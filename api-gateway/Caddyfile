@@ -1,0 +1,27 @@
+# Caddy配置文件
+
+# 自动HTTPS证书管理
+*.voice-interaction.app {
+    tls {
+        dns cloudflare {
+            api_token your_cloudflare_api_token
+        }
+    }
+    
+    # 反向代理到Kong网关
+    reverse_proxy http://localhost:8000
+    
+    # 日志配置
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+    
+    # 安全头部
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        X-XSS-Protection "1; mode=block"
+    }
+}

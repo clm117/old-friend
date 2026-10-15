@@ -1,0 +1,9 @@
+# 语伴 接入层（API Gateway）依赖
+# 版本对齐当前开发环境：D:\Program Files (x86)\Python 3.11
+
+fastapi==0.136.0
+uvicorn[standard]==0.45.0
+python-jose[cryptography]==3.5.0
+requests==2.32.5
+websockets==17.1
+python-multipart==0.0.26

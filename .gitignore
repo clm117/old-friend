@@ -1,0 +1,50 @@
+# 语伴 —— 版本控制忽略清单（安全关键：密钥与模型严禁入库）
+
+# --- 密钥与环境配置 ---
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+credentials*.json
+**/ai-service/.env
+
+# --- 网关账号表（含口令派生值，严禁入库）---
+authdata/
+api-gateway/users.json
+
+# --- 供应商密钥文件（含明文 Key，严禁入库）---
+*apiKey*.csv
+通义千问.txt
+
+# --- 模型与音频产物（体积大，不入库）---
+models/
+test_outputs/
+*.wav
+*.mp3
+*.mp4
+
+# --- Python 缓存与虚拟环境 ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# --- 日志与临时调试产物 ---
+*.log
+debug*.py
+debug*.wav
+
+# --- 基础设施中的二进制（Windows nginx / cloudflared / cpolar 等）---
+infrastructure/nginx/nginx-1.26.3/
+infrastructure/cloudflared/*.exe
+infrastructure/cpolar/
+infrastructure/gpu/
+
+# --- 编辑器与系统 ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

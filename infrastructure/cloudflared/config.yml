@@ -1,0 +1,7 @@
+tunnel: 416ced25-78e5-464f-bfd9-fee361cb7990
+credentials-file: d:\ProgramFile\语伴\infrastructure\cloudflared\416ced25-78e5-464f-bfd9-fee361cb7990.json
+
+ingress:
+  - hostname: yuban.moonexplore.cn
+    service: http://localhost:8080
+  - service: http_status:404

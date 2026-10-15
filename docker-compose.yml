@@ -1,0 +1,122 @@
+# ============================================================
+# 语伴 服务编排（Docker Compose）
+#
+# 启动：docker compose up -d --build
+# 访问：http://localhost:${NGINX_HTTP_PORT:-8080}
+#
+# 架构：nginx（前端 + 反代）→ api-gateway → ai-service（GPU）
+#
+# 前置条件：
+#   1) 宿主机安装 NVIDIA 驱动 + NVIDIA Container Toolkit（AI 服务需要 GPU）
+#   2) 项目根目录存在 .env（由 .env.example 复制）并填好 LLM_API_KEY
+#   3) models/ 目录已就位（以只读卷挂载，不打进镜像）
+# ============================================================
+name: yuban
+
+services:
+
+  # ---------- 前端 + 反向代理 ----------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: yuban-nginx
+    ports:
+      - "${NGINX_HTTP_PORT:-8080}:80"
+    volumes:
+      - ./infrastructure/nginx/docker/yuban.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./test_outputs:/usr/share/nginx/test_outputs:ro
+    depends_on:
+      api-gateway:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - yuban
+
+  # ---------- 接入层：API 网关 ----------
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    image: yuban-gateway:latest
+    container_name: yuban-gateway
+    environment:
+      AI_SERVICE_URL: http://ai-service:8084
+      AI_SERVICE_WS_URL: ws://ai-service:8084
+      JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
+      # 安全加固相关（生产按 .env 覆盖）
+      AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
+      # 账号表由 auth_seed.py 播种到宿主机 ./authdata（下方便以卷挂载）
+      AUTH_USERS_FILE: /app/authdata/users.json
+      AUTH_TOKEN_TTL_MINUTES: ${AUTH_TOKEN_TTL_MINUTES:-720}
+      LOGIN_RATE_LIMIT_PER_MINUTE: ${LOGIN_RATE_LIMIT_PER_MINUTE:-5}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+      EXPENSIVE_RATE_LIMIT_PER_MINUTE: ${EXPENSIVE_RATE_LIMIT_PER_MINUTE:-20}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      AI_SERVICE_TIMEOUT: ${AI_SERVICE_TIMEOUT:-60}
+      AI_SERVICE_TTS_TIMEOUT: ${AI_SERVICE_TTS_TIMEOUT:-600}
+      ENABLE_DOCS: ${ENABLE_DOCS:-false}
+    volumes:
+      # 账号表目录（users.json 不进镜像，由 auth_seed.py 离线生成）
+      - ./authdata:/app/authdata
+    expose:
+      - "8005"
+    depends_on:
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request as u; u.urlopen('http://localhost:8005/').read()\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - yuban
+
+  # ---------- 核心 AI 服务（GPU） ----------
+  ai-service:
+    build:
+      context: .
+      dockerfile: ai-service/Dockerfile
+      args:
+        BASE_IMAGE: ${AI_BASE_IMAGE:-pytorch/pytorch:2.11.0-cuda13.0-cudnn9-runtime}
+    image: yuban-ai-service:latest
+    container_name: yuban-ai-service
+    environment:
+      # LLM / ASR 配置（来自根目录 .env）
+      LLM_PROVIDER: ${LLM_PROVIDER:-qwen}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-qwen-plus}
+      # 安全加固：CORS 白名单与上传上限（与网关保持一致）
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      # 预留 GPU 显存增长策略
+      PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+    volumes:
+      # 模型只读挂载：代码按「项目根/models」解析，容器内路径为 /app/models
+      - ./models:/app/models:ro
+    expose:
+      - "8084"
+    # GPU 资源（需宿主机安装 NVIDIA Container Toolkit）
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      # 模型在 import 阶段加载，启动慢；start_period 给足时间
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+    restart: unless-stopped
+    networks:
+      - yuban
+
+networks:
+  yuban:
+    driver: bridge

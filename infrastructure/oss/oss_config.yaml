@@ -1,0 +1,14 @@
+oss:
+  endpoint: oss-cn-beijing.aliyuncs.com
+  access_key: your_access_key
+  secret_key: your_secret_key
+  bucket_name: voice-interaction-bucket
+
+prefixes:
+  audio: "audio/"
+  models: "models/"
+  logs: "logs/"
+
+lifecycle:
+  audio_retention: 30 days
+  model_retention: 90 days

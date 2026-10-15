@@ -1,0 +1,18 @@
+project:
+  name: voice-interaction-project
+  region: cn-beijing
+
+logstores:
+  - name: api-gateway-logs
+    ttl: 30
+  - name: ai-service-logs
+    ttl: 30
+  - name: message-service-logs
+    ttl: 30
+
+indexes:
+  enabled: true
+  fields:
+    - level
+    - service
+    - session_id

@@ -1,0 +1,47 @@
+stages:
+  - build
+  - test
+  - deploy
+
+build_client:
+  stage: build
+  script:
+    - cd client/ios
+    - pod install
+    - xcodebuild -scheme VoiceInteraction -configuration Release
+    
+    - cd ../android
+    - ./gradlew assembleRelease
+  artifacts:
+    paths:
+      - client/ios/build/
+      - client/android/app/build/outputs/apk/
+
+build_api_gateway:
+  stage: build
+  script:
+    - cd api-gateway
+    - pip install -r requirements.txt
+    - python -m py_compile app.py
+
+build_ai_service:
+  stage: build
+  script:
+    - cd ai-service
+    - pip install -r requirements.txt
+
+test:
+  stage: test
+  script:
+    - cd api-gateway
+    - python -m pytest tests/
+    
+    - cd ../ai-service
+    - python -m pytest tests/
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying to production..."
+  only:
+    - master

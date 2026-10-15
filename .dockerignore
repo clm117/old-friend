@@ -1,0 +1,52 @@
+# ============================================================
+# 语伴 Docker 构建忽略清单
+# 作用：显著减小构建上下文体积，并避免密钥/模型被打进镜像
+# ============================================================
+
+# --- 版本控制与 IDE ---
+.git
+.gitignore
+.vscode
+.idea
+
+# --- Python 缓存/虚拟环境 ---
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.venv/
+venv/
+env/
+
+# --- 大体积目录（运行时以 volume 挂载，不进镜像）---
+models/
+test_outputs/
+
+# --- 客户端代码（独立构建，服务端镜像不需要）---
+client/
+frontend/
+
+# --- 基础设施中的大文件/二进制（Windows 版 nginx、cloudflared 等）---
+infrastructure/nginx/nginx-1.26.3/
+infrastructure/cloudflared/*.exe
+infrastructure/cpolar/
+infrastructure/gpu/
+
+# --- 密钥与本地配置（严禁进镜像）---
+.env
+.env.*
+**/.env
+**/.env.*
+
+# --- 网关账号表（运行时以卷挂载到 /app/authdata）---
+authdata/
+**/users.json
+
+# --- 日志与临时产物 ---
+*.log
+*.wav
+*.mp3
+*.docx
+debug*.py
+
+# --- 文档 ---
+*.md

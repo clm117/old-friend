@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#4CAF50">
+    <title>语伴 - 智能语音交互助手</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- 登录门禁（仅当网关 /health 返回 auth_required=true 且本地无令牌时显示） -->
+    <div class="auth-overlay" id="authOverlay">
+        <form class="auth-card" id="authForm">
+            <h2>登录语伴</h2>
+            <p class="auth-hint">请输入账号密码以继续</p>
+            <label for="authUsername">账号</label>
+            <input type="text" id="authUsername" name="username" autocomplete="username" autocapitalize="off" required>
+            <label for="authPassword">密码</label>
+            <input type="password" id="authPassword" name="password" autocomplete="current-password" required>
+            <button type="submit" class="auth-submit" id="authSubmitBtn">登录</button>
+            <div class="auth-error" id="authError"></div>
+        </form>
+    </div>
+
+    <div class="app">
+        <!-- 顶部标题栏 -->
+        <header class="app-header">
+            <h1>语伴</h1>
+            <p>智能语音交互助手</p>
+            <button type="button" class="logout-btn" id="logoutBtn" style="display: none;">退出</button>
+        </header>
+
+        <!-- 主内容区 -->
+        <main class="app-main">
+            <!-- 语音对话界面 -->
+            <section class="tab-content active" id="chat">
+                <div class="chat-container">
+                    <div class="chat-history" id="chatHistory">
+                        <!-- 对话历史将在这里显示 -->
+                        <div class="chat-welcome">
+                            <div class="welcome-icon">🎤</div>
+                            <p>点下方大麦克风按钮，直接说话与语伴对话<br>也可以用输入框打字</p>
+                        </div>
+                    </div>
+
+                    <!-- 录音状态条 -->
+                    <div class="recording-bar" id="recordingBar" style="display:none;">
+                        <span class="rec-dot"></span>
+                        <span id="recordingText">正在聆听… 再点一下结束</span>
+                    </div>
+
+                    <!-- 语音输入提示 -->
+                    <div class="chat-voice-tip" id="voiceTip" style="display:none;"></div>
+
+                    <div class="chat-input-area">
+                        <!-- 主交互：麦克风按钮 -->
+                        <button class="mic-btn" id="micBtn" aria-label="按住说话">
+                            <span class="mic-icon">🎤</span>
+                        </button>
+                        <!-- 文本输入（辅助） -->
+                        <input type="text" id="chatInput" placeholder="或输入文字…" enterkeyhint="send">
+                        <button class="send-mini-btn" id="chatSendBtn">发送</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 语音录入界面 -->
+            <section class="tab-content" id="voice-input">
+                <div class="page-container">
+                    <h3>语音录入</h3>
+                    <p class="page-desc">从麦克风录入声音，识别声音特征，存储为模拟声音备选项</p>
+
+                    <div class="form-group">
+                        <label for="voiceName">语音名称</label>
+                        <input type="text" id="voiceName" placeholder="例如：我的声音">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="voiceDescriptionInput">语音描述</label>
+                        <textarea id="voiceDescriptionInput" placeholder="例如：我的自然说话声音"></textarea>
+                    </div>
+
+                    <div class="record-section">
+                        <button class="record-btn" id="recordVoiceBtn" aria-label="开始录制">
+                            <span class="record-icon">🎤</span>
+                            <span class="record-text">开始录制</span>
+                        </button>
+                        <button class="stop-btn" id="stopVoiceBtn" style="display: none;" aria-label="停止录制">
+                            <span class="stop-icon">⏹️</span>
+                            <span class="stop-text">停止录制</span>
+                        </button>
+                    </div>
+
+                    <button class="submit-btn" id="saveVoiceBtn" style="display: none;">保存语音</button>
+                    <div class="response" id="voiceInputResponse"></div>
+
+                    <h4 class="section-title">已保存的语音</h4>
+                    <div class="saved-voices" id="savedVoices"></div>
+                </div>
+            </section>
+
+            <!-- 语音定义界面 -->
+            <section class="tab-content" id="voice-define">
+                <div class="page-container">
+                    <h3>语音定义</h3>
+                    <p class="page-desc">通过声学特征参数定义新的声音，或调整已录入的声音</p>
+
+                    <div class="form-group">
+                        <label for="voiceNameDefine">语音名称</label>
+                        <input type="text" id="voiceNameDefine" placeholder="例如：温暖女声">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="voiceDescriptionDefine">语音描述</label>
+                        <textarea id="voiceDescriptionDefine" placeholder="例如：温暖的女性声音，语速适中，带有亲和力"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="baseVoice">基础语音</label>
+                        <select id="baseVoice">
+                            <option value="">选择已保存的语音</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="voiceFileDefine">上传参考音频</label>
+                        <input type="file" id="voiceFileDefine" accept="audio/*">
+                    </div>
+
+                    <h4 class="section-title">声学特征参数</h4>
+                    <div class="params-grid">
+                        <div class="param-item">
+                            <div class="param-header">
+                                <label for="pitch">音调</label>
+                                <span id="pitchValue">1.0</span>
+                            </div>
+                            <input type="range" id="pitch" min="0.5" max="1.5" step="0.1" value="1">
+                        </div>
+                        <div class="param-item">
+                            <div class="param-header">
+                                <label for="speed">语速</label>
+                                <span id="speedValue">1.0</span>
+                            </div>
+                            <input type="range" id="speed" min="0.5" max="2" step="0.1" value="1">
+                        </div>
+                        <div class="param-item">
+                            <div class="param-header">
+                                <label for="volume">音量</label>
+                                <span id="volumeValue">1.0</span>
+                            </div>
+                            <input type="range" id="volume" min="0.5" max="1.5" step="0.1" value="1">
+                        </div>
+                        <div class="param-item">
+                            <div class="param-header">
+                                <label for="emotionIntensity">情感强度</label>
+                                <span id="emotionIntensityValue">0.5</span>
+                            </div>
+                            <input type="range" id="emotionIntensity" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+                    </div>
+
+                    <button class="submit-btn" id="defineVoiceBtn">定义语音</button>
+                    <div class="response" id="voiceDefineResponse"></div>
+                </div>
+            </section>
+
+            <!-- 情感配置界面 -->
+            <section class="tab-content" id="emotion-config">
+                <div class="page-container">
+                    <h3>情感配置</h3>
+                    <p class="page-desc">定义AI具有的情感特征，使声音更加人性化</p>
+
+                    <div class="form-group">
+                        <label for="emotionProfileName">情感配置名称</label>
+                        <input type="text" id="emotionProfileName" placeholder="例如：友好助手">
+                    </div>
+
+                    <h4 class="section-title">基本情感</h4>
+                    <div class="emotions-grid">
+                        <div class="emotion-item">
+                            <div class="param-header">
+                                <label for="happiness">愉悦</label>
+                                <span id="happinessValue">0.5</span>
+                            </div>
+                            <input type="range" id="happiness" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+                        <div class="emotion-item">
+                            <div class="param-header">
+                                <label for="sadness">悲伤</label>
+                                <span id="sadnessValue">0.1</span>
+                            </div>
+                            <input type="range" id="sadness" min="0" max="1" step="0.1" value="0.1">
+                        </div>
+                        <div class="emotion-item">
+                            <div class="param-header">
+                                <label for="anger">愤怒</label>
+                                <span id="angerValue">0.1</span>
+                            </div>
+                            <input type="range" id="anger" min="0" max="1" step="0.1" value="0.1">
+                        </div>
+                        <div class="emotion-item">
+                            <div class="param-header">
+                                <label for="fear">恐惧</label>
+                                <span id="fearValue">0.1</span>
+                            </div>
+                            <input type="range" id="fear" min="0" max="1" step="0.1" value="0.1">
+                        </div>
+                        <div class="emotion-item">
+                            <div class="param-header">
+                                <label for="disgust">厌恶</label>
+                                <span id="disgustValue">0.1</span>
+                            </div>
+                            <input type="range" id="disgust" min="0" max="1" step="0.1" value="0.1">
+                        </div>
+                        <div class="emotion-item">
+                            <div class="param-header">
+                                <label for="surprise">惊讶</label>
+                                <span id="surpriseValue">0.3</span>
+                            </div>
+                            <input type="range" id="surprise" min="0" max="1" step="0.1" value="0.3">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="emotionDescription">情感描述</label>
+                        <textarea id="emotionDescription" placeholder="例如：友好、热情、耐心的助手形象，适合日常对话"></textarea>
+                    </div>
+
+                    <button class="submit-btn" id="saveEmotionBtn">保存情感配置</button>
+                    <div class="response" id="emotionConfigResponse"></div>
+
+                    <h4 class="section-title">已保存的情感配置</h4>
+                    <div class="saved-emotions" id="savedEmotions"></div>
+                </div>
+            </section>
+
+            <!-- 角色选择界面 -->
+            <section class="tab-content" id="character">
+                <div class="page-container">
+                    <h3>角色选择</h3>
+                    <p class="page-desc">选择官方预设角色，或创建自定义角色。角色决定对话的声音（音色）与人设（性格/说话风格）。</p>
+
+                    <div id="characterStatus" style="margin-bottom: 12px; padding: 10px; background: #e8f5e9; border-radius: 8px; font-size: 0.9rem; display: none;"></div>
+
+                    <h4 style="margin: 16px 0 8px;">官方预设</h4>
+                    <div id="presetCharacterList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+
+                    <h4 style="margin: 20px 0 8px;">我的自定义角色</h4>
+                    <div id="customCharacterList" style="display: flex; flex-direction: column; gap: 10px;">
+                        <p style="color: #999; font-size: 0.9rem;">还没有自定义角色，在下方创建。</p>
+                    </div>
+
+                    <h4 style="margin: 20px 0 8px;">创建自定义角色</h4>
+                    <div class="form-group">
+                        <label for="charName">角色名称 *</label>
+                        <input type="text" id="charName" placeholder="例如：邻家姐姐">
+                    </div>
+                    <div class="form-group">
+                        <label for="charGender">性别</label>
+                        <select id="charGender"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="charAgeGroup">年龄段</label>
+                        <select id="charAgeGroup"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>音色标签（可多选）</label>
+                        <div id="charVoiceTags" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="charIdentity">身份/职业（可选）</label>
+                        <input type="text" id="charIdentity" placeholder="例如：幼儿园老师">
+                    </div>
+                    <div class="form-group">
+                        <label for="charRelation">与你的关系</label>
+                        <select id="charRelation"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>性格标签（可多选）</label>
+                        <div id="charPersonalityTags" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                    </div>
+                    <div class="form-group">
+                        <label for="charStyle">说话风格（可选）</label>
+                        <input type="text" id="charStyle" placeholder="例如：爱用比喻，句尾常带语气词">
+                    </div>
+                    <div class="form-group">
+                        <label for="charFreeDesc">自由设定（可选）</label>
+                        <textarea id="charFreeDesc" placeholder="其他想补充的人设背景，可留空"></textarea>
+                    </div>
+                    <button class="submit-btn" id="createCharacterBtn">创建角色</button>
+                    <div class="response" id="characterResponse"></div>
+                </div>
+            </section>
+
+            <!-- 语音合成界面 -->
+            <section class="tab-content" id="tts">
+                <div class="page-container">
+                    <h3>语音合成</h3>
+                    <p class="page-desc">输入文本，使用已定义的语音或指定风格合成语音（VoxCPM2，固化参数 CFG=2.0/Steps=10）</p>
+
+                    <div class="form-group">
+                        <label for="ttsText">合成文本</label>
+                        <textarea id="ttsText" placeholder="例如：你好，欢迎使用语伴智能语音助手。"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ttsVoiceSelect">使用语音</label>
+                        <select id="ttsVoiceSelect">
+                            <option value="">会话已定义的语音</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ttsDescription">自定义风格描述（可选，优先于上方选择）</label>
+                        <input type="text" id="ttsDescription" placeholder="例如：A young woman, gentle and sweet voice">
+                    </div>
+
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="ttsQuickMode" checked>
+                            <span>快速模式（速度提升约40%，轻微质量下降）</span>
+                        </label>
+                    </div>
+
+                    <button class="submit-btn" id="ttsBtn">开始合成</button>
+                    <div class="response" id="ttsResponse">
+                        <p class="tts-hint">提示：分句流式合成，每句生成后自动播放。快速模式下每句约需 1~3 分钟。</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 设置界面 -->
+            <section class="tab-content" id="settings">
+                <div class="page-container">
+                    <h3>设置</h3>
+
+                    <div class="form-group">
+                        <label for="apiUrl">API Gateway 地址</label>
+                        <input type="text" id="apiUrl" value="http://localhost:8005" placeholder="API Gateway 地址">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sessionId">会话 ID</label>
+                        <input type="text" id="sessionId" value="session_" placeholder="会话 ID">
+                    </div>
+
+                    <button class="save-btn" id="saveSettingsBtn">保存设置</button>
+                </div>
+            </section>
+        </main>
+
+        <!-- 底部固定导航栏 -->
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-tab="chat">
+                <span class="nav-icon">💬</span>
+                <span class="nav-label">对话</span>
+            </button>
+            <button class="nav-btn" data-tab="voice-input">
+                <span class="nav-icon">🎙️</span>
+                <span class="nav-label">录入</span>
+            </button>
+            <button class="nav-btn" data-tab="voice-define">
+                <span class="nav-icon">⚙️</span>
+                <span class="nav-label">定义</span>
+            </button>
+            <button class="nav-btn" data-tab="emotion-config">
+                <span class="nav-icon">😊</span>
+                <span class="nav-label">情感</span>
+            </button>
+            <button class="nav-btn" data-tab="character">
+                <span class="nav-icon">🧑‍🎤</span>
+                <span class="nav-label">角色</span>
+            </button>
+            <button class="nav-btn" data-tab="tts">
+                <span class="nav-icon">🔊</span>
+                <span class="nav-label">合成</span>
+            </button>
+            <button class="nav-btn" data-tab="settings">
+                <span class="nav-icon">🔧</span>
+                <span class="nav-label">设置</span>
+            </button>
+        </nav>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

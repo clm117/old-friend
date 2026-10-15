@@ -1,0 +1,28 @@
+# 语伴 核心 AI 服务依赖
+# 说明：torch / torchaudio / torchvision 由基础镜像（pytorch/pytorch）自带，
+#       此处不再安装，避免 CUDA 版本与镜像内置版本冲突。
+# 版本对齐当前开发环境：D:\Program Files (x86)\Python 3.11
+
+# --- Web 框架 ---
+fastapi==0.136.0
+uvicorn[standard]==0.45.0
+python-multipart==0.0.26
+pydantic==2.13.3
+
+# --- 模型推理 ---
+transformers==5.3.0
+accelerate==1.13.0
+safetensors==0.7.0
+voxcpm==2.0.2
+
+# --- 数值与音频处理 ---
+numpy==2.3.5
+scipy==1.17.0
+librosa==0.11.0
+soundfile==0.13.1
+soxr==1.0.0
+einops==0.8.2
+
+# --- 网络（LLM / ASR 调用、WebSocket）---
+httpx==0.28.1
+websockets==17.1

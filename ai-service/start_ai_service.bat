@@ -1,0 +1,1 @@
+"D:\Program Files (x86)\Python 3.11\python.exe" main.py

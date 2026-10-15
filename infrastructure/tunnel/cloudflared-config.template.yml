@@ -1,0 +1,20 @@
+# 语伴 Cloudflare 命名隧道配置模板
+# 用法: 复制为 C:\Users\clm117\.cloudflared\config.yml 并替换 <> 占位符
+# (setup_fixed_tunnel.ps1 会自动完成复制与替换, 无需手动编辑)
+#
+# 前提: 你的域名 NS 已托管到 Cloudflare (见 FIXED_DOMAIN_GUIDE.md 步骤一)
+
+tunnel: <TUNNEL_ID>
+credentials-file: C:\Users\clm117\.cloudflared\<TUNNEL_ID>.json
+
+ingress:
+  # 手机访问的固定域名 -> 本机 nginx (nginx 再反代网关 8005 / AI 8084 / WebSocket)
+  - hostname: <YOUR_SUBDOMAIN>
+    service: http://localhost:8080
+    originRequest:
+      # WebSocket 长连接 (实时语音对话) 不超时
+      noTLSVerify: true
+      connectTimeout: 30s
+
+  # 兜底规则 (必需, 必须放最后)
+  - service: http_status:404
