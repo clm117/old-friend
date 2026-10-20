@@ -9,6 +9,7 @@ import logging
 import sys
 import os
 import asyncio
+import time
 import torch
 
 # 添加当前目录和项目根目录到Python路径
@@ -39,6 +40,23 @@ from typing import Optional, List
 import io
 import wave
 
+# ===== Prometheus 指标 =====
+from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
+
+AI_REQUESTS = Counter(
+    "ai_requests_total", "AI 请求总数", ["endpoint", "status"]
+)
+AI_LATENCY = Histogram(
+    "ai_request_duration_seconds", "AI 请求耗时", ["endpoint"],
+    buckets=[0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0],
+)
+GPU_MEMORY_USED = Gauge(
+    "ai_gpu_memory_used_bytes", "GPU 显存已用字节数", ["device"]
+)
+GPU_MEMORY_TOTAL = Gauge(
+    "ai_gpu_memory_total_bytes", "GPU 显存总字节数", ["device"]
+)
+
 # 简单的内存存储实现
 class InMemoryStorage:
     def __init__(self):
@@ -63,7 +81,17 @@ class InMemoryStorage:
             return None
         return self.short_term_memory[session_id].get(key, None)
 
+# ===== 结构化日志配置 =====
+logging.basicConfig(
+    level=logging.INFO,
+    format='{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
+    datefmt="%Y-%m-%dT%H:%M:%S%z",
+)
 logger = logging.getLogger("yuban.ai")
+
+# ===== 优雅退出说明 =====
+# Uvicorn 内置处理 SIGINT/SIGTERM，server.serve() 会在收到信号后优雅返回。
+# 退出后在下方统一释放 GPU 显存等资源。
 
 app = FastAPI()
 
@@ -386,7 +414,9 @@ async def tts(
     quick_mode: 可选，快速模式（CFG=1.5/Steps=6，速度提升约40%）
     返回: audio/wav 音频流
     """
+    _start = time.time()
     if not text.strip():
+        AI_REQUESTS.labels(endpoint="tts", status="400").inc()
         return {"error": "text 不能为空"}
 
     # 风格优先级：显式 description > 会话绑定角色 voice_profile > 旧版语音定义
@@ -415,8 +445,12 @@ async def tts(
         )
 
     if wav_bytes is None:
+        AI_REQUESTS.labels(endpoint="tts", status="503").inc()
+        AI_LATENCY.labels(endpoint="tts").observe(time.time() - _start)
         return {"error": "VoxCPM2 模型不可用"}
 
+    AI_REQUESTS.labels(endpoint="tts", status="200").inc()
+    AI_LATENCY.labels(endpoint="tts").observe(time.time() - _start)
     return Response(
         content=wav_bytes,
         media_type="audio/wav",
@@ -539,6 +573,19 @@ async def health_check():
         "tts_service": "gpu" if _USE_GPU else "cpu",
         "llm_service": llm_service.provider if llm_service.config["api_key"] else "unconfigured"
     }
+
+
+# ===== Prometheus 指标端点（生产应在 nginx 层限制仅内网可达）=====
+@app.get("/metrics")
+async def metrics():
+    # 抓取时刷新 GPU 显存指标
+    if _USE_GPU and torch.cuda.is_available():
+        for i in range(torch.cuda.device_count()):
+            used = torch.cuda.memory_allocated(i)
+            total = torch.cuda.get_device_properties(i).total_memory
+            GPU_MEMORY_USED.labels(device=f"cuda:{i}").set(used)
+            GPU_MEMORY_TOTAL.labels(device=f"cuda:{i}").set(total)
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 # ===== WebSocket 实时对话端点（GPU 模式专属，全链路流式）=====
 # 流程：用户文本 → LLM 流式生成 → 按句切 → TTS 合成 → 推音频块
@@ -678,4 +725,18 @@ async def ws_chat(ws: WebSocket, session_id: str):
             pass
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8084)
+    config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=8084,
+        log_config=None,  # 使用自定义 logging 配置
+    )
+    server = uvicorn.Server(config)
+    asyncio.run(server.serve())
+
+    # 服务完全关闭后清理资源
+    logger.info("正在释放资源...")
+    if _USE_GPU and torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        logger.info("GPU 显存已释放")
+    logger.info("AI 服务已完全关闭")

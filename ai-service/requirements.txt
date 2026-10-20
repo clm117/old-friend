@@ -26,3 +26,5 @@ einops==0.8.2
 # --- 网络（LLM / ASR 调用、WebSocket）---
 httpx==0.28.1
 websockets==17.1
+
+prometheus-client==0.24.0

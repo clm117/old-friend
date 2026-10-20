@@ -7,3 +7,5 @@ python-jose[cryptography]==3.5.0
 requests==2.32.5
 websockets==17.1
 python-multipart==0.0.26
+
+prometheus-client==0.24.0

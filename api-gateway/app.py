@@ -12,6 +12,7 @@
 - 错误：对外仅返回通用错误，异常详情只进服务端日志
 - 响应头：补充 nosniff / frame / referrer 等安全头
 """
+import asyncio
 import logging
 import os
 import re
@@ -27,11 +28,31 @@ from jose import jwt, JWTError
 
 from auth_store import dummy_verify, load_users, users_file_path, verify_password
 
+# ===== Prometheus 指标 =====
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+METRICS_REQUESTS = Counter(
+    "gateway_requests_total", "HTTP 请求总数", ["method", "path", "status"]
+)
+METRICS_LATENCY = Histogram(
+    "gateway_request_duration_seconds", "HTTP 请求耗时", ["path"],
+    buckets=[0.05, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0],
+)
+METRICS_AUTH_FAILURES = Counter(
+    "gateway_auth_failures_total", "鉴权失败总数", ["reason"]  # 401/429
+)
+
+# ===== 结构化日志配置 =====
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    format='{"time":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","message":"%(message)s"}',
+    datefmt="%Y-%m-%dT%H:%M:%S%z",
 )
 logger = logging.getLogger("yuban.gateway")
+
+# ===== 优雅退出说明 =====
+# Uvicorn 内置处理 SIGINT/SIGTERM，server.serve() 会在收到信号后优雅返回。
+# 无需自定义信号处理器，避免与 Uvicorn 冲突及事件循环未就绪时的竞态。
 
 _ENABLE_DOCS = os.environ.get("ENABLE_DOCS", "false").lower() == "true"
 # 生产关闭 /docs 与 /openapi.json，避免暴露接口面
@@ -129,7 +150,8 @@ _AUDIO_MAGIC = (
 
 LOGIN_PATH = "/api/auth/login"
 # 匿名可达路径（登录接口必须公开，否则无法换取令牌）
-PUBLIC_PATHS = ("/", "/health", LOGIN_PATH)
+# /metrics 供 Prometheus 抓取；生产环境应在 nginx 层限制仅内网可达
+PUBLIC_PATHS = ("/", "/health", LOGIN_PATH, "/metrics")
 
 
 def _safe_id(value: str) -> bool:
@@ -218,7 +240,10 @@ def _upstream_error(endpoint: str, exc: Exception) -> JSONResponse:
 # ===== 安全中间件：限流 → 鉴权 → 上传预检 → 安全响应头 =====
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
+    _start = time.time()
     if _rate_limited(request):
+        METRICS_AUTH_FAILURES.labels(reason="rate_limited").inc()
+        METRICS_REQUESTS.labels(method=request.method, path=request.url.path, status="429").inc()
         return JSONResponse(
             {"error": "请求过于频繁，请稍后重试"},
             status_code=429,
@@ -235,13 +260,18 @@ async def security_middleware(request: Request, call_next):
                     raise JWTError("token 缺少 exp 声明")
                 request.state.user_id = payload.get("sub")
             except JWTError:
+                METRICS_AUTH_FAILURES.labels(reason="invalid_token").inc()
+                METRICS_REQUESTS.labels(method=request.method, path=path, status="401").inc()
                 return JSONResponse({"error": "无效或已过期的访问凭证"}, status_code=401)
         elif AUTH_REQUIRED:
+            METRICS_AUTH_FAILURES.labels(reason="missing_token").inc()
+            METRICS_REQUESTS.labels(method=request.method, path=path, status="401").inc()
             return JSONResponse({"error": "缺少访问凭证"}, status_code=401)
 
     if path.startswith(UPLOAD_PATHS):
         cl = request.headers.get("content-length")
         if cl and cl.isdigit() and int(cl) > MAX_UPLOAD_BYTES + 4096:
+            METRICS_REQUESTS.labels(method=request.method, path=path, status="413").inc()
             return JSONResponse(
                 {"error": f"请求体超过上限（{MAX_UPLOAD_BYTES // (1024 * 1024)}MB）"},
                 status_code=413,
@@ -251,6 +281,10 @@ async def security_middleware(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
+
+    # 指标记录
+    METRICS_REQUESTS.labels(method=request.method, path=path, status=str(response.status_code)).inc()
+    METRICS_LATENCY.labels(path=path).observe(time.time() - _start)
     return response
 
 
@@ -589,6 +623,12 @@ async def health_check():
     }
 
 
+# Prometheus 指标端点（生产应在 nginx 层限制仅内网可达）
+@app.get("/metrics")
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 # WebSocket 实时对话透传（转发到 ai-service/ws/chat/{session_id}）
 @app.websocket("/ws/chat/{session_id}")
 async def ws_chat_proxy(ws: WebSocket, session_id: str):
@@ -660,4 +700,12 @@ async def root():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8005)
+    config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=8005,
+        log_config=None,  # 使用自定义 logging 配置
+    )
+    server = uvicorn.Server(config)
+    asyncio.run(server.serve())
+    logger.info("服务已完全关闭")
