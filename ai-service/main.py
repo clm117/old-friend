@@ -16,6 +16,28 @@ import torch
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
+# 加载同目录 .env（TTS_PROVIDER / CLOUD_TTS_VOICE 等），不覆盖已存在的环境变量
+def _load_dotenv():
+    from pathlib import Path
+    env_path = Path(__file__).parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key, val = key.strip(), val.strip().strip("'\"")
+        if key and val and key not in os.environ:
+            os.environ[key] = val
+
+
+_load_dotenv()
+
+# ===== TTS 提供方：voxcpm2（本地模型，实时交互需 GPU）| cloud（云 TTS，验证期免 GPU）=====
+_TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "voxcpm2").strip().lower()
+
 from fun_audio_chat.fun_audio_chat_service import FunAudioChatService
 
 # ===== GPU/CPU 自动切换 =====
@@ -130,10 +152,46 @@ def _internal_error(endpoint: str, exc: Exception) -> dict:
 
 # 初始化服务
 aio_service = FunAudioChatService()
-voxcpm2_service = _ServiceClass()
+if _TTS_PROVIDER == "cloud":
+    # 云 TTS 验证模式：不实例化本地 VoxCPM2（声音定义/克隆端点同步不可用）
+    from cloud_tts_service import cloud_tts_service
+    voxcpm2_service = None
+    print("[启动] TTS_PROVIDER=cloud，使用云 TTS（本地 VoxCPM2 不加载）")
+else:
+    cloud_tts_service = None
+    voxcpm2_service = _ServiceClass()
 llm_service = LLMService()
 character_engine = CharacterEngine()
 memory_storage = InMemoryStorage()
+
+
+async def _synthesize_speech(text, style, emotion_params, quick_mode):
+    """
+    统一 TTS 入口：
+    - 云模式（cloud）：走 DashScope 云 TTS，style/emotion 参数忽略
+    - 本地 GPU 版：synthesize 为 async，直接 await
+    - 本地 CPU 版：同步推理放线程池，避免阻塞事件循环
+    返回 (wav_bytes, sample_rate)；wav_bytes 为 None 表示服务不可用
+    """
+    if _TTS_PROVIDER == "cloud":
+        return await cloud_tts_service.synthesize(text, quick_mode=quick_mode)
+    if _USE_GPU:
+        return await voxcpm2_service.synthesize(
+            text,
+            style_description=style,
+            emotion_params=emotion_params,
+            quick_mode=quick_mode,
+        )
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None,
+        lambda: voxcpm2_service.synthesize(
+            text,
+            style_description=style,
+            emotion_params=emotion_params,
+            quick_mode=quick_mode,
+        ),
+    )
 
 
 # ===== 角色管理 =====
@@ -305,6 +363,9 @@ async def define_voice(
     volume: 音量（范围：0.5-1.5，默认：1.0）
     emotion_intensity: 情感强度（范围：0.0-1.0，默认：0.5）
     """
+    if voxcpm2_service is None:
+        return {"error": "当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用"}
+
     try:
         # 读取音频文件
         audio_data = await audio.read()
@@ -362,6 +423,9 @@ async def define_voice_compat(
     volume: 音量（范围：0.5-1.5，默认：1.0）
     emotion_intensity: 情感强度（范围：0.0-1.0，默认：0.5）
     """
+    if voxcpm2_service is None:
+        return {"error": "当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用"}
+
     try:
         # 读取音频文件
         audio_data = await audio.read()
@@ -424,30 +488,15 @@ async def tts(
     emotion_config = memory_storage.get_short_term_memory(session_id, "emotion_config")
     emotion_params = emotion_config.get("params") if emotion_config else None
 
-    # GPU 版 synthesize 是 async，CPU 版同步 → 统一放线程池/await，避免阻塞事件循环
-    loop = asyncio.get_running_loop()
-    if _USE_GPU:
-        wav_bytes, sample_rate = await voxcpm2_service.synthesize(
-            text,
-            style_description=style,
-            emotion_params=emotion_params if not style else None,
-            quick_mode=quick_mode
-        )
-    else:
-        wav_bytes, sample_rate = await loop.run_in_executor(
-            None,
-            lambda: voxcpm2_service.synthesize(
-                text,
-                style_description=style,
-                emotion_params=emotion_params if not style else None,
-                quick_mode=quick_mode
-            )
-        )
+    # 统一 TTS 入口（云/本地 GPU/CPU 分派见 _synthesize_speech）
+    wav_bytes, sample_rate = await _synthesize_speech(
+        text, style, emotion_params if not style else None, quick_mode
+    )
 
     if wav_bytes is None:
         AI_REQUESTS.labels(endpoint="tts", status="503").inc()
         AI_LATENCY.labels(endpoint="tts").observe(time.time() - _start)
-        return {"error": "VoxCPM2 模型不可用"}
+        return {"error": "TTS 服务不可用"}
 
     AI_REQUESTS.labels(endpoint="tts", status="200").inc()
     AI_LATENCY.labels(endpoint="tts").observe(time.time() - _start)
@@ -570,7 +619,7 @@ async def health_check():
     return {
         "status": "healthy",
         "device": "cuda" if _USE_GPU else "cpu",
-        "tts_service": "gpu" if _USE_GPU else "cpu",
+        "tts_service": _TTS_PROVIDER if _TTS_PROVIDER != "voxcpm2" else ("gpu" if _USE_GPU else "cpu"),
         "llm_service": llm_service.provider if llm_service.config["api_key"] else "unconfigured"
     }
 
@@ -587,9 +636,9 @@ async def metrics():
             GPU_MEMORY_TOTAL.labels(device=f"cuda:{i}").set(total)
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
-# ===== WebSocket 实时对话端点（GPU 模式专属，全链路流式）=====
+# ===== WebSocket 实时对话端点（全链路流式）=====
 # 流程：用户文本 → LLM 流式生成 → 按句切 → TTS 合成 → 推音频块
-# 仅 GPU 模式有实际意义（CPU 太慢），但 CPU 模式也可用（会慢）
+# TTS 提供方见 _TTS_PROVIDER：cloud（云，验证期免 GPU）或 voxcpm2（本地，实时需 GPU）
 @app.websocket("/ws/chat/{session_id}")
 async def ws_chat(ws: WebSocket, session_id: str):
     await ws.accept()
@@ -663,26 +712,14 @@ async def ws_chat(ws: WebSocket, session_id: str):
             async def tts_task(sentence_text, idx):
                 """单句 TTS 合成并推送（后台并行，不阻塞文本流/事件循环）"""
                 try:
-                    loop = asyncio.get_running_loop()
-                    if _USE_GPU:
-                        result = voxcpm2_service.synthesize(
-                            sentence_text,
-                            style_description=style,
-                            emotion_params=emotion_params if not style else None,
-                            quick_mode=False
-                        )
-                        wav_bytes, sample_rate = await result
-                    else:
-                        # CPU 同步推理放线程池，避免阻塞事件循环（WS ping/其他请求）
-                        wav_bytes, sample_rate = await loop.run_in_executor(
-                            None,
-                            lambda: voxcpm2_service.synthesize(
-                                sentence_text,
-                                style_description=style,
-                                emotion_params=emotion_params if not style else None,
-                                quick_mode=True
-                            )
-                        )
+                    # 统一 TTS 入口（云/本地分派见 _synthesize_speech）
+                    # 非 GPU 一律快速模式：CPU 提速；云侧映射为 speech_rate 略升
+                    wav_bytes, sample_rate = await _synthesize_speech(
+                        sentence_text,
+                        style,
+                        emotion_params if not style else None,
+                        quick_mode=not _USE_GPU,
+                    )
                     if wav_bytes:
                         await safe_send_bytes(wav_bytes)
                         await safe_send_json({
