@@ -554,6 +554,25 @@ async def get_session_character(session_id: str):
         return _upstream_error("sessions/get-character", e)
 
 
+@app.post("/api/ai/sessions/{session_id}/voice-style")
+async def bind_voice_style(session_id: str, request: Request):
+    if not _safe_id(session_id):
+        return JSONResponse({"error": "session_id 非法"}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "请求体必须是 JSON"}, status_code=400)
+    try:
+        resp = requests.post(
+            f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/voice-style",
+            json=body,
+            timeout=AI_SERVICE_TIMEOUT,
+        )
+        return resp.json()
+    except Exception as e:
+        return _upstream_error("sessions/bind-voice-style", e)
+
+
 # ===== 鉴权接口（登录换取令牌）=====
 @app.post(LOGIN_PATH)
 async def auth_login(request: Request):

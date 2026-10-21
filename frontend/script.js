@@ -528,6 +528,109 @@ function addMessage(sender, text, streaming = false, thinking = false) {
 }
 
 // 语音录入
+// ===== 录音音频：转 WAV + IndexedDB 存储 =====
+// MediaRecorder 在浏览器中通常产出 webm/ogg，而网关只接受 wav/mp3/ogg/flac/m4a，
+// 故录制后统一转为 WAV(PCM16) 再存储与上传；localStorage 存不下 Blob，故用 IndexedDB。
+
+const VOICE_DB_NAME = 'yuban_voice_db';
+const VOICE_DB_STORE = 'voice_audio';
+
+function _openVoiceDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(VOICE_DB_NAME, 1);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(VOICE_DB_STORE)) {
+                db.createObjectStore(VOICE_DB_STORE);
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function saveVoiceAudio(id, blob) {
+    const db = await _openVoiceDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(VOICE_DB_STORE, 'readwrite');
+        tx.objectStore(VOICE_DB_STORE).put(blob, id);
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+}
+
+async function getVoiceAudio(id) {
+    const db = await _openVoiceDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(VOICE_DB_STORE, 'readonly');
+        const req = tx.objectStore(VOICE_DB_STORE).get(id);
+        req.onsuccess = () => { db.close(); resolve(req.result || null); };
+        req.onerror = () => { db.close(); reject(req.error); };
+    });
+}
+
+async function deleteVoiceAudio(id) {
+    const db = await _openVoiceDB();
+    return new Promise((resolve) => {
+        const tx = db.transaction(VOICE_DB_STORE, 'readwrite');
+        tx.objectStore(VOICE_DB_STORE).delete(id);
+        tx.oncomplete = () => { db.close(); resolve(true); };
+        tx.onerror = () => { db.close(); resolve(false); };
+    });
+}
+
+// 任意浏览器录音 Blob → WAV(PCM16)
+async function _blobToWav(blob) {
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        return _encodeWav(audioBuffer);
+    } finally {
+        audioCtx.close();
+    }
+}
+
+function _encodeWav(audioBuffer) {
+    const numChannels = audioBuffer.numberOfChannels;
+    const sampleRate = audioBuffer.sampleRate;
+    const samples = audioBuffer.length;
+    const blockAlign = numChannels * 2;          // PCM16
+    const dataSize = samples * blockAlign;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+
+    const writeStr = (offset, str) => {
+        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    };
+
+    writeStr(0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    view.setUint32(16, 16, true);                // fmt chunk 长度
+    view.setUint16(20, 1, true);                 // PCM 格式
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true);                // 位深
+    writeStr(36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    const channels = [];
+    for (let c = 0; c < numChannels; c++) channels.push(audioBuffer.getChannelData(c));
+    let offset = 44;
+    for (let i = 0; i < samples; i++) {
+        for (let c = 0; c < numChannels; c++) {
+            const s = Math.max(-1, Math.min(1, channels[c][i]));
+            view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            offset += 2;
+        }
+    }
+    return new Blob([view], { type: 'audio/wav' });
+}
+
 function setupVoiceInput() {
     const recordVoiceBtn = document.getElementById('recordVoiceBtn');
     const stopVoiceBtn = document.getElementById('stopVoiceBtn');
@@ -575,37 +678,49 @@ function setupVoiceInput() {
         }
     });
     
-    saveVoiceBtn.addEventListener('click', function() {
+    saveVoiceBtn.addEventListener('click', async function() {
         const voiceName = document.getElementById('voiceName').value;
         const voiceDescription = document.getElementById('voiceDescriptionInput').value;
-        
+        const responseDiv = document.getElementById('voiceInputResponse');
+
         if (!voiceName) {
             alert('请输入语音名称');
             return;
         }
-        
-        const audioBlob = new Blob(voiceChunks, { type: 'audio/wav' });
-        
-        // 保存语音到本地存储
+
         const voice = {
             id: 'voice_' + Date.now(),
             name: voiceName,
             description: voiceDescription,
             timestamp: new Date().toISOString()
         };
-        
+
+        // 录音数据转 WAV 后存入 IndexedDB（供"使用"时做声音克隆）
+        let hasAudio = false;
+        if (voiceChunks.length > 0) {
+            try {
+                const rawBlob = new Blob(voiceChunks, { type: voiceChunks[0].type || 'audio/webm' });
+                const wavBlob = await _blobToWav(rawBlob);
+                await saveVoiceAudio(voice.id, wavBlob);
+                voice.hasAudio = true;
+                hasAudio = true;
+            } catch (e) {
+                console.error('录音数据处理失败:', e);
+            }
+        }
+
         voices.push(voice);
         localStorage.setItem('voices', JSON.stringify(voices));
-        
-        // 显示保存成功消息
-        const responseDiv = document.getElementById('voiceInputResponse');
-        responseDiv.innerHTML = '<p style="color: green;">语音保存成功！</p>';
-        
+
+        responseDiv.innerHTML = hasAudio
+            ? '<p style="color: green;">语音保存成功（含录音数据）！</p>'
+            : '<p style="color: orange;">已保存，但未检测到录音数据（请先录制再保存）。</p>';
+
         // 重置表单
         document.getElementById('voiceName').value = '';
         document.getElementById('voiceDescriptionInput').value = '';
         document.getElementById('saveVoiceBtn').style.display = 'none';
-        
+
         // 更新已保存的语音列表
         displaySavedVoices();
     });
@@ -644,14 +759,21 @@ function setupVoiceDefine() {
         
         // 获取用户上传的音频文件
         const voiceFileInput = document.getElementById('voiceFileDefine');
-        let audioFile;
+        // 参考音频（下方统一转为 WAV 后上传）
         
-        if (voiceFileInput && voiceFileInput.files.length > 0) {
-            audioFile = voiceFileInput.files[0];
-        } else {
-            // 如果用户没有上传音频文件，创建一个空的音频文件
-            const audioBlob = new Blob([], { type: 'audio/wav' });
-            audioFile = new File([audioBlob], 'voice.wav', { type: 'audio/wav' });
+        if (voiceFileInput.files.length === 0) {
+            alert('请先上传参考音频文件（支持 wav / mp3 / m4a / ogg 等）');
+            return;
+        }
+
+        // 网关只接受 wav/mp3/ogg/flac/m4a，故先把参考音频统一转为 WAV；转换失败则退回原文件，
+        // 由服务端给出明确提示（避免"不支持的音频格式"这类 400）
+        let audioFile = voiceFileInput.files[0];
+        try {
+            const wavBlob = await _blobToWav(audioFile);
+            audioFile = new File([wavBlob], 'reference.wav', { type: 'audio/wav' });
+        } catch (e) {
+            console.warn('参考音频转 WAV 失败，改用原文件上传:', e);
         }
         
         try {
@@ -672,11 +794,24 @@ function setupVoiceDefine() {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // 透出服务端的具体错误（session_id/描述/音频格式等），避免只看到状态码无原因
+                let detail = `HTTP ${response.status}`;
+                try {
+                    const errBody = await response.json();
+                    if (errBody && errBody.error) detail = errBody.error;
+                } catch (_) { /* 响应非 JSON，保留状态码 */ }
+                throw new Error(detail);
             }
             
             const result = await response.json();
             console.log('Voice define response:', result);
+
+            // 云 TTS 模式下服务端以 200 返回 error（声音定义不可用），此处明确提示而非误报成功
+            if (result && result.error) {
+                document.getElementById('voiceDefineResponse').innerHTML =
+                    `<p style="color: red;">语音定义失败: ${result.error}</p>`;
+                return;
+            }
             
             // 保存语音定义到本地存储
             const voice = {
@@ -739,8 +874,8 @@ function setupVoiceDefine() {
 // 情感配置
 function setupEmotionConfig() {
     // 初始化情感滑块值显示
-    const emotions = ['happiness', 'sadness', 'anger', 'fear', 'disgust', 'surprise'];
-    emotions.forEach(emotionId => {
+    const emotionIds = ['happiness', 'sadness', 'anger', 'fear', 'disgust', 'surprise'];
+    emotionIds.forEach(emotionId => {
         const slider = document.getElementById(emotionId);
         const valueDisplay = document.getElementById(emotionId + 'Value');
         
@@ -788,7 +923,13 @@ function setupEmotionConfig() {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                // 透出服务端的具体错误（session_id/描述/音频格式等），避免只看到状态码无原因
+                let detail = `HTTP ${response.status}`;
+                try {
+                    const errBody = await response.json();
+                    if (errBody && errBody.error) detail = errBody.error;
+                } catch (_) { /* 响应非 JSON，保留状态码 */ }
+                throw new Error(detail);
             }
             
             const result = await response.json();
@@ -811,8 +952,8 @@ function setupEmotionConfig() {
                 timestamp: new Date().toISOString()
             };
             
-            window.emotions.push(emotionProfile);
-            localStorage.setItem('emotions', JSON.stringify(window.emotions));
+            emotions.push(emotionProfile);
+            localStorage.setItem('emotions', JSON.stringify(emotions));
             
             // 显示保存成功消息
             const responseDiv = document.getElementById('emotionConfigResponse');
@@ -1052,12 +1193,65 @@ function updateBaseVoiceSelect() {
     });
 }
 
-// 使用语音
-function useVoice(voiceId) {
+// 使用语音（优先用录音做声音克隆；克隆不可用则退化为绑定语音风格描述）
+async function useVoice(voiceId) {
     const voice = voices.find(v => v.id === voiceId);
-    if (voice) {
-        alert(`已选择使用语音：${voice.name}`);
-        // 这里可以添加使用语音的逻辑
+    if (!voice) return;
+
+    const description = voice.description || voice.name;
+    let audioBlob = null;
+    try {
+        audioBlob = await getVoiceAudio(voiceId);
+    } catch (e) {
+        console.warn('读取录音数据失败:', e);
+    }
+
+    // 有录音数据 → 走后端声音克隆（需 GPU/VoxCPM2）
+    if (audioBlob) {
+        try {
+            const fd = new FormData();
+            fd.append('session_id', sessionId);
+            fd.append('description', description);
+            fd.append('audio', new File([audioBlob], voiceId + '.wav', { type: 'audio/wav' }));
+            fd.append('pitch', 1.0);
+            fd.append('speed', 1.0);
+            fd.append('volume', 1.0);
+            fd.append('emotion_intensity', 0.5);
+
+            const resp = await fetch(`${apiUrl}/api/voice/define`, { method: 'POST', body: fd });
+            const result = await resp.json();
+            if (result && result.status === 'ok') {
+                alert(`已使用语音「${voice.name}」（声音克隆完成），后续对话将使用该音色。`);
+                return;
+            }
+            // 云 TTS 模式等场景克隆不可用，继续走退化路径
+            console.warn('声音克隆不可用，退化为语音风格绑定:', result);
+        } catch (e) {
+            console.warn('声音克隆调用失败，退化为语音风格绑定:', e);
+        }
+    }
+
+    // 退化路径：仅按描述绑定语音风格
+    try {
+        const body = {
+            description,
+            ...(voice.voiceDefinition ? { voice_definition: voice.voiceDefinition } : {}),
+            ...(voice.voiceParams ? { voice_params: voice.voiceParams } : {}),
+        };
+        const resp = await fetch(`${apiUrl}/api/ai/sessions/${sessionId}/voice-style`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        await resp.json();
+        alert(
+            audioBlob
+                ? `已绑定语音「${voice.name}」。注意：当前为云 TTS 模式，音色克隆需 GPU 部署后生效。`
+                : `已绑定语音「${voice.name}」（该语音无录音数据，仅按描述绑定）。`
+        );
+    } catch (err) {
+        alert(`绑定语音失败：${err.message}`);
     }
 }
 
@@ -1066,17 +1260,39 @@ function deleteVoice(voiceId) {
     if (confirm('确定要删除这个语音吗？')) {
         voices = voices.filter(v => v.id !== voiceId);
         localStorage.setItem('voices', JSON.stringify(voices));
+        deleteVoiceAudio(voiceId).catch(() => {});
         displaySavedVoices();
         updateBaseVoiceSelect();
     }
 }
 
-// 使用情感配置
-function useEmotion(emotionId) {
+// 使用情感配置（绑定到当前会话）
+async function useEmotion(emotionId) {
     const emotion = emotions.find(e => e.id === emotionId);
-    if (emotion) {
-        alert(`已选择使用情感配置：${emotion.name}`);
-        // 这里可以添加使用情感配置的逻辑
+    if (!emotion) return;
+
+    try {
+        const fd = new FormData();
+        fd.append('session_id', sessionId);
+        fd.append('emotion_name', emotion.name);
+        fd.append('emotion_description', emotion.description || '');
+        const e = emotion.emotions || {};
+        fd.append('happiness', e.happiness ?? 0.5);
+        fd.append('sadness', e.sadness ?? 0.5);
+        fd.append('anger', e.anger ?? 0.5);
+        fd.append('fear', e.fear ?? 0.5);
+        fd.append('disgust', e.disgust ?? 0.5);
+        fd.append('surprise', e.surprise ?? 0.5);
+
+        const resp = await fetch(`${apiUrl}/api/emotion-config`, {
+            method: 'POST',
+            body: fd,
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        await resp.json();
+        alert(`已启用情感配置「${emotion.name}」，后续合成将带上该情感风格。`);
+    } catch (err) {
+        alert(`启用情感配置失败：${err.message}`);
     }
 }
 

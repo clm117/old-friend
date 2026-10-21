@@ -275,6 +275,24 @@ async def get_session_character(session_id: str):
     return {"status": "ok", "character": ch}
 
 
+class VoiceStyleBind(BaseModel):
+    description: str                       # 语音风格描述（英文 prompt，供 TTS 使用）
+    voice_definition: Optional[str] = None  # 可选：VoxCPM2 声音定义字符串
+    voice_params: Optional[dict] = None     # 可选：VoxCPM2 声音参数（pitch/speed 等）
+
+
+@app.post("/api/ai/sessions/{session_id}/voice-style")
+async def bind_voice_style(session_id: str, payload: VoiceStyleBind):
+    """为会话绑定语音风格（覆盖角色自带的 voice_prompt）"""
+    if payload.description:
+        memory_storage.set_short_term_memory(session_id, "voice_description", payload.description)
+    if payload.voice_definition:
+        memory_storage.set_short_term_memory(session_id, "voice_definition", payload.voice_definition)
+    if payload.voice_params:
+        memory_storage.set_short_term_memory(session_id, "voice_params", json.dumps(payload.voice_params))
+    return {"status": "ok", "session_id": session_id, "voice_description": payload.description}
+
+
 def _resolve_session_style(session_id: str, explicit_description: str = None):
     """
     解析 TTS 语音风格，优先级：
