@@ -18,6 +18,24 @@ import os
 import re
 import time
 from collections import defaultdict, deque
+from pathlib import Path
+
+# ===== 加载项目根目录 .env（不覆盖已存在的环境变量）=====
+def _load_root_dotenv():
+    """网关从项目根目录 .env 读取配置；compose/生产环境由容器注入，不冲突。"""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key, val = key.strip(), val.strip().strip("'\"")
+        if key and val and key not in os.environ:
+            os.environ[key] = val
+
+_load_root_dotenv()
 
 import requests
 import uvicorn
@@ -240,6 +258,10 @@ def _upstream_error(endpoint: str, exc: Exception) -> JSONResponse:
 # ===== 安全中间件：限流 → 鉴权 → 上传预检 → 安全响应头 =====
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
+    # CORS 预检由 CORSMiddleware 处理，鉴权/限流不应拦截 OPTIONS
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     _start = time.time()
     if _rate_limited(request):
         METRICS_AUTH_FAILURES.labels(reason="rate_limited").inc()
