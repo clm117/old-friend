@@ -339,10 +339,10 @@ async def process_voice(session_id: str = Form(...), audio: UploadFile = File(..
 
     # 转发到核心AI服务
     try:
-        response = requests.post(
+        response = await _async_request(
+            "post",
             f"{AI_SERVICE_URL}/api/ai/process",
             json={"session_id": session_id, "audio_data": audio_data.hex()},
-            timeout=AI_SERVICE_TIMEOUT,
         )
         return response.json()
     except Exception as e:
@@ -359,7 +359,8 @@ async def tts(session_id: str = Form(...), text: str = Form(...), description: s
     if len(text) > 1000:
         return JSONResponse({"error": "text 过长（上限 1000 字）"}, status_code=400)
     try:
-        response = requests.post(
+        response = await _async_request(
+            "post",
             f"{AI_SERVICE_URL}/api/ai/tts",
             data={
                 "session_id": session_id,
@@ -390,11 +391,11 @@ async def transcribe_voice(session_id: str = Form("default"), audio: UploadFile 
     if invalid:
         return JSONResponse({"error": invalid}, status_code=400)
     try:
-        response = requests.post(
+        response = await _async_request(
+            "post",
             f"{AI_SERVICE_URL}/api/ai/transcribe",
             data={"session_id": session_id},
             files={"audio": ("recording.wav", audio_bytes, "audio/wav")},
-            timeout=AI_SERVICE_TIMEOUT,
         )
         return response.json()
     except Exception as e:
@@ -407,9 +408,9 @@ async def get_response(session_id: str):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     try:
-        response = requests.get(
+        response = await _async_request(
+            "get",
             f"{AI_SERVICE_URL}/api/ai/response/{session_id}",
-            timeout=AI_SERVICE_TIMEOUT,
         )
         return response.json()
     except Exception as e:
@@ -475,7 +476,8 @@ async def emotion_config(
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     try:
         # 转发到核心AI服务
-        response = requests.post(
+        response = await _async_request(
+            "post",
             f"{AI_SERVICE_URL}/api/ai/emotion-config",
             data={
                 "session_id": session_id,
@@ -488,7 +490,6 @@ async def emotion_config(
                 "disgust": disgust,
                 "surprise": surprise,
             },
-            timeout=AI_SERVICE_TIMEOUT,
         )
         return response.json()
     except Exception as e:
@@ -501,9 +502,9 @@ async def get_emotion_config(session_id: str):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     try:
-        response = requests.get(
+        response = await _async_request(
+            "get",
             f"{AI_SERVICE_URL}/api/ai/emotion-config/{session_id}",
-            timeout=AI_SERVICE_TIMEOUT,
         )
         return response.json()
     except Exception as e:
@@ -514,7 +515,7 @@ async def get_emotion_config(session_id: str):
 @app.get("/api/characters/options")
 async def character_options():
     try:
-        resp = requests.get(f"{AI_SERVICE_URL}/api/ai/characters/options", timeout=AI_SERVICE_TIMEOUT)
+        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/characters/options")
         return resp.json()
     except Exception as e:
         return _upstream_error("characters/options", e)
@@ -523,7 +524,7 @@ async def character_options():
 @app.get("/api/characters")
 async def list_characters():
     try:
-        resp = requests.get(f"{AI_SERVICE_URL}/api/ai/characters", timeout=AI_SERVICE_TIMEOUT)
+        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/characters")
         return resp.json()
     except Exception as e:
         return _upstream_error("characters/list", e)
@@ -534,8 +535,9 @@ async def get_character(character_id: str):
     if not _safe_id(character_id):
         return JSONResponse({"error": "character_id 非法"}, status_code=400)
     try:
-        resp = requests.get(
-            f"{AI_SERVICE_URL}/api/ai/characters/{character_id}", timeout=AI_SERVICE_TIMEOUT
+        resp = await _async_request(
+            "get",
+            f"{AI_SERVICE_URL}/api/ai/characters/{character_id}",
         )
         return resp.json()
     except Exception as e:
@@ -546,8 +548,10 @@ async def get_character(character_id: str):
 async def create_character(request: Request):
     try:
         payload = await request.json()
-        resp = requests.post(
-            f"{AI_SERVICE_URL}/api/ai/characters", json=payload, timeout=AI_SERVICE_TIMEOUT
+        resp = await _async_request(
+            "post",
+            f"{AI_SERVICE_URL}/api/ai/characters",
+            json=payload,
         )
         return resp.json()
     except Exception as e:
@@ -561,10 +565,10 @@ async def bind_character(session_id: str, character_id: str = Form(...)):
     if not _safe_id(character_id):
         return JSONResponse({"error": "character_id 非法"}, status_code=400)
     try:
-        resp = requests.post(
+        resp = await _async_request(
+            "post",
             f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/character",
             data={"character_id": character_id},
-            timeout=AI_SERVICE_TIMEOUT,
         )
         return resp.json()
     except Exception as e:
@@ -576,8 +580,9 @@ async def get_session_character(session_id: str):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     try:
-        resp = requests.get(
-            f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/character", timeout=AI_SERVICE_TIMEOUT
+        resp = await _async_request(
+            "get",
+            f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/character",
         )
         return resp.json()
     except Exception as e:
@@ -593,10 +598,10 @@ async def bind_voice_style(session_id: str, request: Request):
     except Exception:
         return JSONResponse({"error": "请求体必须是 JSON"}, status_code=400)
     try:
-        resp = requests.post(
+        resp = await _async_request(
+            "post",
             f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/voice-style",
             json=body,
-            timeout=AI_SERVICE_TIMEOUT,
         )
         return resp.json()
     except Exception as e:
@@ -660,7 +665,9 @@ async def auth_me(request: Request):
 @app.get("/health")
 async def health_check():
     try:
-        resp = requests.get(f"{AI_SERVICE_URL}/health", timeout=3)
+        resp = await _async_request(
+            "get", f"{AI_SERVICE_URL}/health", timeout=3
+        )
         ai_status = resp.json()
     except Exception:
         ai_status = {"status": "unreachable"}
