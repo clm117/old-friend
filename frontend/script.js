@@ -1489,8 +1489,11 @@ function setupCharacters() {
 
 // 加载枚举选项并填充下拉框/标签
 async function loadCharacterOptions() {
+    // 鉴权启动前（无 token）跳过，待登录后由 handleAuthSubmit 重载页面再执行
+    if (authRequired && !getToken()) return;
     try {
         const resp = await fetch(`${apiUrl}/api/characters/options`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const result = await resp.json();
         characterOptions = result.options;
 
@@ -1503,7 +1506,7 @@ async function loadCharacterOptions() {
         // 选项就绪后重新渲染角色列表（中文标签映射需要 options）
         loadCharacters();
     } catch (e) {
-        console.error('加载角色选项失败:', e);
+        console.warn('加载角色选项失败:', e.message);
     }
 }
 
@@ -1527,14 +1530,16 @@ function getSelectedTags(groupKey) {
 
 // 加载角色列表
 async function loadCharacters() {
+    if (authRequired && !getToken()) return;
     try {
         const resp = await fetch(`${apiUrl}/api/characters`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const result = await resp.json();
         const list = result.characters || [];
         renderCharacterList('presetCharacterList', list.filter(c => c.is_preset));
         renderCharacterList('customCharacterList', list.filter(c => !c.is_preset));
     } catch (e) {
-        console.error('加载角色列表失败:', e);
+        console.warn('加载角色列表失败:', e.message);
     }
 }
 
@@ -1600,16 +1605,19 @@ function showCharacterStatus(msg) {
 
 // 查询当前会话已绑定的角色
 async function loadSessionCharacter() {
+    if (authRequired && !getToken()) return;
     try {
         const resp = await fetch(`${apiUrl}/api/sessions/${sessionId}/character`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const result = await resp.json();
         if (result.character) {
             currentCharacterId = result.character.id;
             showCharacterStatus(`当前使用角色：「${result.character.name}」`);
             loadCharacters();
         }
+        // 会话未绑定时 character=null，属正常业务状态，静默返回
     } catch (e) {
-        console.error('查询会话角色失败:', e);
+        console.warn('查询会话角色失败:', e.message);
     }
 }
 
