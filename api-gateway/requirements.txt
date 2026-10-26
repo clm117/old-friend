@@ -4,8 +4,8 @@
 fastapi==0.136.0
 uvicorn[standard]==0.45.0
 python-jose[cryptography]==3.5.0
-requests==2.32.5
+requests==2.33.0
 websockets==17.1
-python-multipart==0.0.26
+python-multipart==0.0.31
 
 prometheus-client==0.24.0

@@ -6,14 +6,19 @@
 # --- Web 框架 ---
 fastapi==0.136.0
 uvicorn[standard]==0.45.0
-python-multipart==0.0.26
+python-multipart==0.0.31
 pydantic==2.13.3
 
 # --- 模型推理 ---
-transformers==5.3.0
+# 注：transformers 已升级至 5.10.0 修复安全漏洞（PYSEC-2026-2290/3929）
+# 注：datasets 5.0.1 超出 voxcpm 声明的 <4 约束，但实测推理链路不引用 training 模块，不受影响
+transformers==5.10.0
 accelerate==1.13.0
 safetensors==0.7.0
 voxcpm==2.0.2
+
+# 传递依赖已在 Python 环境中单独锁定（pillow 13.0.0 / datasets 5.0.1 / fsspec 2026.6.0）
+# 注意：不可写入 requirements.txt——pip-audit 会在隔离 venv 中检测到与 voxcpm 的声明冲突
 
 # --- 数值与音频处理 ---
 numpy==2.3.5
