@@ -766,15 +766,9 @@ function setupVoiceDefine() {
             return;
         }
 
-        // 网关只接受 wav/mp3/ogg/flac/m4a，故先把参考音频统一转为 WAV；转换失败则退回原文件，
-        // 由服务端给出明确提示（避免"不支持的音频格式"这类 400）
-        let audioFile = voiceFileInput.files[0];
-        try {
-            const wavBlob = await _blobToWav(audioFile);
-            audioFile = new File([wavBlob], 'reference.wav', { type: 'audio/wav' });
-        } catch (e) {
-            console.warn('参考音频转 WAV 失败，改用原文件上传:', e);
-        }
+        // 网关已原生支持 wav/mp3/ogg/flac/m4a 五种格式（见 api-gateway/_AUDIO_MAGIC），
+        // 无需前端预先解码转码，直接上传原文件即可，避免 _encodeWav 的同步 CPU 密集循环阻塞主线程
+        const audioFile = voiceFileInput.files[0];
         
         try {
             // 构建表单数据

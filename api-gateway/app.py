@@ -255,6 +255,14 @@ def _upstream_error(endpoint: str, exc: Exception) -> JSONResponse:
     return JSONResponse({"error": "服务暂时不可用，请稍后重试"}, status_code=502)
 
 
+async def _async_request(method: str, url: str, **kwargs):
+    """把同步 requests 包进线程池，避免在 async def 里阻塞事件循环。
+    网关现有 15 处 requests.get/post 统一走这里——逐步迁移到 httpx.AsyncClient 前的过渡层。"""
+    loop = asyncio.get_running_loop()
+    kwargs.setdefault("timeout", AI_SERVICE_TIMEOUT)
+    return await loop.run_in_executor(None, lambda: getattr(requests, method.lower())(url, **kwargs))
+
+
 # ===== 安全中间件：限流 → 鉴权 → 上传预检 → 安全响应头 =====
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
@@ -431,8 +439,9 @@ async def define_voice(
         if invalid:
             return JSONResponse({"error": invalid}, status_code=400)
 
-        # 转发到核心AI服务
-        response = requests.post(
+        # 转发到核心AI服务（包进线程池，避免同步 requests 阻塞 asyncio 事件循环）
+        response = await _async_request(
+            "post",
             f"{AI_SERVICE_URL}/api/ai/define-voice",
             data={
                 "session_id": session_id,
@@ -443,7 +452,6 @@ async def define_voice(
                 "emotion_intensity": emotion_intensity,
             },
             files={"audio": (audio.filename, audio_data, audio.content_type or "application/octet-stream")},
-            timeout=AI_SERVICE_TIMEOUT,
         )
         return response.json()
     except Exception as e:
