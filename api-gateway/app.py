@@ -151,7 +151,8 @@ UPLOAD_PATHS = ("/api/voice/process", "/api/voice/transcribe", "/api/voice/defin
 
 # ===== 上传与输入校验 =====
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_MB", "10")) * 1024 * 1024
-_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
+# 只允许字母/数字开头，中间可含 _ - . 三种分隔符（但不允许纯分隔符）
+_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-.]{0,63}$")
 
 # 常见音频容器魔数（含 m4a/mp4 的 ftyp 分支单独判断）
 _AUDIO_MAGIC = (
