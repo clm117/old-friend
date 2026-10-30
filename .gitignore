@@ -36,6 +36,9 @@ __pycache__/
 venv/
 env/
 
+# --- AI 服务运行时数据（角色持久化、memory 等）---
+ai-service/data/
+
 # --- 日志与临时调试产物 ---
 *.log
 debug*.py
