@@ -24,6 +24,10 @@ test_outputs/
 *.wav
 *.mp3
 *.mp4
+*.safetensors
+*.pth
+*.bin
+*.pt
 
 # --- Python 缓存与虚拟环境 ---
 __pycache__/

@@ -3,7 +3,7 @@ import torch
 class SeeduplexService:
     def __init__(self):
         # 加载Seeduplex模型
-        self.model = torch.load("seeduplex_model.pt")
+        self.model = torch.load("seeduplex_model.pt", weights_only=True)
         self.model.eval()
     
     def process_audio(self, audio_data):

@@ -18,6 +18,20 @@ let chatWs = null;  // WebSocket 连接
 let audioQueue = [];  // 待播放音频队列
 let isPlayingAudio = false;  // 是否正在播放
 
+// ============ XSS 防护：HTML 转义工具 ============
+// 把用户输入 / 后端返回的动态值嵌入 innerHTML 前必须调用
+function escapeHtml(str) {
+    if (str == null) return '';
+    const t = String(str);
+    // 数字等非字符串直接 toString 后也安全
+    return t
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // ============================================
 // 鉴权：令牌存储 + 请求自动携带 + 登录门禁
 // ============================================
@@ -803,7 +817,7 @@ function setupVoiceDefine() {
             // 云 TTS 模式下服务端以 200 返回 error（声音定义不可用），此处明确提示而非误报成功
             if (result && result.error) {
                 document.getElementById('voiceDefineResponse').innerHTML =
-                    `<p style="color: red;">语音定义失败: ${result.error}</p>`;
+                    `<p style="color: red;">语音定义失败: ${escapeHtml(result.error)}</p>`;
                 return;
             }
             
@@ -860,7 +874,7 @@ function setupVoiceDefine() {
         } catch (error) {
             console.error('Error defining voice:', error);
             const responseDiv = document.getElementById('voiceDefineResponse');
-            responseDiv.innerHTML = `<p style="color: red;">定义语音时出错: ${error.message}</p>`;
+            responseDiv.innerHTML = `<p style="color: red;">定义语音时出错: ${escapeHtml(error.message)}</p>`;
         }
     });
 }
@@ -985,7 +999,7 @@ function setupEmotionConfig() {
         } catch (error) {
             console.error('Error saving emotion config:', error);
             const responseDiv = document.getElementById('emotionConfigResponse');
-            responseDiv.innerHTML = `<p style="color: red;">保存情感配置时出错: ${error.message}</p>`;
+            responseDiv.innerHTML = `<p style="color: red;">保存情感配置时出错: ${escapeHtml(error.message)}</p>`;
         }
     });
 }
@@ -1118,13 +1132,13 @@ function displaySavedVoices() {
         voiceCard.className = 'voice-card';
         voiceCard.innerHTML = `
             <div>
-                <h5>${voice.name}</h5>
-                <p>${voice.description || '无描述'}</p>
+                <h5>${escapeHtml(voice.name)}</h5>
+                <p>${escapeHtml(voice.description || '无描述')}</p>
                 <p style="font-size: 0.8em; color: #999;">${new Date(voice.timestamp).toLocaleString()}</p>
             </div>
             <div>
-                <button class="use-btn" onclick="useVoice('${voice.id}')">使用</button>
-                <button class="delete-btn" onclick="deleteVoice('${voice.id}')">删除</button>
+                <button class="use-btn" onclick="useVoice('${escapeHtml(voice.id)}')">使用</button>
+                <button class="delete-btn" onclick="deleteVoice('${escapeHtml(voice.id)}')">删除</button>
             </div>
         `;
         savedVoicesDiv.appendChild(voiceCard);
@@ -1157,13 +1171,13 @@ function displaySavedEmotions() {
         emotionCard.className = 'emotion-card';
         emotionCard.innerHTML = `
             <div>
-                <h5>${emotion.name}</h5>
-                <p>${emotion.description || '无描述'}</p>
+                <h5>${escapeHtml(emotion.name)}</h5>
+                <p>${escapeHtml(emotion.description || '无描述')}</p>
                 <p style="font-size: 0.8em; color: #999;">${new Date(emotion.timestamp).toLocaleString()}</p>
             </div>
             <div>
-                <button class="use-btn" onclick="useEmotion('${emotion.id}')">使用</button>
-                <button class="delete-btn" onclick="deleteEmotion('${emotion.id}')">删除</button>
+                <button class="use-btn" onclick="useEmotion('${escapeHtml(emotion.id)}')">使用</button>
+                <button class="delete-btn" onclick="deleteEmotion('${escapeHtml(emotion.id)}')">删除</button>
             </div>
         `;
         savedEmotionsDiv.appendChild(emotionCard);
@@ -1429,7 +1443,7 @@ function setupTts() {
                 }
             } catch (error) {
                 console.error('Error synthesizing speech:', error);
-                ttsResponse.innerHTML = `<p style="color: red;">第 ${i + 1} 句合成出错: ${error.message}</p>`;
+                ttsResponse.innerHTML = `<p style="color: red;">第 ${i + 1} 句合成出错: ${escapeHtml(error.message)}</p>`;
                 ttsBtn.disabled = false;
                 ttsBtn.textContent = '开始合成';
                 return;
@@ -1506,14 +1520,14 @@ async function loadCharacterOptions() {
 
 function fillSelect(selectId, dict) {
     const sel = document.getElementById(selectId);
-    sel.innerHTML = Object.entries(dict).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+    sel.innerHTML = Object.entries(dict).map(([k, v]) => `<option value="${escapeHtml(k)}">${escapeHtml(v)}</option>`).join('');
 }
 
 function renderTagGroup(containerId, dict, groupKey) {
     const container = document.getElementById(containerId);
     container.innerHTML = Object.entries(dict).map(([k, v]) =>
         `<label style="display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border:1px solid #ddd; border-radius:16px; font-size:0.85rem; cursor:pointer; background:#fff;">
-            <input type="checkbox" value="${k}" data-group="${groupKey}" style="margin:0;">${v}
+            <input type="checkbox" value="${escapeHtml(k)}" data-group="${groupKey}" style="margin:0;">${escapeHtml(v)}
         </label>`
     ).join('');
 }
@@ -1556,14 +1570,14 @@ function renderCharacterList(containerId, characters) {
         return `
         <div style="border:1px solid ${active ? '#4CAF50' : '#ddd'}; border-radius:10px; padding:12px; background:${active ? '#f1f8f2' : '#fff'};">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong>${ch.name} ${active ? '<span style="color:#4CAF50; font-size:0.8rem;">✓ 使用中</span>' : ''}</strong>
-                <button onclick="bindCharacter('${ch.id}')" style="padding:6px 14px; background:${active ? '#ccc' : '#4CAF50'}; color:#fff; border:none; border-radius:6px; cursor:pointer;">${active ? '已选择' : '选择'}</button>
+                <strong>${escapeHtml(ch.name)} ${active ? '<span style="color:#4CAF50; font-size:0.8rem;">✓ 使用中</span>' : ''}</strong>
+                <button onclick="bindCharacter('${escapeHtml(ch.id)}')" style="padding:6px 14px; background:${active ? '#ccc' : '#4CAF50'}; color:#fff; border:none; border-radius:6px; cursor:pointer;">${active ? '已选择' : '选择'}</button>
             </div>
             <div style="font-size:0.85rem; color:#666; margin-top:6px;">
-                ${characterOptions?.genders?.[vp.gender] || ''} · ${characterOptions?.age_groups?.[vp.age_group] || ''} · 音色：${tags || '默认'}
+                ${characterOptions?.genders?.[vp.gender] || escapeHtml(vp.gender || '')} · ${characterOptions?.age_groups?.[vp.age_group] || escapeHtml(vp.age_group || '')} · 音色：${escapeHtml(tags) || '默认'}
             </div>
             <div style="font-size:0.85rem; color:#666; margin-top:2px;">
-                ${pp.identity ? '身份：' + pp.identity + ' · ' : ''}关系：${characterOptions?.relations?.[pp.relation] || '朋友'}${personality ? ' · ' + personality : ''}
+                ${pp.identity ? '身份：' + escapeHtml(pp.identity) + ' · ' : ''}关系：${characterOptions?.relations?.[pp.relation] || escapeHtml(pp.relation || '朋友')}${personality ? ' · ' + escapeHtml(personality) : ''}
             </div>
         </div>`;
     }).join('');

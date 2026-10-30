@@ -133,6 +133,7 @@ class VoxCPM2Service:
         根据语音定义生成语音嵌入（占位实现：VoxCPM2 管线无独立嵌入接口，
         返回基于定义文本的确定性伪嵌入，供记忆存储与检索链路使用）
         """
-        seed = int(hashlib.md5(str(voice_definition).encode("utf-8")).hexdigest()[:8], 16)
+        import hashlib, secrets
+        seed = int(hashlib.sha256(str(voice_definition).encode("utf-8")).hexdigest()[:8], 16)
         rng = np.random.RandomState(seed)
         return rng.rand(1, 768).astype(np.float32)

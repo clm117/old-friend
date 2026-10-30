@@ -3,7 +3,7 @@ import torch
 class OmniVoiceService:
     def __init__(self):
         # 加载OmniVoice模型
-        self.model = torch.load("omni_voice_model.pt")
+        self.model = torch.load("omni_voice_model.pt", weights_only=True)
         self.model.eval()
     
     def clone_voice(self, reference_audio, text):

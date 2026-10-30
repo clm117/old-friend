@@ -160,6 +160,7 @@ class VoxCPM2ServiceGPU:
 
     def generate_voice_embedding(self, voice_definition):
         """根据语音定义生成语音嵌入（与 CPU 版一致的占位实现）"""
-        seed = int(hashlib.md5(str(voice_definition).encode("utf-8")).hexdigest()[:8], 16)
+        import hashlib
+        seed = int(hashlib.sha256(str(voice_definition).encode("utf-8")).hexdigest()[:8], 16)
         rng = np.random.RandomState(seed)
         return rng.rand(1, 768).astype(np.float32)

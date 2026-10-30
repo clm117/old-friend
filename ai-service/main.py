@@ -38,7 +38,8 @@ _load_dotenv()
 # ===== TTS 提供方：voxcpm2（本地模型，实时交互需 GPU）| cloud（云 TTS，验证期免 GPU）=====
 _TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "voxcpm2").strip().lower()
 
-from fun_audio_chat.fun_audio_chat_service import FunAudioChatService
+# FunAudioChatService（语音对话 ASR 入口）—— 仅在本地 TTS 模式下实例化
+# cloud 模式跳过：该服务依赖本地 transformers，且 cloud 模式下 /api/ai/process 端点不会被前端调用
 
 # ===== GPU/CPU 自动切换 =====
 # 有 CUDA → 加载 GPU 版服务（optimize=True, 高质量参数, 异步合成）
@@ -151,7 +152,20 @@ def _internal_error(endpoint: str, exc: Exception) -> dict:
     return {"error": "服务内部错误"}
 
 # 初始化服务
-aio_service = FunAudioChatService()
+if _TTS_PROVIDER == "cloud":
+    # 云 TTS 模式：跳过 FunAudioChatService（本地模型）实例化，省 import/加载时间
+    class _MockAudioService:
+        def process_audio(self, *a, **kw):
+            return "Cloud TTS 模式：Fun-Audio-Chat 未启用"
+        def get_voice_response(self, *a, **kw):
+            return b""
+        def streaming_process(self, *a, **kw):
+            return "Cloud TTS 模式"
+    aio_service = _MockAudioService()
+    print("[启动] TTS_PROVIDER=cloud，FunAudioChatService 跳过（mock 占位）")
+else:
+    from fun_audio_chat.fun_audio_chat_service import FunAudioChatService
+    aio_service = FunAudioChatService()
 if _TTS_PROVIDER == "cloud":
     # 云 TTS 验证模式：不实例化本地 VoxCPM2（声音定义/克隆端点同步不可用）
     from cloud_tts_service import cloud_tts_service
