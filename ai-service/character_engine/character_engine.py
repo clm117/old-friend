@@ -10,8 +10,12 @@
 - 不设"精神状态"预设字段（合规红线），心理危机由内容安全护栏处理
 - 官方预设角色解决冷启动，用户自定义走向导式（必填声学项给默认值）
 """
+import json
+import os
+import threading
 import time
 import uuid
+from pathlib import Path
 
 # ===== 枚举字典（前后端共用，前端向导下拉选项以此为准）=====
 
@@ -155,11 +159,42 @@ PRESET_CHARACTERS = [
 class CharacterEngine:
     """角色引擎：预设角色 + 用户自定义角色 + 档案 → prompt 转换"""
 
+    # 持久化文件路径（相对 ai-service/ 目录）
+    DATA_DIR = Path(os.environ.get("YUBAN_DATA_DIR", Path(__file__).parent.parent / "data"))
+    PERSIST_FILE = DATA_DIR / "custom_characters.json"
+
     def __init__(self):
         # 预设角色常驻内存
         self._presets = {c["id"]: dict(c) for c in PRESET_CHARACTERS}
-        # 用户自定义角色（生产环境替换为 Redis/DB，接口不变）
+        # 用户自定义角色 —— 启动时从 JSON 文件加载
         self._custom = {}
+        self._lock = threading.Lock()
+        self._load()
+
+    # ---------- 持久化 ----------
+
+    def _load(self):
+        """从 JSON 文件加载自定义角色（文件不存在则空字典）"""
+        try:
+            if self.PERSIST_FILE.exists():
+                with open(self.PERSIST_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                self._custom = {c["id"]: c for c in data if c.get("id", "").startswith("custom_")}
+        except (json.JSONDecodeError, OSError, KeyError) as e:
+            # 文件损坏时安全降级（不让启动失败）
+            self._custom = {}
+
+    def _save(self):
+        """原子写：写临时文件再 rename，避免中途崩溃丢数据"""
+        try:
+            self.DATA_DIR.mkdir(parents=True, exist_ok=True)
+            tmp = self.PERSIST_FILE.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(list(self._custom.values()), f, ensure_ascii=False, indent=2)
+            os.replace(tmp, self.PERSIST_FILE)
+        except OSError:
+            # 持久化失败不让主流程挂掉
+            pass
 
     # ---------- 查询 ----------
 
@@ -180,7 +215,7 @@ class CharacterEngine:
             "personality_tags": PERSONALITY_TAGS,
         }
 
-    # ---------- 创建/更新 ----------
+    # ---------- 创建/删除 ----------
 
     def create_character(self, name, voice_profile=None, persona_profile=None):
         """
@@ -197,8 +232,21 @@ class CharacterEngine:
             "voice_profile": self._normalize_voice_profile(voice_profile),
             "persona_profile": self._normalize_persona_profile(persona_profile),
         }
-        self._custom[character_id] = character
+        with self._lock:
+            self._custom[character_id] = character
+            self._save()
         return character
+
+    def delete_character(self, character_id):
+        """删除自定义角色。预设角色不可删除。返回 True/False 表示是否删除成功。"""
+        if character_id in self._presets:
+            return False
+        with self._lock:
+            if character_id in self._custom:
+                del self._custom[character_id]
+                self._save()
+                return True
+        return False
 
     @staticmethod
     def _normalize_voice_profile(vp):

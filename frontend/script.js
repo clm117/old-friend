@@ -1561,17 +1561,24 @@ function renderCharacterList(containerId, characters) {
         }
         return;
     }
+    const isCustom = containerId === 'customCharacterList';
     container.innerHTML = characters.map(ch => {
         const vp = ch.voice_profile || {};
         const pp = ch.persona_profile || {};
         const tags = (vp.voice_tags || []).map(t => characterOptions?.voice_tags?.[t] || t).join('、');
         const personality = (pp.personality_tags || []).map(t => characterOptions?.personality_tags?.[t] || t).join('、');
         const active = ch.id === currentCharacterId;
+        const delBtn = isCustom && !active
+            ? `<button onclick="deleteCharacter('${escapeHtml(ch.id)}')" style="margin-left:8px; padding:6px 12px; background:#ff5252; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.85rem;">删除</button>`
+            : '';
         return `
         <div style="border:1px solid ${active ? '#4CAF50' : '#ddd'}; border-radius:10px; padding:12px; background:${active ? '#f1f8f2' : '#fff'};">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <strong>${escapeHtml(ch.name)} ${active ? '<span style="color:#4CAF50; font-size:0.8rem;">✓ 使用中</span>' : ''}</strong>
-                <button onclick="bindCharacter('${escapeHtml(ch.id)}')" style="padding:6px 14px; background:${active ? '#ccc' : '#4CAF50'}; color:#fff; border:none; border-radius:6px; cursor:pointer;">${active ? '已选择' : '选择'}</button>
+                <div>
+                    <button onclick="bindCharacter('${escapeHtml(ch.id)}')" style="padding:6px 14px; background:${active ? '#ccc' : '#4CAF50'}; color:#fff; border:none; border-radius:6px; cursor:pointer;">${active ? '已选择' : '选择'}</button>
+                    ${delBtn}
+                </div>
             </div>
             <div style="font-size:0.85rem; color:#666; margin-top:6px;">
                 ${characterOptions?.genders?.[vp.gender] || escapeHtml(vp.gender || '')} · ${characterOptions?.age_groups?.[vp.age_group] || escapeHtml(vp.age_group || '')} · 音色：${escapeHtml(tags) || '默认'}
@@ -1609,6 +1616,27 @@ function showCharacterStatus(msg) {
     const el = document.getElementById('characterStatus');
     el.style.display = 'block';
     el.textContent = msg;
+}
+
+// 删除自定义角色
+async function deleteCharacter(characterId) {
+    if (!confirm('确认删除该自定义角色？')) return;
+    try {
+        const resp = await fetch(`${apiUrl}/api/characters/${characterId}`, { method: 'DELETE' });
+        const result = await resp.json();
+        if (result.error) {
+            alert('删除失败：' + result.error);
+            return;
+        }
+        // 如果删的是当前会话绑定角色，解绑
+        if (currentCharacterId === characterId) {
+            currentCharacterId = null;
+            showCharacterStatus('角色已删除，请重新选择');
+        }
+        loadCharacters();
+    } catch (e) {
+        alert('删除失败：' + e.message);
+    }
 }
 
 // 查询当前会话已绑定的角色

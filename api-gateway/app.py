@@ -559,6 +559,20 @@ async def create_character(request: Request):
         return _upstream_error("characters/create", e)
 
 
+@app.delete("/api/characters/{character_id}")
+async def delete_character(character_id: str):
+    if not _safe_id(character_id):
+        return JSONResponse({"error": "character_id 非法"}, status_code=400)
+    try:
+        resp = await _async_request(
+            "delete",
+            f"{AI_SERVICE_URL}/api/ai/characters/{character_id}",
+        )
+        return resp.json()
+    except Exception as e:
+        return _upstream_error("characters/delete", e)
+
+
 @app.post("/api/sessions/{session_id}/character")
 async def bind_character(session_id: str, character_id: str = Form(...)):
     if not _safe_id(session_id):

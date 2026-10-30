@@ -260,6 +260,20 @@ async def create_character(payload: CharacterCreate):
     return {"status": "ok", "character": ch}
 
 
+@app.delete("/api/ai/characters/{character_id}")
+async def delete_character(character_id: str):
+    """删除自定义角色（预设角色不可删除）"""
+    ch = character_engine.get_character(character_id)
+    if not ch:
+        return {"error": "角色不存在"}
+    if ch.get("is_preset"):
+        return {"error": "预设角色不可删除"}
+    ok = character_engine.delete_character(character_id)
+    if ok:
+        return {"status": "ok", "deleted_id": character_id}
+    return {"error": "删除失败"}
+
+
 @app.post("/api/ai/sessions/{session_id}/character")
 async def bind_character(session_id: str, character_id: str = Form(...)):
     """为会话绑定角色（对话和合成均使用该角色的声音与人设）"""
