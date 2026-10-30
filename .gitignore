@@ -52,3 +52,13 @@ infrastructure/gpu/
 .idea/
 .DS_Store
 Thumbs.db
+
+# --- 临时 Word 锁文件 ---
+~$*
+
+# --- CAIE 学习资料（个人学习文档，不入库）---
+CAIE_*.docx
+caie_images/
+
+# --- Trae 临时共享包 ---
+.trae-html-share-packages/
