@@ -5,7 +5,7 @@
 分层：A=API（网关+AI 服务）  B=前端 UI（Playwright 真实浏览器）
 
 运行：python ui_test_deep.py
-输出：控制台 + e:/语伴/ui_test_deep_report.json
+输出：控制台 + 同目录 ui_test_deep_report.json
 """
 import base64
 import hashlib
@@ -127,36 +127,48 @@ def run_api(p):
         f"status={r.status}")
 
     # ---------- A2 登录数据类型分支 ----------
+    # 注意：登录接口限流 5/min，每次请求间隔 ≥ 0.3s 避免瞬时刷爆桶
     r = api.post("/api/auth/login", form={"username": USER, "password": PASS})
     rec("A06", "API-登录", "非 JSON 请求体 → 400", r.status == 400 and "请求体必须是 JSON" in body(r),
         f"status={r.status} {body(r)[:60]}")
 
+    time.sleep(0.3)
     r = post_json(api, "/api/auth/login", ["a", "b"], {})
     rec("A07", "API-登录", "JSON 数组（非对象）→ 400", r.status == 400 and "请求体格式不正确" in body(r),
         f"status={r.status} {body(r)[:60]}")
 
+    time.sleep(0.3)
     r = api.post("/api/auth/login", data={"username": "", "password": PASS})
     rec("A08", "API-登录", "username 空 → 400", r.status == 400 and "不能为空" in body(r), f"status={r.status}")
 
+    time.sleep(0.3)
     r = api.post("/api/auth/login", data={"username": USER, "password": ""})
     rec("A09", "API-登录", "password 空 → 400", r.status == 400 and "不能为空" in body(r), f"status={r.status}")
+
+    # login_token() + A06-A09 = 5 次登录（桶已满），等 62s 让窗口重置
+    print("[API] 登录桶已满（5/min），等 62s 后继续 A10-A14 ...")
+    time.sleep(62)
 
     r = api.post("/api/auth/login", data={"username": "a" * 65, "password": PASS})
     rec("A10", "API-登录", "username=65 字符（上限 64）→ 400", r.status == 400 and "格式不正确" in body(r),
         f"status={r.status}")
 
+    time.sleep(0.3)
     r = api.post("/api/auth/login", data={"username": USER, "password": "p" * 257})
     rec("A11", "API-登录", "password=257 字符（上限 256）→ 400", r.status == 400 and "格式不正确" in body(r),
         f"status={r.status}")
 
+    time.sleep(0.3)
     r = api.post("/api/auth/login", data={"username": USER, "password": "Wrong@123"})
     rec("A12", "API-登录", "错误密码 → 401 统一文案", r.status == 401 and "账号或密码错误" in body(r),
         f"status={r.status}")
 
+    time.sleep(0.3)
     r = api.post("/api/auth/login", data={"username": "no_such_user_xyz", "password": "Whatever@1"})
     rec("A13", "API-登录", "不存在的账号 → 401（防枚举同文案）", r.status == 401 and "账号或密码错误" in body(r),
         f"status={r.status}")
 
+    time.sleep(0.3)
     r = api.post("/api/auth/login", data={"username": USER, "password": PASS})
     j = jbody(r) or {}
     rec("A14", "API-登录", "正确凭证 → token/expires_in/token_type",
@@ -379,6 +391,10 @@ def run_api(p):
     # ---------- A12 HTTP 契约杂项 ----------
     r = api.get("/api/no-such-endpoint-p0", headers=AUTH)
     rec("A63", "API-契约", "未知路径 → 404", r.status == 404, f"status={r.status}")
+
+    # A10-A14 又耗了 5 次登录桶，等窗口重置再跑 A64/A65
+    print("[API] 登录桶 2 次耗尽，等 62s 后继续 A64/A65 ...")
+    time.sleep(62)
 
     r = api.get("/api/auth/login")
     rec("A64", "API-契约", "GET 打 POST-only 登录 → 405", r.status == 405, f"status={r.status}")
@@ -1550,6 +1566,11 @@ def main():
             tb = traceback.format_exc()
             print("API 段异常:", tb[:800])
             rec("Z01", "套件自检", "API 段完整执行（异常即中断）", False, tb.splitlines()[-1][:200])
+
+        # 登录限流桶（5/min）已被 API 段消耗，等窗口重置后 UI 段才能正常登录
+        print("[套件] 等待 62s 让登录限流窗口重置 ...")
+        time.sleep(62)
+
         try:
             run_ui(p)
         except Exception:
@@ -1573,11 +1594,12 @@ def main():
         print(f"[FAIL] {r['id']} [{r['area']}] {r['case']} | {r['detail']}")
     print("=" * 72)
 
-    with open(r"e:\语伴\ui_test_deep_report.json", "w", encoding="utf-8") as f:
+    REPORT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui_test_deep_report.json")
+    with open(REPORT_PATH, "w", encoding="utf-8") as f:
         json.dump({"summary": {"total": total, "passed": passed, "failed": len(failed),
                                "blocked": blocked}, "results": RESULTS},
                   f, ensure_ascii=False, indent=2)
-    print("报告: e:\\语伴\\ui_test_deep_report.json")
+    print(f"报告: {REPORT_PATH}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,612 @@
+{
+  "summary": {
+    "total": 86,
+    "passed": 79,
+    "failed": 7,
+    "blocked": 0
+  },
+  "results": [
+    {
+      "id": "A01",
+      "area": "API-鉴权",
+      "case": "GET /health 公开访问",
+      "status": "PASS",
+      "detail": "status=200"
+    },
+    {
+      "id": "A02",
+      "area": "API-鉴权",
+      "case": "无 Authorization → 401 缺少凭证",
+      "status": "PASS",
+      "detail": "status=401 {\"error\":\"缺少访问凭证\"}"
+    },
+    {
+      "id": "A03",
+      "area": "API-鉴权",
+      "case": "伪造 token → 401 无效凭证",
+      "status": "PASS",
+      "detail": "status=401 {\"error\":\"无效或已过期的访问凭证\"}"
+    },
+    {
+      "id": "A04",
+      "area": "API-鉴权",
+      "case": "Authorization 缺 Bearer 前缀 → 401",
+      "status": "PASS",
+      "detail": "status=401 {\"error\":\"缺少访问凭证\"}"
+    },
+    {
+      "id": "A05",
+      "area": "API-鉴权",
+      "case": "合法 token → 200",
+      "status": "PASS",
+      "detail": "status=200"
+    },
+    {
+      "id": "A06",
+      "area": "API-登录",
+      "case": "非 JSON 请求体 → 400",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"请求体必须是 JSON\"}"
+    },
+    {
+      "id": "A07",
+      "area": "API-登录",
+      "case": "JSON 数组（非对象）→ 400",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"请求体格式不正确\"}"
+    },
+    {
+      "id": "A08",
+      "area": "API-登录",
+      "case": "username 空 → 400",
+      "status": "PASS",
+      "detail": "status=400"
+    },
+    {
+      "id": "A09",
+      "area": "API-登录",
+      "case": "password 空 → 400",
+      "status": "PASS",
+      "detail": "status=400"
+    },
+    {
+      "id": "A10",
+      "area": "API-登录",
+      "case": "username=65 字符（上限 64）→ 400",
+      "status": "PASS",
+      "detail": "status=400"
+    },
+    {
+      "id": "A11",
+      "area": "API-登录",
+      "case": "password=257 字符（上限 256）→ 400",
+      "status": "PASS",
+      "detail": "status=400"
+    },
+    {
+      "id": "A12",
+      "area": "API-登录",
+      "case": "错误密码 → 401 统一文案",
+      "status": "PASS",
+      "detail": "status=401"
+    },
+    {
+      "id": "A13",
+      "area": "API-登录",
+      "case": "不存在的账号 → 401（防枚举同文案）",
+      "status": "PASS",
+      "detail": "status=401"
+    },
+    {
+      "id": "A14",
+      "area": "API-登录",
+      "case": "正确凭证 → token/expires_in/token_type",
+      "status": "PASS",
+      "detail": "token_len=171 expires_in=43200"
+    },
+    {
+      "id": "A15",
+      "area": "API-登录",
+      "case": "/api/auth/me 有效 token → username",
+      "status": "PASS",
+      "detail": "status=200"
+    },
+    {
+      "id": "A16",
+      "area": "API-参数校验",
+      "case": "含 / 的 session_id 非法",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"session_id 非法\"}"
+    },
+    {
+      "id": "A17",
+      "area": "API-参数校验",
+      "case": "session_id=65 字符（上限 64）非法",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"session_id 非法\"}"
+    },
+    {
+      "id": "A18",
+      "area": "API-参数校验",
+      "case": "含中文的 session_id 非法",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"session_id 非法\"}"
+    },
+    {
+      "id": "A19",
+      "area": "API-参数校验",
+      "case": "合法 session_id 通过",
+      "status": "PASS",
+      "detail": "status=200 {\"status\":\"ok\",\"session_id\":\"abc-123_X\"}"
+    },
+    {
+      "id": "A20",
+      "area": "API-TTS",
+      "case": "空 text → 400",
+      "status": "FAIL",
+      "detail": "status=422"
+    },
+    {
+      "id": "A21",
+      "area": "API-TTS",
+      "case": "纯空白 text → 400",
+      "status": "PASS",
+      "detail": "status=400"
+    },
+    {
+      "id": "A22",
+      "area": "API-TTS",
+      "case": "text=1001 字（上限 1000）→ 400",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"text 过长（上限 1000 字）\"}"
+    },
+    {
+      "id": "A23",
+      "area": "API-TTS",
+      "case": "text=1000 字（下边界）通过校验",
+      "status": "PASS",
+      "detail": "status=502"
+    },
+    {
+      "id": "A25",
+      "area": "API-定义",
+      "case": "description 空 → 400",
+      "status": "FAIL",
+      "detail": "status=422"
+    },
+    {
+      "id": "A26",
+      "area": "API-定义",
+      "case": "description=201 字（上限 200）→ 400",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"description 过长（上限 200 字）\"}"
+    },
+    {
+      "id": "A27",
+      "area": "API-定义",
+      "case": "空音频文件 → 400 音频内容为空",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"音频内容为空\"}"
+    },
+    {
+      "id": "A28",
+      "area": "API-定义",
+      "case": "非音频格式 → 400 不支持格式",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"不支持的音频格式（仅支持 wav / mp3 / ogg / flac / m4a）\"}"
+    },
+    {
+      "id": "A29",
+      "area": "API-定义",
+      "case": "合法 wav + 描述 → 通过校验",
+      "status": "PASS",
+      "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+    },
+    {
+      "id": "A29b",
+      "area": "API-定义",
+      "case": "pitch 负数 → 服务不崩溃",
+      "status": "PASS",
+      "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+    },
+    {
+      "id": "A29c",
+      "area": "API-定义",
+      "case": "speed=0 → 服务不崩溃",
+      "status": "PASS",
+      "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+    },
+    {
+      "id": "A29d",
+      "area": "API-定义",
+      "case": "volume 非数字 → 服务不崩溃",
+      "status": "PASS",
+      "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+    },
+    {
+      "id": "A31",
+      "area": "API-情感",
+      "case": "六维情感全 0（下边界）",
+      "status": "PASS",
+      "detail": "status=200 {\"status\":\"ok\",\"emotion_config\":{\"name\":\"全零\",\"description\":\"\",\"params\":{\"happine"
+    },
+    {
+      "id": "A32",
+      "area": "API-情感",
+      "case": "六维情感全 1（上边界）",
+      "status": "PASS",
+      "detail": "status=200 {\"status\":\"ok\",\"emotion_config\":{\"name\":\"全一\",\"description\":\"\",\"params\":{\"happine"
+    },
+    {
+      "id": "A33",
+      "area": "API-情感",
+      "case": "情感值超范围(-1/2) → clamp 到 [0,1]",
+      "status": "FAIL",
+      "detail": "status=200 happiness=-1.0 surprise=2.0"
+    },
+    {
+      "id": "A34",
+      "area": "API-情感",
+      "case": "非法 session_id → 400",
+      "status": "PASS",
+      "detail": "status=400"
+    },
+    {
+      "id": "A35",
+      "area": "API-角色",
+      "case": "空 name → 默认「未命名角色」",
+      "status": "PASS",
+      "detail": "name=未命名角色"
+    },
+    {
+      "id": "A36",
+      "area": "API-角色",
+      "case": "name=500 字 → 截断到 64",
+      "status": "PASS",
+      "detail": "name_len=64"
+    },
+    {
+      "id": "A37",
+      "area": "API-角色",
+      "case": "gender 非法 → female",
+      "status": "PASS",
+      "detail": "gender=female"
+    },
+    {
+      "id": "A38",
+      "area": "API-角色",
+      "case": "age_group 非法 → young_adult",
+      "status": "PASS",
+      "detail": "age=young_adult"
+    },
+    {
+      "id": "A39",
+      "area": "API-角色",
+      "case": "relation 非法 → friend",
+      "status": "PASS",
+      "detail": "relation=friend"
+    },
+    {
+      "id": "A40",
+      "area": "API-角色",
+      "case": "voice_tags 非法 → 默认标签",
+      "status": "PASS",
+      "detail": "tags=['gentle']"
+    },
+    {
+      "id": "A41",
+      "area": "API-角色",
+      "case": "speed=5 → clamp 1.3",
+      "status": "PASS",
+      "detail": "speed=1.3"
+    },
+    {
+      "id": "A42",
+      "area": "API-角色",
+      "case": "identity=60 字 → 截断 50",
+      "status": "PASS",
+      "detail": "len=50"
+    },
+    {
+      "id": "A43",
+      "area": "API-角色",
+      "case": "speaking_style=300 字 → 截断 200",
+      "status": "PASS",
+      "detail": "len=200"
+    },
+    {
+      "id": "A44",
+      "area": "API-角色",
+      "case": "free_description=600 字 → 截断 500",
+      "status": "PASS",
+      "detail": "len=500"
+    },
+    {
+      "id": "A45",
+      "area": "API-角色",
+      "case": "speed 非数字 → 校验拒绝（float_parsing），不创建角色",
+      "status": "PASS",
+      "detail": "status=200 [{'type': 'float_parsing', 'loc': ['body', 'voice_profile', "
+    },
+    {
+      "id": "A46",
+      "area": "API-角色",
+      "case": "speed=0 → clamp 0.7",
+      "status": "PASS",
+      "detail": "speed=0.7"
+    },
+    {
+      "id": "A47",
+      "area": "API-角色",
+      "case": "不存在的角色 id → 非 500",
+      "status": "PASS",
+      "detail": "status=200 {\"error\":\"角色不存在\"}"
+    },
+    {
+      "id": "A48",
+      "area": "API-角色",
+      "case": "character_id 含 / → 400",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"character_id 非法\"}"
+    },
+    {
+      "id": "A49",
+      "area": "API-角色",
+      "case": "未绑定会话查角色 → character 为空",
+      "status": "PASS",
+      "detail": "status=200 body={\"status\":\"ok\",\"character\":null}"
+    },
+    {
+      "id": "A50",
+      "area": "API-角色",
+      "case": "绑定不存在的角色 → 返回 error 字段",
+      "status": "PASS",
+      "detail": "status=200 body={\"error\":\"角色不存在\"}"
+    },
+    {
+      "id": "A51",
+      "area": "API-上传",
+      "case": "音频 > 10MB → 拒收（400/413 均符合契约）",
+      "status": "PASS",
+      "detail": "status=413 {\"error\":\"请求体超过上限（10MB）\"}"
+    },
+    {
+      "id": "A52",
+      "area": "API-JWT",
+      "case": "alg=none 篡改算法 → 401",
+      "status": "PASS",
+      "detail": "status=401 {\"error\":\"无效或已过期的访问凭证\"}"
+    },
+    {
+      "id": "A53",
+      "area": "API-JWT",
+      "case": "错误密钥签名 → 401",
+      "status": "PASS",
+      "detail": "status=401 {\"error\":\"无效或已过期的访问凭证\"}"
+    },
+    {
+      "id": "A54",
+      "area": "API-JWT",
+      "case": "过期 token（exp 已过） → 401",
+      "status": "PASS",
+      "detail": "status=401 {\"error\":\"无效或已过期的访问凭证\"}"
+    },
+    {
+      "id": "A55",
+      "area": "API-JWT",
+      "case": "缺 exp 声明 → 401",
+      "status": "PASS",
+      "detail": "status=401 {\"error\":\"无效或已过期的访问凭证\"}"
+    },
+    {
+      "id": "A56",
+      "area": "API-JWT",
+      "case": "篡改 payload 不重签 → 401",
+      "status": "PASS",
+      "detail": "status=401"
+    },
+    {
+      "id": "A60",
+      "area": "API-CORS",
+      "case": "白名单 origin 预检 → 回显 allow-origin",
+      "status": "PASS",
+      "detail": "status=200 allow-origin='http://localhost:8899'"
+    },
+    {
+      "id": "A61",
+      "area": "API-CORS",
+      "case": "非白名单 origin 预检 → 不放行",
+      "status": "PASS",
+      "detail": "status=400 allow-origin=''"
+    },
+    {
+      "id": "A62",
+      "area": "API-CORS",
+      "case": "401 响应带 CORS 头（前端才能读到错误文案）",
+      "status": "PASS",
+      "detail": "status=401 allow-origin='http://localhost:8899'"
+    },
+    {
+      "id": "A63",
+      "area": "API-契约",
+      "case": "未知路径 → 404",
+      "status": "PASS",
+      "detail": "status=404"
+    },
+    {
+      "id": "A64",
+      "area": "API-契约",
+      "case": "GET 打 POST-only 登录 → 405",
+      "status": "PASS",
+      "detail": "status=405"
+    },
+    {
+      "id": "A65",
+      "area": "API-契约",
+      "case": "登录收 multipart → 400 必须是 JSON",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"请求体必须是 JSON\"}"
+    },
+    {
+      "id": "A66",
+      "area": "API-契约",
+      "case": "TTS 收 JSON 体（应为表单）→ 422",
+      "status": "PASS",
+      "detail": "status=422 {\"detail\":[{\"type\":\"missing\",\"loc\":[\"body\",\"sessio"
+    },
+    {
+      "id": "A67",
+      "area": "API-注入",
+      "case": "session_id 编码绕过(%2F→/) → 400",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"session_id 非法\"}"
+    },
+    {
+      "id": "A68",
+      "area": "API-注入",
+      "case": "session_id 空串 → 400",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"session_id 非法\"}"
+    },
+    {
+      "id": "A69",
+      "area": "API-注入",
+      "case": "session_id 含 null 字节 → 400",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"session_id 非法\"}"
+    },
+    {
+      "id": "A70",
+      "area": "API-注入",
+      "case": "character_id 路径穿越 → 拒绝（400/404），不到上游",
+      "status": "PASS",
+      "detail": "encoded=404 dotdot=404"
+    },
+    {
+      "id": "A71",
+      "area": "API-注入",
+      "case": "角色名/描述注入串 → 原样存储不执行不崩溃",
+      "status": "PASS",
+      "detail": "status=200 name=x' OR '1'='1'; DROP TABLE users;--"
+    },
+    {
+      "id": "A72",
+      "area": "API-上传",
+      "case": "wav 魔数+恶意负载 → 受控失败、不外泄堆栈",
+      "status": "PASS",
+      "detail": "status=200 {\"error\":\"服务内部错误\"}"
+    },
+    {
+      "id": "A73",
+      "area": "API-上传",
+      "case": "PE(MZ) 头伪装 .wav → 400 不支持格式",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"不支持的音频格式（仅支持 wav / mp3 / ogg / flac / m4a）\"}"
+    },
+    {
+      "id": "A74",
+      "area": "API-上传",
+      "case": "音频恰好 10MB（上边界）→ 不因体积被拒",
+      "status": "PASS",
+      "detail": "status=200 {\"error\":\"服务内部错误\"}"
+    },
+    {
+      "id": "A75",
+      "area": "API-上传",
+      "case": "音频 10MB-1KB（下边界）→ 不因体积被拒",
+      "status": "PASS",
+      "detail": "status=200 {\"error\":\"服务内部错误\"}"
+    },
+    {
+      "id": "A76",
+      "area": "API-上传",
+      "case": "10MB 合规体积 + 非法魔数 → 体积过、魔数拦（400）",
+      "status": "PASS",
+      "detail": "status=400 {\"error\":\"不支持的音频格式（仅支持 wav / mp3 / ogg / flac / m4a）\"}"
+    },
+    {
+      "id": "A58",
+      "area": "API-限流",
+      "case": "昂贵接口降额(2/min)：第 3 次 → 429 + Retry-After",
+      "status": "FAIL",
+      "detail": "tts_seq=[422, 422, 429] retry_after='60'"
+    },
+    {
+      "id": "A57",
+      "area": "API-限流",
+      "case": "登录爆破(3/min)：第 4 次 → 429 + Retry-After + CORS 头",
+      "status": "PASS",
+      "detail": "seq=[401, 401, 429] retry_after='60' cors='http://localhost:8899'"
+    },
+    {
+      "id": "A59",
+      "area": "API-限流",
+      "case": "普通接口(5/min)：第 6 次 → 429",
+      "status": "PASS",
+      "detail": "seq=[200, 200, 200, 200, 200, 429]"
+    },
+    {
+      "id": "B01",
+      "area": "UI-登录",
+      "case": "账号密码都空 → 前端拦截且不发请求",
+      "status": "PASS",
+      "detail": "error='' req=True"
+    },
+    {
+      "id": "B02",
+      "area": "UI-登录",
+      "case": "仅填账号（缺密码）→ 前端拦截",
+      "status": "PASS",
+      "detail": "error=''"
+    },
+    {
+      "id": "B03",
+      "area": "UI-登录",
+      "case": "错误密码 → 显示 401 文案并清空密码",
+      "status": "PASS",
+      "detail": "error=账号或密码错误"
+    },
+    {
+      "id": "B04",
+      "area": "UI-登录",
+      "case": "正确凭证 → 遮罩隐藏 + token 落库 + 退出按钮可见",
+      "status": "PASS",
+      "detail": "token=有 logout=True"
+    },
+    {
+      "id": "B05",
+      "area": "UI-登录",
+      "case": "已有有效 token 刷新 → 不弹遮罩",
+      "status": "PASS",
+      "detail": "遮罩隐藏"
+    },
+    {
+      "id": "B06",
+      "area": "UI-登录",
+      "case": "伪造 token → 401 自动清 token 并弹门禁（失效提示）",
+      "status": "FAIL",
+      "detail": "shown=False hint= token_cleared=False"
+    },
+    {
+      "id": "Z99",
+      "area": "套件自检",
+      "case": "UI 段完整执行（异常即中断）",
+      "status": "FAIL",
+      "detail": ""
+    },
+    {
+      "id": "Z02",
+      "area": "套件自检",
+      "case": "API 用例数量 = 77",
+      "status": "PASS",
+      "detail": "实际 77"
+    },
+    {
+      "id": "Z03",
+      "area": "套件自检",
+      "case": "UI 用例数量 = 85",
+      "status": "FAIL",
+      "detail": "实际 6"
+    }
+  ]
+}

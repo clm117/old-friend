@@ -317,7 +317,8 @@ def print_report():
     print("=" * 70)
 
     # 保存 JSON 报告
-    with open(r"e:\语伴\ui_test_report.json", "w", encoding="utf-8") as f:
+    REPORT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui_test_report.json")
+    with open(REPORT_PATH, "w", encoding="utf-8") as f:
         json.dump({
             "summary": {"total": total, "passed": passed, "failed": failed, "blocked": blocked},
             "results": results,
@@ -325,7 +326,7 @@ def print_report():
             "page_errors": page_errors[:10],
             "failed_requests": failed_reqs,
         }, f, ensure_ascii=False, indent=2)
-    print(f"报告已保存: e:\\语伴\\ui_test_report.json")
+    print(f"报告已保存: {REPORT_PATH}")
 
 
 if __name__ == "__main__":
