@@ -173,6 +173,16 @@ LOGIN_PATH = "/api/auth/login"
 PUBLIC_PATHS = ("/", "/health", LOGIN_PATH, "/metrics")
 
 
+def _with_cors(response: JSONResponse, request) -> JSONResponse:
+    """给中间件短路返回的响应补 CORS 头（CORSMiddleware 只包住路由层响应）"""
+    origin = request.headers.get("origin", "")
+    if origin in CORS_ALLOW_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    return response
+
+
 def _safe_id(value: str) -> bool:
     """校验 session_id / character_id，阻断拼接进上游 URL 的注入"""
     return bool(value) and bool(_SAFE_ID_RE.match(value))
@@ -275,11 +285,12 @@ async def security_middleware(request: Request, call_next):
     if _rate_limited(request):
         METRICS_AUTH_FAILURES.labels(reason="rate_limited").inc()
         METRICS_REQUESTS.labels(method=request.method, path=request.url.path, status="429").inc()
-        return JSONResponse(
+        resp = JSONResponse(
             {"error": "请求过于频繁，请稍后重试"},
             status_code=429,
             headers={"Retry-After": "60"},
         )
+        return _with_cors(resp, request)
 
     path = request.url.path
     if path not in PUBLIC_PATHS:
@@ -293,11 +304,13 @@ async def security_middleware(request: Request, call_next):
             except JWTError:
                 METRICS_AUTH_FAILURES.labels(reason="invalid_token").inc()
                 METRICS_REQUESTS.labels(method=request.method, path=path, status="401").inc()
-                return JSONResponse({"error": "无效或已过期的访问凭证"}, status_code=401)
+                resp = JSONResponse({"error": "无效或已过期的访问凭证"}, status_code=401)
+                return _with_cors(resp, request)
         elif AUTH_REQUIRED:
             METRICS_AUTH_FAILURES.labels(reason="missing_token").inc()
             METRICS_REQUESTS.labels(method=request.method, path=path, status="401").inc()
-            return JSONResponse({"error": "缺少访问凭证"}, status_code=401)
+            resp = JSONResponse({"error": "缺少访问凭证"}, status_code=401)
+            return _with_cors(resp, request)
 
     if path.startswith(UPLOAD_PATHS):
         cl = request.headers.get("content-length")

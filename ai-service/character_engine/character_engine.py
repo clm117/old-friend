@@ -226,7 +226,7 @@ class CharacterEngine:
         character_id = f"custom_{uuid.uuid4().hex[:12]}"
         character = {
             "id": character_id,
-            "name": name or "未命名角色",
+            "name": (name or "未命名角色").strip()[:64],
             "is_preset": False,
             "created_at": time.time(),
             "voice_profile": self._normalize_voice_profile(voice_profile),

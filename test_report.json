@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-11-02 08:35:13",
+  "environment": {
+    "api_base": "http://127.0.0.1:8005",
+    "ui_base": "http://localhost:8899",
+    "ai_base": "http://127.0.0.1:8084",
+    "test_python": "D:\\Program Files (x86)\\Python 3.11\\python.exe",
+    "service_python": "D:\\Program Files (x86)\\Python 3.11\\python.exe",
+    "services_started": []
+  },
+  "summary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 0
+  },
+  "suites": {
+    "deep": {
+      "desc": "深度套件：API 分支/数据类型/状态/临界值/安全攻击面 + UI 全界面",
+      "elapsed_s": 81.8,
+      "summary": {
+        "total": 0
+      },
+      "results": [],
+      "log": "D:\\ProgramFile\\语伴\\test_outputs\\deep_run.log"
+    }
+  },
+  "failures": []
+}
