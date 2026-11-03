@@ -85,9 +85,15 @@ window.fetch = async function(input, init) {
     opts.headers = headers;
 
     const resp = await _nativeFetch(input, opts);
-    if (resp.status === 401 && authRequired) {
+    if (resp.status === 401) {
         setToken('');
-        showAuthOverlay(true, '登录状态已失效，请重新登录');
+        if (authRequired) {
+            showAuthOverlay(true, '登录状态已失效，请重新登录');
+        } else {
+            // authRequired 尚未由 /health 初始化（竞态），401 也说明 token 失效
+            // 等待 initAuth 稍后跑完 checkAuthGate 自然会弹门禁
+            console.warn('401 收到但 authRequired 未初始化，已清 token');
+        }
     }
     return resp;
 };
@@ -825,7 +831,7 @@ function setupVoiceDefine() {
             const voice = {
                 id: 'voice_' + Date.now(),
                 name: voiceName,
-                description: voiceDescription,
+                description: voiceDescription || voiceName,
                 baseVoice: baseVoice,
                 params: {
                     pitch: pitch,
@@ -846,13 +852,13 @@ function setupVoiceDefine() {
             responseDiv.innerHTML = `
                 <h4>语音定义结果</h4>
                 <p style="color: green;">语音定义成功！</p>
-                <p>名称: ${voiceName}</p>
-                <p>描述: ${voiceDescription}</p>
+                <p>名称: ${escapeHtml(voiceName)}</p>
+                <p>描述: ${escapeHtml(voiceDescription)}</p>
                 <p>音调: ${pitch}</p>
                 <p>语速: ${speed}</p>
                 <p>音量: ${volume}</p>
                 <p>情感强度: ${emotionIntensity}</p>
-                <p>语音定义: ${result.voice_definition}</p>
+                <p>语音定义: ${escapeHtml(result.voice_definition)}</p>
             `;
             
             // 重置表单
@@ -947,7 +953,7 @@ function setupEmotionConfig() {
             const emotionProfile = {
                 id: 'emotion_' + Date.now(),
                 name: emotionProfileName,
-                description: emotionDescription,
+                description: emotionDescription || emotionProfileName,
                 emotions: {
                     happiness: happiness,
                     sadness: sadness,
@@ -968,8 +974,8 @@ function setupEmotionConfig() {
             responseDiv.innerHTML = `
                 <h4>情感配置结果</h4>
                 <p style="color: green;">情感配置保存成功！</p>
-                <p>名称: ${emotionProfileName}</p>
-                <p>描述: ${emotionDescription}</p>
+                <p>名称: ${escapeHtml(emotionProfileName)}</p>
+                <p>描述: ${escapeHtml(emotionDescription)}</p>
                 <p>愉悦: ${happiness}</p>
                 <p>悲伤: ${sadness}</p>
                 <p>愤怒: ${anger}</p>
@@ -1110,7 +1116,14 @@ function handleLogout() {
 function loadVoices() {
     const savedVoices = localStorage.getItem('voices');
     if (savedVoices) {
-        voices = JSON.parse(savedVoices);
+        try {
+            voices = JSON.parse(savedVoices);
+            if (!Array.isArray(voices)) voices = [];
+        } catch (e) {
+            console.warn('voices 脏数据已清除:', e.message);
+            localStorage.removeItem('voices');
+            voices = [];
+        }
         displaySavedVoices();
     }
 }
@@ -1149,7 +1162,14 @@ function displaySavedVoices() {
 function loadEmotions() {
     const savedEmotions = localStorage.getItem('emotions');
     if (savedEmotions) {
-        emotions = JSON.parse(savedEmotions);
+        try {
+            emotions = JSON.parse(savedEmotions);
+            if (!Array.isArray(emotions)) emotions = [];
+        } catch (e) {
+            console.warn('emotions 脏数据已清除:', e.message);
+            localStorage.removeItem('emotions');
+            emotions = [];
+        }
         displaySavedEmotions();
     }
 }
@@ -1604,6 +1624,8 @@ async function bindCharacter(characterId) {
             return;
         }
         currentCharacterId = characterId;
+        // 持久化到 localStorage，刷新后恢复
+        localStorage.setItem(`session_character_${sessionId}`, characterId);
         showCharacterStatus(`已选择角色「${result.character_name}」，对话和合成将使用该角色的声音与人设。声音风格：${result.voice_prompt}`);
         loadCharacters();
         loadSessionCharacter();
@@ -1650,8 +1672,13 @@ async function loadSessionCharacter() {
             currentCharacterId = result.character.id;
             showCharacterStatus(`当前使用角色：「${result.character.name}」`);
             loadCharacters();
+        } else {
+            // 服务端未绑定，尝试从 localStorage 恢复
+            const saved = localStorage.getItem(`session_character_${sessionId}`);
+            if (saved) {
+                await bindCharacter(saved);
+            }
         }
-        // 会话未绑定时 character=null，属正常业务状态，静默返回
     } catch (e) {
         console.warn('查询会话角色失败:', e.message);
     }
@@ -1695,7 +1722,7 @@ async function createCharacter() {
             alert('创建失败：' + result.error);
         } else {
             document.getElementById('characterResponse').innerHTML =
-                `<p style="color:green;">角色「${result.character.name}」创建成功！可在上方列表点"选择"绑定到当前会话。</p>`;
+                `<p style="color:green;">角色「${escapeHtml(result.character.name)}」创建成功！可在上方列表点"选择"绑定到当前会话。</p>`;
             document.getElementById('charName').value = '';
             document.getElementById('charIdentity').value = '';
             document.getElementById('charStyle').value = '';

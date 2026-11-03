@@ -452,7 +452,7 @@ async def define_voice(
 @app.post("/api/voice/define")
 async def define_voice_compat(
     session_id: str = Form(...),
-    description: str = Form(...),
+    description: str = Form(""),
     audio: UploadFile = File(...),
     pitch: float = Form(1.0),
     speed: float = Form(1.0),
@@ -512,7 +512,7 @@ async def define_voice_compat(
 @app.post("/api/ai/tts")
 async def tts(
     session_id: str = Form(...),
-    text: str = Form(...),
+    text: str = Form(""),
     description: str = Form(None),
     quick_mode: bool = Form(False)
 ):
@@ -616,14 +616,16 @@ async def emotion_config(
     surprise: 惊讶程度（范围：0.0-1.0，默认：0.3）
     """
     try:
+        # clamp 所有情感值到 [0, 1]，与文档注释一致
+        _c = lambda x: max(0.0, min(1.0, float(x)))
         # 构建情感参数
         emotion_params = {
-            "happiness": happiness,
-            "sadness": sadness,
-            "anger": anger,
-            "fear": fear,
-            "disgust": disgust,
-            "surprise": surprise
+            "happiness": _c(happiness),
+            "sadness": _c(sadness),
+            "anger": _c(anger),
+            "fear": _c(fear),
+            "disgust": _c(disgust),
+            "surprise": _c(surprise)
         }
         
         # 保存情感配置到内存存储

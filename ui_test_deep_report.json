@@ -1,8 +1,8 @@
 {
   "summary": {
-    "total": 86,
-    "passed": 79,
-    "failed": 7,
+    "total": 97,
+    "passed": 92,
+    "failed": 5,
     "blocked": 0
   },
   "results": [
@@ -66,8 +66,8 @@
       "id": "A09",
       "area": "API-登录",
       "case": "password 空 → 400",
-      "status": "PASS",
-      "detail": "status=400"
+      "status": "FAIL",
+      "detail": "status=429"
     },
     {
       "id": "A10",
@@ -143,8 +143,8 @@
       "id": "A20",
       "area": "API-TTS",
       "case": "空 text → 400",
-      "status": "FAIL",
-      "detail": "status=422"
+      "status": "PASS",
+      "detail": "status=400"
     },
     {
       "id": "A21",
@@ -171,8 +171,8 @@
       "id": "A25",
       "area": "API-定义",
       "case": "description 空 → 400",
-      "status": "FAIL",
-      "detail": "status=422"
+      "status": "PASS",
+      "detail": "status=400"
     },
     {
       "id": "A26",
@@ -528,8 +528,8 @@
       "id": "A58",
       "area": "API-限流",
       "case": "昂贵接口降额(2/min)：第 3 次 → 429 + Retry-After",
-      "status": "FAIL",
-      "detail": "tts_seq=[422, 422, 429] retry_after='60'"
+      "status": "PASS",
+      "detail": "tts_seq=[400, 400, 429] retry_after='60'"
     },
     {
       "id": "A57",
@@ -585,14 +585,91 @@
       "area": "UI-登录",
       "case": "伪造 token → 401 自动清 token 并弹门禁（失效提示）",
       "status": "FAIL",
-      "detail": "shown=False hint= token_cleared=False"
+      "detail": "shown=True hint=请输入账号密码以继续 token_cleared=True"
+    },
+    {
+      "id": "B07",
+      "area": "UI-登录",
+      "case": "退出登录 → 清 token + 回到登录页",
+      "status": "PASS",
+      "detail": "overlay=True token=None"
+    },
+    {
+      "id": "B08",
+      "area": "UI-导航",
+      "case": "7 个标签切换 active 状态正确（互斥）",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "B09",
+      "area": "UI-导航",
+      "case": "切到定义页 → baseVoice 选项含已保存语音",
+      "status": "PASS",
+      "detail": "options=['', 'lv1']"
+    },
+    {
+      "id": "B10",
+      "area": "UI-导航",
+      "case": "切到合成页 → ttsVoiceSelect 同步已保存语音",
+      "status": "PASS",
+      "detail": "options=['', 'lv1']"
+    },
+    {
+      "id": "B11",
+      "area": "UI-对话",
+      "case": "空输入点击发送 → 不产生用户消息",
+      "status": "PASS",
+      "detail": "before=0 after=0"
+    },
+    {
+      "id": "B12",
+      "area": "UI-对话",
+      "case": "纯空格输入 → trim 后不发送",
+      "status": "PASS",
+      "detail": "count=0"
+    },
+    {
+      "id": "B13",
+      "area": "UI-对话",
+      "case": "Enter 键发送消息",
+      "status": "PASS",
+      "detail": "count=1"
+    },
+    {
+      "id": "B14",
+      "area": "UI-对话",
+      "case": "发送后输入框清空",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "B15",
+      "area": "UI-对话",
+      "case": "发送后输入曾锁定（disabled，探针捕获瞬态）",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "B16",
+      "area": "UI-对话",
+      "case": "用户消息已渲染到历史",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "id": "B17",
+      "area": "UI-对话",
+      "case": "Shift+Enter 不发送（保留换行语义）",
+      "status": "PASS",
+      "detail": "count=1"
     },
     {
       "id": "Z99",
       "area": "套件自检",
       "case": "UI 段完整执行（异常即中断）",
       "status": "FAIL",
-      "detail": ""
+      "detail": "    at UtilityScript.<anonymous> (<anonymous>:1:44)"
     },
     {
       "id": "Z02",
@@ -606,7 +683,7 @@
       "area": "套件自检",
       "case": "UI 用例数量 = 85",
       "status": "FAIL",
-      "detail": "实际 6"
+      "detail": "实际 17"
     }
   ]
 }

@@ -365,7 +365,7 @@ async def process_voice(session_id: str = Form(...), audio: UploadFile = File(..
 
 # TTS语音合成接口（透传到核心AI服务）
 @app.post("/api/voice/tts")
-async def tts(session_id: str = Form(...), text: str = Form(...), description: str = Form(None), quick_mode: str = Form("false")):
+async def tts(session_id: str = Form(...), text: str = Form(""), description: str = Form(None), quick_mode: str = Form("false")):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     if not text.strip():
@@ -435,7 +435,7 @@ async def get_response(session_id: str):
 @app.post("/api/voice/define")
 async def define_voice(
     session_id: str = Form(...),
-    description: str = Form(...),
+    description: str = Form(""),
     audio: UploadFile = File(...),
     pitch: float = Form(1.0),
     speed: float = Form(1.0),
@@ -488,6 +488,10 @@ async def emotion_config(
 ):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
+    # 情感值 clamp 到 [0, 1]，与文档注释一致
+    _clamp = lambda x: max(0.0, min(1.0, float(x)))
+    happiness, sadness, anger = _clamp(happiness), _clamp(sadness), _clamp(anger)
+    fear, disgust, surprise = _clamp(fear), _clamp(disgust), _clamp(surprise)
     try:
         # 转发到核心AI服务
         response = await _async_request(
