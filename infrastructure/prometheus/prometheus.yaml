@@ -3,22 +3,24 @@ global:
   evaluation_interval: 15s
 
 rule_files:
-  - "rules/*.yml"
-
-scrape_configs:
-  - job_name: 'api-gateway'
-    static_configs:
-      - targets: ['api-gateway:8000']
-  
-  - job_name: 'ai-service'
-    static_configs:
-      - targets: ['ai-service:8080']
-  
-  - job_name: 'message-service'
-    static_configs:
-      - targets: ['message-service:8081']
+  - "/etc/prometheus/rules/*.yml"
 
 alerting:
   alertmanagers:
     - static_configs:
         - targets: ['alertmanager:9093']
+
+scrape_configs:
+  - job_name: 'api-gateway'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api-gateway:8005']
+
+  - job_name: 'ai-service'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['ai-service:8084']
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

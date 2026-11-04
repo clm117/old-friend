@@ -9,11 +9,13 @@
   python auth_seed.py passwd alice           # 修改口令
   python auth_seed.py list                   # 列出账号
   python auth_seed.py remove alice           # 删除账号
+  python auth_seed.py ensure --username admin  # 容器初始化：仅当账号缺失时创建
 
 账号文件路径由 AUTH_USERS_FILE 指定，默认 api-gateway/users.json。
 """
 import argparse
 import getpass
+import os
 import sys
 
 from auth_store import (
@@ -103,6 +105,37 @@ def cmd_remove(args) -> int:
     return 0
 
 
+def cmd_ensure(args) -> int:
+    """容器启动前的一次性初始化：账号表缺失/为空时用环境变量创建首个账号。
+
+    - 账号已存在：直接成功退出，不覆盖口令。
+    - 账号不存在且提供了 AUTH_SEED_PASSWORD：创建账号。
+    - 账号不存在且未提供口令：失败退出，让编排层明确报错而不是空表启动。
+    """
+    username = args.username or os.environ.get("AUTH_SEED_USER", "admin")
+    if not _check_username(username):
+        return 1
+    users = load_users()
+    if username in users:
+        print(f"账号已存在，跳过初始化：{username}")
+        return 0
+    password = args.password or os.environ.get("AUTH_SEED_PASSWORD", "")
+    if not password:
+        print(
+            "账号表为空，且未设置 AUTH_SEED_PASSWORD；请在 .env 中提供初始账号口令后重试",
+            file=sys.stderr,
+        )
+        return 2
+    if len(password) < MIN_PASSWORD_LEN:
+        print(f"口令太短，至少 {MIN_PASSWORD_LEN} 位", file=sys.stderr)
+        return 1
+    users[username] = hash_password(password)
+    path = save_users(users)
+    print(f"已初始化账号：{username}")
+    print(f"账号文件：{path}")
+    return 0
+
+
 def cmd_list(_args) -> int:
     users = load_users()
     print(f"账号文件：{users_file_path()}")
@@ -135,6 +168,11 @@ def main(argv: list[str] | None = None) -> int:
 
     p_ls = sub.add_parser("list", help="列出账号")
     p_ls.set_defaults(func=cmd_list)
+
+    p_ensure = sub.add_parser("ensure", help="容器初始化：缺失时创建首个账号（不覆盖）")
+    p_ensure.add_argument("--username", default=None, help="账号名，默认取 AUTH_SEED_USER 或 admin")
+    p_ensure.add_argument("-p", "--password", default=None, help="口令，默认取 AUTH_SEED_PASSWORD")
+    p_ensure.set_defaults(func=cmd_ensure)
 
     args = parser.parse_args(argv)
     return args.func(args)

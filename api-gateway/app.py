@@ -17,7 +17,6 @@ import logging
 import os
 import re
 import time
-from collections import defaultdict, deque
 from pathlib import Path
 
 # ===== 加载项目根目录 .env（不覆盖已存在的环境变量）=====
@@ -42,9 +41,11 @@ import uvicorn
 from fastapi import FastAPI, Request, UploadFile, File, Form, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 
 from auth_store import dummy_verify, load_users, users_file_path, verify_password
+from rate_limit_store import RateLimitStore
 
 # ===== Prometheus 指标 =====
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -130,7 +131,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOW_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
     max_age=600,
 )
@@ -170,7 +171,7 @@ _AUDIO_MAGIC = (
 LOGIN_PATH = "/api/auth/login"
 # 匿名可达路径（登录接口必须公开，否则无法换取令牌）
 # /metrics 供 Prometheus 抓取；生产环境应在 nginx 层限制仅内网可达
-PUBLIC_PATHS = ("/", "/health", LOGIN_PATH, "/metrics")
+PUBLIC_PATHS = ("/", "/health", "/ready", LOGIN_PATH, "/metrics")
 
 
 def _with_cors(response: JSONResponse, request) -> JSONResponse:
@@ -202,9 +203,8 @@ def _validate_audio(audio_bytes: bytes) -> str | None:
     return "不支持的音频格式（仅支持 wav / mp3 / ogg / flac / m4a）"
 
 
-# ===== 限流实现（进程内滑动窗口）=====
-_rate_buckets: dict[tuple, deque] = defaultdict(deque)
-_req_counter = 0
+# ===== 限流实现（Redis 可选，进程内滑动窗口兜底）=====
+_rate_limiter = RateLimitStore(os.environ.get("GATEWAY_REDIS_URL", "").strip() or None)
 
 
 def _client_ip(request: Request) -> str:
@@ -215,42 +215,17 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _sweep_rate_buckets(now: float) -> None:
-    for key, q in list(_rate_buckets.items()):
-        while q and now - q[0] > 60:
-            q.popleft()
-        if not q:
-            del _rate_buckets[key]
-
-
-def _hit_limit(key: tuple, limit: int) -> bool:
-    """通用滑动窗口计数：True 表示该 key 在 60 秒内已超过 limit 次"""
-    now = time.time()
-    q = _rate_buckets[key]
-    while q and now - q[0] > 60:
-        q.popleft()
-    if len(q) >= limit:
-        return True
-    q.append(now)
-    return False
-
-
 def _rate_limited(request: Request) -> bool:
-    """True 表示超限。按 IP + 路由档次分桶，避免内存无限增长"""
-    global _req_counter
-    _req_counter += 1
-    if _req_counter % 1000 == 0:
-        _sweep_rate_buckets(time.time())
-
+    """True 表示超限。按 IP + 路由档次分桶，Redis 配置后跨实例共享"""
     path = request.url.path
     ip = _client_ip(request)
     if path == LOGIN_PATH:
         # 登录接口单独降额：防口令爆破与账号枚举
-        return _hit_limit((ip, "login"), LOGIN_RATE_LIMIT_PER_MINUTE)
+        return _rate_limiter.hit((ip, "login"), LOGIN_RATE_LIMIT_PER_MINUTE)
 
     is_expensive = path.startswith(EXPENSIVE_PATHS)
     limit = EXPENSIVE_RATE_LIMIT_PER_MINUTE if is_expensive else RATE_LIMIT_PER_MINUTE
-    return _hit_limit((ip, "expensive" if is_expensive else "normal"), limit)
+    return _rate_limiter.hit((ip, "expensive" if is_expensive else "normal"), limit)
 
 
 def _extract_token(request: Request) -> str | None:
@@ -693,22 +668,51 @@ async def auth_me(request: Request):
     return {"username": username, "auth_required": AUTH_REQUIRED}
 
 
-# 健康检查
+# 健康检查：网关自身存活 + 上游 AI 服务可用性（上游不可达时返回 503，避免监控误判）
 @app.get("/health")
 async def health_check():
     try:
-        resp = await _async_request(
-            "get", f"{AI_SERVICE_URL}/health", timeout=3
-        )
+        resp = await _async_request("get", f"{AI_SERVICE_URL}/health", timeout=3)
         ai_status = resp.json()
     except Exception:
         ai_status = {"status": "unreachable"}
-    return {
-        "status": "healthy",
+    ai_healthy = isinstance(ai_status, dict) and ai_status.get("status") in ("healthy", "ready")
+    payload = {
+        "status": "healthy" if ai_healthy else "degraded",
         # 前端据此决定是否弹出登录门禁（AUTH_REQUIRED=false 时不锁死界面）
         "auth_required": AUTH_REQUIRED,
         "ai_service": ai_status,
+        "rate_limiter": _rate_limiter.backend,
     }
+    if not ai_healthy:
+        return JSONResponse(payload, status_code=503)
+    return payload
+
+
+# 就绪探针：账号表已播种 + 上游 AI 服务 /ready 通过，供容器/负载均衡使用
+@app.get("/ready")
+async def readiness_check():
+    problems: list[str] = []
+    if AUTH_REQUIRED and not _USER_STORE:
+        problems.append("account_store_empty")
+    ai_ready = False
+    ai_status: dict = {}
+    try:
+        resp = await _async_request("get", f"{AI_SERVICE_URL}/ready", timeout=3)
+        ai_status = resp.json()
+        ai_ready = resp.status_code == 200 and isinstance(ai_status, dict) and ai_status.get("status") == "ready"
+    except Exception as e:
+        ai_status = {"status": "unreachable", "error": type(e).__name__}
+    if not ai_ready:
+        problems.append("ai_service_not_ready")
+    payload = {
+        "status": "ready" if not problems else "not_ready",
+        "problems": problems,
+        "ai_service": ai_status,
+    }
+    if problems:
+        return JSONResponse(payload, status_code=503)
+    return payload
 
 
 # Prometheus 指标端点（生产应在 nginx 层限制仅内网可达）
@@ -725,7 +729,10 @@ async def ws_chat_proxy(ws: WebSocket, session_id: str):
     import websockets
 
     # 输入校验：session_id 白名单
+    # 注意：Starlette 在 accept 前 close 会退化为 HTTP 403，浏览器侧只能看到 1006；
+    # 先 accept 再带业务关闭码 1008 结束，客户端才能收到明确的鉴权失败语义。
     if not _safe_id(session_id):
+        await ws.accept()
         await ws.close(code=1008, reason="session_id invalid")
         return
 
@@ -735,6 +742,7 @@ async def ws_chat_proxy(ws: WebSocket, session_id: str):
         try:
             jwt.decode(token or "", JWT_SECRET, algorithms=[JWT_ALGORITHM])
         except JWTError:
+            await ws.accept()
             await ws.close(code=1008, reason="unauthorized")
             return
 

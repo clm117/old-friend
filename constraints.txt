@@ -1,0 +1,13 @@
+# 通用安全约束（生产构建时配合 -c 使用）
+# 用法：
+#   pip install -r api-gateway/requirements.txt -c constraints.txt
+#   pip install -r ai-service/requirements.txt -c constraints.txt
+#
+# 说明：
+# - PyJWT 已替代 python-jose，传递依赖 ecdsa（CVE-2024-23342，无上游修复）不再安装。
+# - accelerate 1.13.0 为当前可用的最新版本，上游暂无修复版本；通过固定版本 +
+#   仅加载可信来源模型权重（禁止 trust_remote_code）作为补偿控制。
+# - redis 仅用于可选的状态/限流外置，未配置时服务自动内存兜底。
+PyJWT==2.10.1
+redis==7.4.0
+accelerate==1.13.0

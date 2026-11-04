@@ -929,3 +929,34 @@ input[type="range"]::-moz-range-thumb {
     color: #c62828;
     text-align: center;
 }
+
+/* ============================================
+   合规页脚（隐私政策 / 用户协议）
+   ============================================ */
+.legal-footer {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+    background: #fff;
+    border-top: 1px solid #e5e5e5;
+    font-size: 0.72rem;
+}
+
+.legal-footer a {
+    color: #666;
+    text-decoration: none;
+}
+
+.legal-footer a:hover,
+.legal-footer a:active {
+    color: #2e7d32;
+    text-decoration: underline;
+}
+
+.legal-sep {
+    color: #bbb;
+}
+

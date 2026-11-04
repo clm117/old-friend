@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>隐私政策 · 语伴</title>
+    <style>
+        :root { --green: #2e7d32; --green-light: #4CAF50; --text: #333; --muted: #666; --line: #e5e5e5; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0; background: #f5f5f5; color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+            line-height: 1.75; font-size: 15px; -webkit-text-size-adjust: 100%;
+        }
+        .wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
+        header { background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%); color: #fff; padding: 20px 16px; }
+        header .inner { max-width: 760px; margin: 0 auto; }
+        h1 { margin: 0 0 6px; font-size: 1.35rem; }
+        .meta { font-size: 0.8rem; opacity: 0.9; }
+        h2 { margin: 28px 0 10px; font-size: 1.05rem; color: var(--green); }
+        h3 { margin: 18px 0 6px; font-size: 0.95rem; }
+        p, li { color: #444; }
+        ul { padding-left: 20px; }
+        .card { background: #fff; border-radius: 10px; padding: 16px; margin-top: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.85rem; }
+        th, td { border: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; }
+        th { background: #f0f7f0; color: #2e5d32; font-weight: 600; }
+        .notice { background: #fff8e1; border-left: 3px solid #f9a825; padding: 10px 12px; border-radius: 6px; font-size: 0.85rem; }
+        a { color: var(--green); }
+        .back { display: inline-block; margin-top: 28px; color: #fff; background: var(--green-light); padding: 9px 16px; border-radius: 8px; text-decoration: none; }
+        @media (max-width: 420px) { table, thead, tbody, th, td, tr { display: block; } th { display: none; } td { border: none; border-bottom: 1px solid var(--line); } td::before { content: attr(data-label); display: block; font-weight: 600; color: #2e5d32; } }
+    </style>
+</head>
+<body>
+<header>
+    <div class="inner">
+        <h1>隐私政策</h1>
+        <div class="meta">生效日期：2026-11-04 · 更新日期：2026-11-04 · 版本 v1.0（上线前需补齐运营主体信息）</div>
+    </div>
+</header>
+
+<div class="wrap">
+    <div class="card">
+        <p>语伴（以下简称“本应用”）是一款 AI 语音对话与声音创作应用。我们深知个人信息对你的重要性，并会依据《中华人民共和国个人信息保护法》等法律法规处理你的信息。本政策说明我们收集哪些信息、为何收集、如何保存与共享，以及你享有的权利。</p>
+        <div class="notice">提示：本页为随代码交付的初版文本；正式上线前，运营主体名称、注册地址、联系邮箱、备案号等信息需由运营方补齐并完成法务复核。</div>
+    </div>
+
+    <h2 id="collection">一、我们收集的信息清单</h2>
+    <table>
+        <thead>
+            <tr><th>信息类型</th><th>收集场景</th><th>处理目的</th><th>保存位置与期限</th></tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td data-label="信息类型">账号名、口令哈希</td>
+                <td data-label="收集场景">登录</td>
+                <td data-label="处理目的">身份认证、防止未授权访问</td>
+                <td data-label="保存位置与期限">服务器账号表（PBKDF2 哈希，不可逆）；账号存续期间</td>
+            </tr>
+            <tr>
+                <td data-label="信息类型">JWT 登录令牌</td>
+                <td data-label="收集场景">登录成功后</td>
+                <td data-label="处理目的">维持登录状态</td>
+                <td data-label="保存位置与期限">浏览器 localStorage；令牌有效期默认 12 小时，退出即清除</td>
+            </tr>
+            <tr>
+                <td data-label="信息类型">会话 ID、对话文本、角色绑定、情感配置、语音定义</td>
+                <td data-label="收集场景">对话、角色管理、声音与情感设置</td>
+                <td data-label="处理目的">生成回复、保持多轮上下文、复现音色与情感</td>
+                <td data-label="保存位置与期限">服务器状态文件（每会话最多保留最近 200 条消息，最多 2000 个会话）；可随会话删除</td>
+            </tr>
+            <tr>
+                <td data-label="信息类型">录音 / 上传音频</td>
+                <td data-label="收集场景">语音录入、声音定义</td>
+                <td data-label="处理目的">语音识别与音色参考</td>
+                <td data-label="保存位置与期限">服务端仅在请求处理期间于内存中使用，不落盘保存（模型权重与输出音频除外）</td>
+            </tr>
+            <tr>
+                <td data-label="信息类型">IP 地址、User-Agent、请求路径与状态码</td>
+                <td data-label="收集场景">所有接口请求</td>
+                <td data-label="处理目的">限流、安全审计、故障排查</td>
+                <td data-label="保存位置与期限">服务端结构化日志；建议生产保留不超过 30 天</td>
+            </tr>
+            <tr>
+                <td data-label="信息类型">本地设置</td>
+                <td data-label="收集场景">设置页</td>
+                <td data-label="处理目的">记住 API 地址、会话 ID 与已保存的声音/情感选项</td>
+                <td data-label="保存位置与期限">浏览器 localStorage；可随时清除浏览器数据删除</td>
+            </tr>
+        </tbody>
+    </table>
+    <p>我们不会收集你的通讯录、精确位置、相册或与功能无关的设备标识；麦克风权限仅在你主动点击录音时申请。</p>
+
+    <h2>二、信息的共享、委托处理与跨境传输</h2>
+    <ul>
+        <li><strong>云服务</strong>：当使用云端大模型、云 TTS 或云语音识别时，相关文本/音频会发送至阿里云 DashScope 等云服务商处理，仅用于生成本次回复或音频。若部署为本地 VoxCPM2 模型，TTS 不经过第三方。</li>
+        <li>我们不会出售你的个人信息，也不会向无关第三方提供，除非取得你的单独同意或法律法规要求。</li>
+        <li>当前默认使用境内云服务；如后续引入境外服务，我们将依法履行告知与单独同意程序。</li>
+    </ul>
+
+    <h2>三、保存期限与安全措施</h2>
+    <ul>
+        <li>对话状态按会话滚动保留，超出上限自动淘汰，避免无限增长。</li>
+        <li>生产环境通过 HTTPS 传输；账号口令使用 PBKDF2-HMAC-SHA256 加盐哈希；接口启用令牌鉴权、限流与上传校验。</li>
+        <li>服务端账号表与状态文件权限收紧，仅运维账号可读；备份文件需加密保管。</li>
+        <li>发生个人信息安全事件时，我们会按法律要求及时告知并上报。</li>
+    </ul>
+
+    <h2>四、你的权利</h2>
+    <p>你可以请求访问、更正、删除你的账号信息、角色与对话数据，或撤回授权、注销账号。请通过下方联系方式提出，我们将在 15 个工作日内处理。注销后账号表记录与自定义角色数据将被删除，已生成的日志按安全审计期限到期删除。</p>
+    <p>拒绝提供麦克风权限不会影响文字对话功能；拒绝登录则无法使用需鉴权的接口。</p>
+
+    <h2>五、未成年人保护</h2>
+    <p>本应用面向一般用户。未满 14 周岁的未成年人应在监护人同意和指导下使用；如我们发现未经监护人同意收集了未成年人信息，将删除相关数据。</p>
+
+    <h2>六、政策更新与联系我们</h2>
+    <p>政策发生重大变更时，我们会在应用内显著位置提示并更新生效日期。继续使用即表示你接受更新后的政策。</p>
+    <p>运营主体：待填写 · 联系邮箱：待填写（上线前替换为真实可用的隐私联系邮箱） · 备案号：待填写</p>
+
+    <h2>七、其他文档</h2>
+    <p>请同时阅读<a href="terms.html">《用户协议》</a>。</p>
+
+    <a class="back" href="index.html">返回语伴</a>
+</div>
+</body>
+</html>

@@ -37,6 +37,7 @@ function escapeHtml(str) {
 // ============================================
 const AUTH_TOKEN_KEY = 'yuban_token';
 let authRequired = false;  // 由 /health 的 auth_required 决定是否启用登录门禁
+let tokenInvalidated = false;  // token 因 401/1008 失效，用于给出准确提示
 
 function getToken() {
     return localStorage.getItem(AUTH_TOKEN_KEY) || '';
@@ -86,6 +87,7 @@ window.fetch = async function(input, init) {
 
     const resp = await _nativeFetch(input, opts);
     if (resp.status === 401) {
+        tokenInvalidated = true;
         setToken('');
         if (authRequired) {
             showAuthOverlay(true, '登录状态已失效，请重新登录');
@@ -407,8 +409,11 @@ async function uploadAndTranscribe(wavBlob) {
     }
 }
 
-// 建立 WebSocket 连接
+// 建立 WebSocket 连接（幂等：已有可用连接时直接复用，避免重复建连泄漏）
 function connectChatWebSocket() {
+    if (chatWs && chatWs.readyState === WebSocket.OPEN) {
+        return Promise.resolve();
+    }
     return new Promise((resolve, reject) => {
         // WebSocket 无法自定义 Header，强制鉴权时通过 ?token= 传递
         const token = getToken();
@@ -453,6 +458,7 @@ function connectChatWebSocket() {
             setInputLocked(false);
             // 服务端因鉴权失败关闭（1008）→ 回登录页
             if (authRequired && event && event.code === 1008) {
+                tokenInvalidated = true;
                 setToken('');
                 showAuthOverlay(true, '登录状态已失效，请重新登录');
             }
@@ -1056,7 +1062,11 @@ async function checkAuthGate() {
         return;
     }
     if (authRequired && !getToken()) {
-        showAuthOverlay(true, '请输入账号密码以继续');
+        // 令牌刚被 401 清掉时给出失效提示；否则是首次进入，提示输入账号密码
+        showAuthOverlay(
+            true,
+            tokenInvalidated ? '登录状态已失效，请重新登录' : '请输入账号密码以继续'
+        );
     }
 }
 
@@ -1092,6 +1102,7 @@ async function handleAuthSubmit(e) {
             return;
         }
         setToken(result.token);
+        tokenInvalidated = false;
         passwordEl.value = '';
         window.location.reload();
     } catch (err) {
@@ -1104,6 +1115,7 @@ async function handleAuthSubmit(e) {
 
 // 退出登录：清令牌、断开连接并回到登录页
 function handleLogout() {
+    tokenInvalidated = false;
     setToken('');
     if (chatWs) {
         try { chatWs.close(); } catch (e) {}
@@ -1498,6 +1510,9 @@ function loadSettings() {
     if (savedSessionId) {
         sessionId = savedSessionId;
         document.getElementById('sessionId').value = sessionId;
+    } else {
+        // 首次进入：持久化随机会话 ID，保证刷新后角色绑定/对话历史仍归属同一会话
+        localStorage.setItem('sessionId', sessionId);
     }
 }
 

@@ -14,8 +14,9 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # 先装依赖，充分利用层缓存（依赖不变时后续改代码不会重装）
+COPY constraints.txt ./constraints.txt
 COPY api-gateway/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # 拷贝网关代码
 COPY api-gateway/ ./

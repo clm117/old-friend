@@ -1,0 +1,14 @@
+# Alertmanager 配置（生产请替换为真实告警渠道：企业微信/飞书/邮件/Slack）
+# 当前默认 webhook 指向占位地址，仅用于验证配置可加载；不会发送真实告警。
+route:
+  receiver: default
+  group_by: ['alertname', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: default
+    webhook_configs:
+      - url: 'http://host.docker.internal:9999/yuban-alerts'
+        send_resolved: true

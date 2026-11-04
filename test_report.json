@@ -1,27 +1,31 @@
 {
-  "generated_at": "2026-11-02 18:07:49",
+  "generated_at": "2026-11-04 12:34:25",
   "environment": {
     "api_base": "http://127.0.0.1:8005",
     "ui_base": "http://localhost:8899",
     "ai_base": "http://127.0.0.1:8084",
     "test_python": "D:\\Program Files (x86)\\Python 3.11\\python.exe",
     "service_python": "D:\\Program Files (x86)\\Python 3.11\\python.exe",
-    "services_started": []
+    "services_started": [
+      "ai-service",
+      "api-gateway",
+      "frontend-static"
+    ]
   },
   "summary": {
-    "total": 97,
-    "passed": 92,
-    "failed": 5,
+    "total": 165,
+    "passed": 165,
+    "failed": 0,
     "blocked": 0
   },
   "suites": {
     "deep": {
       "desc": "深度套件：API 分支/数据类型/状态/临界值/安全攻击面 + UI 全界面",
-      "elapsed_s": 310.8,
+      "elapsed_s": 321.0,
       "summary": {
-        "total": 97,
-        "passed": 92,
-        "failed": 5,
+        "total": 165,
+        "passed": 165,
+        "failed": 0,
         "blocked": 0
       },
       "results": [
@@ -85,8 +89,8 @@
           "id": "A09",
           "area": "API-登录",
           "case": "password 空 → 400",
-          "status": "FAIL",
-          "detail": "status=429"
+          "status": "PASS",
+          "detail": "status=400"
         },
         {
           "id": "A10",
@@ -260,8 +264,8 @@
           "id": "A33",
           "area": "API-情感",
           "case": "情感值超范围(-1/2) → clamp 到 [0,1]",
-          "status": "FAIL",
-          "detail": "status=200 happiness=-1.0 surprise=2.0"
+          "status": "PASS",
+          "detail": "status=200 happiness=0.0 surprise=1.0"
         },
         {
           "id": "A34",
@@ -603,8 +607,8 @@
           "id": "B06",
           "area": "UI-登录",
           "case": "伪造 token → 401 自动清 token 并弹门禁（失效提示）",
-          "status": "FAIL",
-          "detail": "shown=True hint=请输入账号密码以继续 token_cleared=True"
+          "status": "PASS",
+          "detail": "shown=True hint=登录状态已失效，请重新登录 token_cleared=True"
         },
         {
           "id": "B07",
@@ -684,11 +688,487 @@
           "detail": "count=1"
         },
         {
-          "id": "Z99",
+          "id": "B18",
+          "area": "UI-对话",
+          "case": "WS 不可达 → 插入「连接服务失败」并解锁输入",
+          "status": "PASS",
+          "detail": "unlocked=True"
+        },
+        {
+          "id": "B19",
+          "area": "UI-对话",
+          "case": "status=generating → 「正在思考…」占位",
+          "status": "PASS",
+          "detail": "text=「测试角色」正在思考…"
+        },
+        {
+          "id": "B20",
+          "area": "UI-对话",
+          "case": "首个 text 分片替换思考占位",
+          "status": "PASS",
+          "detail": "text=你好"
+        },
+        {
+          "id": "B21",
+          "area": "UI-对话",
+          "case": "后续 text 分片追加到同一气泡",
+          "status": "PASS",
+          "detail": "text=你好，世界"
+        },
+        {
+          "id": "B22",
+          "area": "UI-对话",
+          "case": "status=reply_done → 解锁输入",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "B23",
+          "area": "UI-对话",
+          "case": "error 消息 → 显示「错误：…」并解锁",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "B24",
+          "area": "UI-对话",
+          "case": "audio 消息 → 仅日志，不插入消息",
+          "status": "PASS",
+          "detail": "无异常"
+        },
+        {
+          "id": "B25",
+          "area": "UI-录入",
+          "case": "空名称保存 → alert 拦截",
+          "status": "PASS",
+          "detail": "alert=['请输入语音名称']"
+        },
+        {
+          "id": "B26",
+          "area": "UI-录入",
+          "case": "有名称保存 → 落库 + 列表卡片 + 表单重置",
+          "status": "PASS",
+          "detail": "count=2 cards=2"
+        },
+        {
+          "id": "B27",
+          "area": "UI-录入",
+          "case": "点击「使用」→ alert 展示所选语音",
+          "status": "PASS",
+          "detail": "alert=['已绑定语音「预置语音A」（该语音无录音数据，仅按描述绑定）。']"
+        },
+        {
+          "id": "B28",
+          "area": "UI-录入",
+          "case": "删除语音-取消 → 数据保留",
+          "status": "PASS",
+          "detail": "count=2"
+        },
+        {
+          "id": "B29",
+          "area": "UI-录入",
+          "case": "删除语音-确认 → 从 localStorage 移除",
+          "status": "PASS",
+          "detail": "count=1"
+        },
+        {
+          "id": "B30",
+          "area": "UI-定义",
+          "case": "滑块下边界(0.5/0.5/0.5/0) → 数值同步",
+          "status": "PASS",
+          "detail": "vals=['0.5', '0.5', '0.5', '0']"
+        },
+        {
+          "id": "B31",
+          "area": "UI-定义",
+          "case": "滑块上边界(1.5/2/1.5/1) → 数值同步",
+          "status": "PASS",
+          "detail": "vals=['1.5', '2', '1.5', '1']"
+        },
+        {
+          "id": "B32",
+          "area": "UI-定义",
+          "case": "空名称 → alert 拦截且不发请求",
+          "status": "PASS",
+          "detail": "req=[]"
+        },
+        {
+          "id": "B33",
+          "area": "UI-定义",
+          "case": "描述留空 → 提交时兜底为名称",
+          "status": "PASS",
+          "detail": "resp=语音定义结果\n\n语音定义成功！\n\n名称: 兜底描述语音\n\n描述:\n\n音调: 1."
+        },
+        {
+          "id": "B34",
+          "area": "UI-定义",
+          "case": "定义成功 → 落库 + 表单/滑块重置",
+          "status": "PASS",
+          "detail": "count=2 pitch=1"
+        },
+        {
+          "id": "B35",
+          "area": "UI-定义",
+          "case": "接口 500 → 红色错误提示",
+          "status": "PASS",
+          "detail": "resp=定义语音时出错: HTTP 500"
+        },
+        {
+          "id": "B36",
+          "area": "UI-情感",
+          "case": "六维滑块全 0（下边界）→ 显示 0",
+          "status": "PASS",
+          "detail": "vals=['0', '0', '0', '0', '0', '0']"
+        },
+        {
+          "id": "B37",
+          "area": "UI-情感",
+          "case": "六维滑块全 1（上边界）→ 显示 1",
+          "status": "PASS",
+          "detail": "vals=['1', '1', '1', '1', '1', '1']"
+        },
+        {
+          "id": "B38",
+          "area": "UI-情感",
+          "case": "空名称 → alert 拦截",
+          "status": "PASS",
+          "detail": "alert=['请输入情感配置名称']"
+        },
+        {
+          "id": "B39",
+          "area": "UI-情感",
+          "case": "保存成功 → 落库 + 列表卡片 + 表单重置",
+          "status": "PASS",
+          "detail": "count=1 cards=1 resp=情感配置结果\n\n情感配置保存成功！\n\n名称: 边界情感全1\n\n描述: 测试描述\n\n愉悦: 1\n\n悲伤: 1\n\n愤怒: 1"
+        },
+        {
+          "id": "B40",
+          "area": "UI-情感",
+          "case": "点击「使用」→ alert 展示所选配置",
+          "status": "PASS",
+          "detail": "alert=['已启用情感配置「边界情感全1」，后续合成将带上该情感风格。']"
+        },
+        {
+          "id": "B41",
+          "area": "UI-情感",
+          "case": "删除-取消 → 数据保留",
+          "status": "PASS",
+          "detail": "before=1 after=1"
+        },
+        {
+          "id": "B42",
+          "area": "UI-情感",
+          "case": "删除-确认 → 从 localStorage 移除",
+          "status": "PASS",
+          "detail": "before=1 after=0"
+        },
+        {
+          "id": "B43",
+          "area": "UI-角色",
+          "case": "预设角色列表加载（≥6 个）",
+          "status": "PASS",
+          "detail": "count=6"
+        },
+        {
+          "id": "B44",
+          "area": "UI-角色",
+          "case": "预设空态 → 「暂无预设角色」",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "B45",
+          "area": "UI-角色",
+          "case": "自定义空态 → 引导创建文案",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "B46",
+          "area": "UI-角色",
+          "case": "纯空格名称 → alert 拦截且不发请求",
+          "status": "PASS",
+          "detail": "alert=['请填写角色名称']"
+        },
+        {
+          "id": "B47",
+          "area": "UI-角色",
+          "case": "创建成功 → 成功文案 + 表单/标签清空",
+          "status": "PASS",
+          "detail": "resp=角色「多标签角色」创建成功！可在上方列表点\"选择\"绑定到当前会话。 cleared={'n': '', 'tags': 0}"
+        },
+        {
+          "id": "B48",
+          "area": "UI-角色",
+          "case": "多选标签已提交（2 音色 + 1 性格）",
+          "status": "PASS",
+          "detail": "chosen=['gentle', 'sweet', 'warm']"
+        },
+        {
+          "id": "B49",
+          "area": "UI-角色",
+          "case": "新角色出现在自定义列表",
+          "status": "PASS",
+          "detail": "names=['未命名角色', 'NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN', '非法枚举', 'speed-零', \"x' OR '1'='1'; DROP TABLE users;--\"]"
+        },
+        {
+          "id": "B50",
+          "area": "UI-角色",
+          "case": "绑定非法角色 id → alert 绑定失败",
+          "status": "PASS",
+          "detail": "alert=['绑定失败：character_id 非法']"
+        },
+        {
+          "id": "B51",
+          "area": "UI-角色",
+          "case": "绑定预设角色 → 状态条曾展示「已选择角色」（探针锁存）",
+          "status": "PASS",
+          "detail": "seen=True status=当前使用角色：「温柔学姐」"
+        },
+        {
+          "id": "B52",
+          "area": "UI-角色",
+          "case": "刷新后回读会话角色 → 「当前使用角色」",
+          "status": "PASS",
+          "detail": "status=当前使用角色：「温柔学姐」"
+        },
+        {
+          "id": "B53",
+          "area": "UI-合成",
+          "case": "空文本 → 红色「请输入合成文本」",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "B54",
+          "area": "UI-合成",
+          "case": "纯空白文本 → 同一校验分支",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "B55",
+          "area": "UI-合成",
+          "case": "单句 1001 字 → 服务端 400 并提示第 1 句失败",
+          "status": "PASS",
+          "detail": "resp=第 1 句合成失败: text 过长（上限 1000 字）"
+        },
+        {
+          "id": "B56",
+          "area": "UI-合成",
+          "case": "返回 JSON 错误 → 「第 1 句合成失败: mock 合成失败」",
+          "status": "PASS",
+          "detail": "resp=第 1 句合成失败: mock 合成失败"
+        },
+        {
+          "id": "B57",
+          "area": "UI-合成",
+          "case": "返回 audio/wav → 全部合成完成（2 句）",
+          "status": "PASS",
+          "detail": "resp=全部合成完成（2 句，总耗时 0 秒）\n\n选择播放：\n\n第1句\n第2句"
+        },
+        {
+          "id": "B58",
+          "area": "UI-合成",
+          "case": "多句分句数为 2（按 。！ 切分）",
+          "status": "PASS",
+          "detail": "resp=全部合成完成（2 句，总耗时 0 秒）\n\n选择播放：\n\n第1句\n第2句"
+        },
+        {
+          "id": "B59",
+          "area": "UI-合成",
+          "case": "关闭快速模式仍可合成且按钮恢复",
+          "status": "PASS",
+          "detail": "resp=全部合成完成（1 句，总耗时 0 秒）\n\n选择播放：\n\n第1句"
+        },
+        {
+          "id": "B60",
+          "area": "UI-设置",
+          "case": "保存设置 → alert + localStorage 落库",
+          "status": "PASS",
+          "detail": "alert=['设置已保存'] ls={'s': 'deep_test_session', 'a': 'http://localhost:8005'}"
+        },
+        {
+          "id": "B61",
+          "area": "UI-设置",
+          "case": "网关不可达 → 不弹门禁、界面仍可操作（仅记日志）",
+          "status": "PASS",
+          "detail": "usable=True overlay=False err="
+        },
+        {
+          "id": "B62",
+          "area": "UI-安全",
+          "case": "角色名 HTML 注入不应执行（innerHTML 风险）",
+          "status": "PASS",
+          "detail": "executed=False"
+        },
+        {
+          "id": "B63",
+          "area": "UI-安全",
+          "case": "语音名 HTML 注入不应执行",
+          "status": "PASS",
+          "detail": "executed=False"
+        },
+        {
+          "id": "B64",
+          "area": "UI-安全",
+          "case": "情感名 HTML 注入不应执行",
+          "status": "PASS",
+          "detail": "executed=False"
+        },
+        {
+          "id": "B65",
+          "area": "UI-数据",
+          "case": "emoji/引号/尖括号/换行 名称正常处理",
+          "status": "PASS",
+          "detail": "resp=角色「🎤\"'<>& 换行」创建成功！可在上方列表点\"选择\"绑定到当前会话。"
+        },
+        {
+          "id": "B66",
+          "area": "UI-数据",
+          "case": "名称 500 字（超长）不崩溃",
+          "status": "PASS",
+          "detail": "resp_len=37"
+        },
+        {
+          "id": "B67",
+          "area": "UI-健壮性",
+          "case": "localStorage.voices 损坏 JSON → 页面不崩溃且不中断初始化",
+          "status": "PASS",
+          "detail": "errors="
+        },
+        {
+          "id": "B68",
+          "area": "UI-健壮性",
+          "case": "localStorage.emotions 损坏 JSON → 页面不崩溃",
+          "status": "PASS",
+          "detail": "errors="
+        },
+        {
+          "id": "B69",
+          "area": "UI-录音",
+          "case": "无麦克风设备 → 错误提示且不崩溃",
+          "status": "PASS",
+          "detail": "tip=麦克风权限被拒绝，请在浏览器/系统设置中允许麦克风权限。微信内浏览器通常禁止录音，请用系统浏览器打开。"
+        },
+        {
+          "id": "B70",
+          "area": "UI-WS",
+          "case": "WS 无 token → 服务端 1008 关闭",
+          "status": "PASS",
+          "detail": "code=1008"
+        },
+        {
+          "id": "B72",
+          "area": "UI-WS",
+          "case": "乱序：reply_done 后迟到 text → 不崩溃、文本归入尾泡",
+          "status": "PASS",
+          "detail": "last=迟到的分片 errors="
+        },
+        {
+          "id": "B73",
+          "area": "UI-WS",
+          "case": "重复 connect → 连接幂等可用不崩溃",
+          "status": "PASS",
+          "detail": "res={'ok': True}"
+        },
+        {
+          "id": "B74",
+          "area": "UI-录音",
+          "case": "麦克风权限被拒绝 → 提示且不崩溃",
+          "status": "PASS",
+          "detail": "tip=麦克风权限被拒绝，请在浏览器/系统设置中允许麦克风权限。微信内浏览器通常禁止录音，请用系统浏览器打开。"
+        },
+        {
+          "id": "B75",
+          "area": "UI-健壮性",
+          "case": "voices 为对象（非数组）→ 不崩溃、列表为空",
+          "status": "PASS",
+          "detail": "errors= cards=0"
+        },
+        {
+          "id": "B76",
+          "area": "UI-健壮性",
+          "case": "voices 元素字段缺失（[{}]）→ 渲染不崩溃",
+          "status": "PASS",
+          "detail": "errors="
+        },
+        {
+          "id": "B77",
+          "area": "UI-会话",
+          "case": "同浏览器新标签 → 共享 sessionId 且免登录",
+          "status": "PASS",
+          "detail": "sid1=deep_test_session sid2=deep_test_session overlay=False"
+        },
+        {
+          "id": "B78",
+          "area": "UI-会话",
+          "case": "全新浏览器上下文（无凭证）→ 登录门禁弹出",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "B79",
+          "area": "UI-合成",
+          "case": "部分失败（第 1 句成功、第 2 句 400）→ 提示失败句且按钮恢复",
+          "status": "PASS",
+          "detail": "resp=第 2 句合成失败: 第二句超限"
+        },
+        {
+          "id": "B83",
+          "area": "UI-性能",
+          "case": "120 条历史消息渲染 < 1000ms",
+          "status": "PASS",
+          "detail": "res={'ms': 11, 'nodes': 120}"
+        },
+        {
+          "id": "B84",
+          "area": "UI-性能",
+          "case": "150 个角色列表渲染 < 2000ms",
+          "status": "PASS",
+          "detail": "res={'ms': 9, 'preset': 75, 'custom': 75}"
+        },
+        {
+          "id": "B85",
+          "area": "UI-性能",
+          "case": "localStorage ~3.6MB voices → 读写一致、界面可操作",
+          "status": "PASS",
+          "detail": "res={'ok': True, 'kb': 3601}"
+        },
+        {
+          "id": "B82",
+          "area": "UI-性能",
+          "case": "首屏 load 基线 < 3000ms（本地静态）",
+          "status": "PASS",
+          "detail": "load=177ms"
+        },
+        {
+          "id": "B80",
+          "area": "UI-移动端",
+          "case": "375px 视口：7 标签可点且激活、无横向滚动",
+          "status": "PASS",
+          "detail": "tabs=7 act_ok=True no_hscroll=True"
+        },
+        {
+          "id": "B81",
+          "area": "UI-无障碍",
+          "case": "登录门禁 Tab 链：起点用户名 → 密码 → 提交键可达",
+          "status": "PASS",
+          "detail": "first=authUsername seq=['authPassword', 'authSubmitBtn', 'micBtn']"
+        },
+        {
+          "id": "Z04",
           "area": "套件自检",
-          "case": "UI 段完整执行（异常即中断）",
-          "status": "FAIL",
-          "detail": "    at UtilityScript.<anonymous> (<anonymous>:1:44)"
+          "case": "UI 段结束清理测试数据（voices/emotions/characters 无残留）",
+          "status": "PASS",
+          "detail": "leftover=[]"
+        },
+        {
+          "id": "B71",
+          "area": "UI-WS",
+          "case": "伪造 token 的 WS 连接 → 服务端 1008 → 清 token 回登录页",
+          "status": "PASS",
+          "detail": "overlay=True token_left=None"
         },
         {
           "id": "Z02",
@@ -701,53 +1181,12 @@
           "id": "Z03",
           "area": "套件自检",
           "case": "UI 用例数量 = 85",
-          "status": "FAIL",
-          "detail": "实际 17"
+          "status": "PASS",
+          "detail": "实际 85"
         }
       ],
       "log": "D:\\ProgramFile\\语伴\\test_outputs\\deep_run.log"
     }
   },
-  "failures": [
-    {
-      "suite": "deep",
-      "id": "A09",
-      "area": "API-登录",
-      "case": "password 空 → 400",
-      "status": "FAIL",
-      "detail": "status=429"
-    },
-    {
-      "suite": "deep",
-      "id": "A33",
-      "area": "API-情感",
-      "case": "情感值超范围(-1/2) → clamp 到 [0,1]",
-      "status": "FAIL",
-      "detail": "status=200 happiness=-1.0 surprise=2.0"
-    },
-    {
-      "suite": "deep",
-      "id": "B06",
-      "area": "UI-登录",
-      "case": "伪造 token → 401 自动清 token 并弹门禁（失效提示）",
-      "status": "FAIL",
-      "detail": "shown=True hint=请输入账号密码以继续 token_cleared=True"
-    },
-    {
-      "suite": "deep",
-      "id": "Z99",
-      "area": "套件自检",
-      "case": "UI 段完整执行（异常即中断）",
-      "status": "FAIL",
-      "detail": "    at UtilityScript.<anonymous> (<anonymous>:1:44)"
-    },
-    {
-      "suite": "deep",
-      "id": "Z03",
-      "area": "套件自检",
-      "case": "UI 用例数量 = 85",
-      "status": "FAIL",
-      "detail": "实际 17"
-    }
-  ]
+  "failures": []
 }

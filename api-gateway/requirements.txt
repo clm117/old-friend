@@ -3,9 +3,12 @@
 
 fastapi==0.136.0
 uvicorn[standard]==0.45.0
-python-jose[cryptography]==3.5.0
+# 安全：使用 PyJWT 替代 python-jose，移除无上游修复的 ecdsa 传递依赖
+PyJWT==2.10.1
 requests==2.33.0
 websockets==17.1
 python-multipart==0.0.31
 
 prometheus-client==0.24.0
+# 可选：配置 GATEWAY_REDIS_URL 后启用跨实例共享限流（未配置时自动内存兜底）
+redis==7.4.0

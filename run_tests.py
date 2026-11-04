@@ -194,28 +194,33 @@ def service_specs(service_py):
         "LLM_PROVIDER": os.environ.get("LLM_PROVIDER", dotenv.get("LLM_PROVIDER", "qwen")),
         "LLM_MODEL": os.environ.get("LLM_MODEL", dotenv.get("LLM_MODEL", "qwen-plus")),
         "LLM_API_KEY": os.environ.get("LLM_API_KEY", dotenv.get("LLM_API_KEY", "")),
+        # 测试数据隔离：不污染 ai-service/data 中的真实角色与会话
+        "YUBAN_DATA_DIR": str(LOG_DIR / "test_data"),
+        "YUBAN_STATE_FILE": str(LOG_DIR / "test_data" / "state.json"),
+        "REDIS_URL": "",
     }
     host_ui, port_ui = port_of(UI_BASE)
     host_api, port_api = port_of(API_BASE)
     host_ai, port_ai = port_of(AI_BASE)
     return [
-        {
-            "name": "api-gateway",
-            "host": host_api, "port": port_api,
-            "args": [service_py, "app.py"], "cwd": ROOT / "api-gateway",
-            "env": gateway_env, "log": LOG_DIR / "service_gateway.log",
-            "health": API_BASE.rstrip("/") + "/health",
-        },
+        # 先启动 AI 服务：网关 /health 会探测上游，AI 未就绪时网关会返回 503
         {
             "name": "ai-service",
             "host": host_ai, "port": port_ai,
             "args": [service_py, "main.py"], "cwd": ROOT / "ai-service",
             "env": ai_env, "log": LOG_DIR / "service_ai.log",
-            # 若 ai-service 已提供 /ready 探针（启动期 503、就绪 200），可改用 /ready
-            # 获得更精确的就绪判定；默认用 /health 以兼容未实现 /ready 的主线版本
-            "health": AI_BASE.rstrip("/") + "/health",
+            # ai-service 已提供 /ready（启动期 503、就绪 200），优先用它
+            "health": AI_BASE.rstrip("/") + "/ready",
             # torch/模型冷启动可达 60s+，就绪等待单独放宽，避免卡边界误判
             "ready_timeout": int(os.environ.get("YUBAN_AI_READY_SECONDS", "240")),
+        },
+        {
+            "name": "api-gateway",
+            "host": host_api, "port": port_api,
+            "args": [service_py, "app.py"], "cwd": ROOT / "api-gateway",
+            "env": gateway_env, "log": LOG_DIR / "service_gateway.log",
+            # 网关自身存活即可启动测试；/health 的上游探测由用例单独验证
+            "health": API_BASE.rstrip("/") + "/",
         },
         {
             "name": "frontend-static",
@@ -225,6 +230,37 @@ def service_specs(service_py):
             "health": UI_BASE.rstrip("/") + "/",
         },
     ]
+
+
+def pids_on_port(port):
+    """Windows：从 netstat 解析监听指定端口的 PID（用于 --restart）"""
+    pids = set()
+    try:
+        out = subprocess.run(["netstat", "-ano", "-p", "tcp"], capture_output=True, text=True,
+                             encoding="utf-8", errors="ignore").stdout
+    except Exception:
+        return pids
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[3] == "LISTENING" and parts[1].endswith(f":{port}"):
+            if parts[4].isdigit():
+                pids.add(int(parts[4]))
+    return pids
+
+
+def stop_existing_services(specs):
+    """--restart 时停掉占用测试端口的旧进程，避免复用旧代码/旧限流桶"""
+    for spec in specs:
+        pids = pids_on_port(spec["port"])
+        if not pids:
+            continue
+        for pid in pids:
+            log(f"停止旧进程 {spec['name']} pid={pid}")
+            try:
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], capture_output=True)
+            except Exception:
+                pass
+    time.sleep(2)
 
 
 def prepare_services(service_py, allow_start=True):
@@ -352,6 +388,8 @@ def main():
                     help="要执行的套件（默认 deep）")
     ap.add_argument("--no-start", action="store_true", help="不自动拉起服务")
     ap.add_argument("--keep", action="store_true", help="测完保留本脚本拉起的服务")
+    ap.add_argument("--restart", action="store_true",
+                    help="先停止占用测试端口的旧服务，确保加载最新代码（默认复用已运行服务）")
     args = ap.parse_args()
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -367,7 +405,7 @@ def main():
     log(f"测试解释器：{test_py}")
 
     service_py = find_python("YUBAN_SERVICE_PY",
-                             "import uvicorn, fastapi, requests, jose",
+                             "import uvicorn, fastapi, requests, jwt",
                              [DEFAULT_SERVICE_PY, sys.executable, "python"])
     if not service_py:
         log("未找到带 uvicorn/fastapi 的 Python 解释器，无法自动拉起服务。"
@@ -379,6 +417,8 @@ def main():
 
     runs = []
     try:
+        if args.restart and not args.no_start:
+            stop_existing_services(service_specs(service_py))
         if not prepare_services(service_py, allow_start=not args.no_start):
             log("环境未就绪，终止测试。")
             return 2

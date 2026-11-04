@@ -5,11 +5,15 @@
 # 访问：http://localhost:${NGINX_HTTP_PORT:-8080}
 #
 # 架构：nginx（前端 + 反代）→ api-gateway → ai-service（GPU）
+#       auth-init 一次性播种账号；Prometheus / Alertmanager / Grafana 可选监控栈
 #
 # 前置条件：
 #   1) 宿主机安装 NVIDIA 驱动 + NVIDIA Container Toolkit（AI 服务需要 GPU）
-#   2) 项目根目录存在 .env（由 .env.example 复制）并填好 LLM_API_KEY
+#   2) 项目根目录存在 .env（由 .env.example 复制）并填好 LLM_API_KEY / JWT_SECRET /
+#      AUTH_SEED_PASSWORD（首次启动用于创建首个账号）
 #   3) models/ 目录已就位（以只读卷挂载，不打进镜像）
+#   4) 如需跨实例共享会话与限流：docker compose --profile redis up -d，
+#      并在 .env 设置 REDIS_URL=redis://redis:6379/0 与 GATEWAY_REDIS_URL 同值
 # ============================================================
 name: yuban
 
@@ -32,6 +36,25 @@ services:
     networks:
       - yuban
 
+  # ---------- 账号初始化（一次性任务，失败则网关不会启动）----------
+  auth-init:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    image: yuban-gateway:latest
+    container_name: yuban-auth-init
+    environment:
+      AUTH_USERS_FILE: /app/authdata/users.json
+      AUTH_SEED_USER: ${AUTH_SEED_USER:-admin}
+      AUTH_SEED_PASSWORD: ${AUTH_SEED_PASSWORD:-}
+    volumes:
+      # 账号表目录（users.json 不进镜像，首次启动由本任务创建）
+      - ./authdata:/app/authdata
+    command: ["python", "auth_seed.py", "ensure"]
+    restart: "no"
+    networks:
+      - yuban
+
   # ---------- 接入层：API 网关 ----------
   api-gateway:
     build:
@@ -45,7 +68,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
       # 安全加固相关（生产按 .env 覆盖）
       AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
-      # 账号表由 auth_seed.py 播种到宿主机 ./authdata（下方便以卷挂载）
+      # 账号表由 auth-init 服务播种到宿主机 ./authdata（下方便以卷挂载）
       AUTH_USERS_FILE: /app/authdata/users.json
       AUTH_TOKEN_TTL_MINUTES: ${AUTH_TOKEN_TTL_MINUTES:-720}
       LOGIN_RATE_LIMIT_PER_MINUTE: ${LOGIN_RATE_LIMIT_PER_MINUTE:-5}
@@ -56,12 +79,15 @@ services:
       AI_SERVICE_TIMEOUT: ${AI_SERVICE_TIMEOUT:-60}
       AI_SERVICE_TTS_TIMEOUT: ${AI_SERVICE_TTS_TIMEOUT:-600}
       ENABLE_DOCS: ${ENABLE_DOCS:-false}
+      # 可选：配置后限流滑动窗口跨实例共享
+      GATEWAY_REDIS_URL: ${GATEWAY_REDIS_URL:-}
     volumes:
-      # 账号表目录（users.json 不进镜像，由 auth_seed.py 离线生成）
       - ./authdata:/app/authdata
     expose:
       - "8005"
     depends_on:
+      auth-init:
+        condition: service_completed_successfully
       ai-service:
         condition: service_healthy
     healthcheck:
@@ -88,14 +114,22 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-qwen}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-qwen-plus}
+      # TTS：voxcpm2 本地模型（需 GPU）| cloud 云 TTS（验证期）
+      TTS_PROVIDER: ${TTS_PROVIDER:-voxcpm2}
       # 安全加固：CORS 白名单与上传上限（与网关保持一致）
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-10}
+      # 状态持久化：会话/对话历史/情感配置/语音绑定落盘；REDIS_URL 可选双写
+      YUBAN_DATA_DIR: /app/data
+      YUBAN_STATE_FILE: /app/data/state.json
+      REDIS_URL: ${REDIS_URL:-}
       # 预留 GPU 显存增长策略
       PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
     volumes:
       # 模型只读挂载：代码按「项目根/models」解析，容器内路径为 /app/models
       - ./models:/app/models:ro
+      # 业务数据（自定义角色、会话状态）持久化，容器重建不丢
+      - ./ai-service/data:/app/data
     expose:
       - "8084"
     # GPU 资源（需宿主机安装 NVIDIA Container Toolkit）
@@ -108,7 +142,7 @@ services:
               capabilities: [gpu]
     healthcheck:
       # 模型在 import 阶段加载，启动慢；start_period 给足时间
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8084/ready >/dev/null || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 10
@@ -117,6 +151,81 @@ services:
     networks:
       - yuban
 
+  # ---------- 可选：Redis（状态/限流跨实例共享）----------
+  redis:
+    image: redis:7.4-alpine
+    container_name: yuban-redis
+    profiles: ["redis"]
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - yuban
+
+  # ---------- 可观测性：Prometheus ----------
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: yuban-prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./infrastructure/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yaml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+    depends_on:
+      - api-gateway
+      - ai-service
+    restart: unless-stopped
+    networks:
+      - yuban
+
+  # ---------- 可观测性：Alertmanager ----------
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: yuban-alertmanager
+    ports:
+      - "127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./infrastructure/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    restart: unless-stopped
+    networks:
+      - yuban
+
+  # ---------- 可观测性：Grafana ----------
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: yuban-grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-before-prod}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - yuban
+
 networks:
   yuban:
     driver: bridge
+
+volumes:
+  redis-data:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:

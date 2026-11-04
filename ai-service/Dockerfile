@@ -32,8 +32,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app/ai-service
 
 # 先装依赖（torch 由基础镜像提供，不重复安装）
+COPY constraints.txt ./constraints.txt
 COPY ai-service/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # 拷贝 AI 服务代码（保持 ai-service/ 这一层目录结构）
 COPY ai-service/ /app/ai-service/

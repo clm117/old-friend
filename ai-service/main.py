@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi import Response
 from fastapi import WebSocket, WebSocketDisconnect
 import uvicorn
@@ -58,6 +59,7 @@ else:
 from llm_service import LLMService
 from character_engine.character_engine import CharacterEngine
 from asr_service import asr_service
+from state_store import PersistentStateStore
 from pydantic import BaseModel
 from typing import Optional, List
 import io
@@ -80,29 +82,8 @@ GPU_MEMORY_TOTAL = Gauge(
     "ai_gpu_memory_total_bytes", "GPU 显存总字节数", ["device"]
 )
 
-# 简单的内存存储实现
-class InMemoryStorage:
-    def __init__(self):
-        self.dialogue_history = {}
-        self.short_term_memory = {}
-    
-    def update_dialogue_history(self, session_id, message):
-        if session_id not in self.dialogue_history:
-            self.dialogue_history[session_id] = []
-        self.dialogue_history[session_id].insert(0, message.encode('utf-8'))
-    
-    def get_dialogue_history(self, session_id):
-        return self.dialogue_history.get(session_id, [])
-    
-    def set_short_term_memory(self, session_id, key, value):
-        if session_id not in self.short_term_memory:
-            self.short_term_memory[session_id] = {}
-        self.short_term_memory[session_id][key] = value
-    
-    def get_short_term_memory(self, session_id, key):
-        if session_id not in self.short_term_memory:
-            return None
-        return self.short_term_memory[session_id].get(key, None)
+# 状态持久化：会话 / 对话历史 / 情感配置 / 语音绑定（JSON 落盘 + Redis 可选）
+memory_storage = PersistentStateStore()
 
 # ===== 结构化日志配置 =====
 logging.basicConfig(
@@ -176,7 +157,6 @@ else:
     voxcpm2_service = _ServiceClass()
 llm_service = LLMService()
 character_engine = CharacterEngine()
-memory_storage = InMemoryStorage()
 
 
 async def _synthesize_speech(text, style, emotion_params, quick_mode):
@@ -672,6 +652,32 @@ async def health_check():
     }
 
 
+# 就绪探针：TTS 提供方已初始化 + 状态存储可写，供网关 /ready 与容器编排使用
+@app.get("/ready")
+async def readiness_check():
+    problems: list[str] = []
+    if _TTS_PROVIDER == "voxcpm2" and voxcpm2_service is None:
+        problems.append("tts_model_not_loaded")
+    if _TTS_PROVIDER == "cloud" and cloud_tts_service is None:
+        problems.append("cloud_tts_not_configured")
+    try:
+        memory_storage.flush(force=True)
+        state_stats = memory_storage.stats()
+    except Exception as e:
+        problems.append("state_store_unwritable")
+        state_stats = {"error": type(e).__name__}
+    payload = {
+        "status": "ready" if not problems else "not_ready",
+        "problems": problems,
+        "device": "cuda" if _USE_GPU else "cpu",
+        "tts_service": _TTS_PROVIDER,
+        "state_store": state_stats,
+    }
+    if problems:
+        return JSONResponse(payload, status_code=503)
+    return payload
+
+
 # ===== Prometheus 指标端点（生产应在 nginx 层限制仅内网可达）=====
 @app.get("/metrics")
 async def metrics():
@@ -821,6 +827,11 @@ if __name__ == "__main__":
 
     # 服务完全关闭后清理资源
     logger.info("正在释放资源...")
+    try:
+        memory_storage.flush(force=True)
+        logger.info("状态存储已落盘")
+    except Exception as e:
+        logger.error("状态落盘失败: %s", e)
     if _USE_GPU and torch.cuda.is_available():
         torch.cuda.empty_cache()
         logger.info("GPU 显存已释放")

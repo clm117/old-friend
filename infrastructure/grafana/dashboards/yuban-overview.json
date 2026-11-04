@@ -1,0 +1,60 @@
+{
+  "uid": "yuban-overview",
+  "title": "语伴 · 生产概览",
+  "tags": ["yuban", "production"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": {"from": "now-1h", "to": "now"},
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "网关请求速率",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(rate(gateway_requests_total[5m])) by (path)", "legendFormat": "{{path}}"}]
+    },
+    {
+      "id": 2,
+      "title": "网关 P95 延迟",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "histogram_quantile(0.95, sum(rate(gateway_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95"}]
+    },
+    {
+      "id": 3,
+      "title": "网关状态码分布",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(rate(gateway_requests_total[5m])) by (status)", "legendFormat": "{{status}}"}]
+    },
+    {
+      "id": 4,
+      "title": "AI 请求速率",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(rate(ai_requests_total[5m])) by (endpoint, status)", "legendFormat": "{{endpoint}} / {{status}}"}]
+    },
+    {
+      "id": 5,
+      "title": "GPU 显存占用",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "ai_gpu_memory_used_bytes / clamp_min(ai_gpu_memory_total_bytes, 1)", "legendFormat": "{{device}}"}]
+    },
+    {
+      "id": 6,
+      "title": "鉴权失败速率",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"expr": "sum(rate(gateway_auth_failures_total[5m])) by (reason)", "legendFormat": "{{reason}}"}]
+    }
+  ]
+}

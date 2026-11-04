@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PYTHONUNBUFFERED: "1"
+  JWT_SECRET: "ci-only-secret-0123456789abcdef0123456789abcdef"
+  AUTH_SEED_PASSWORD: "CiSeed@123456"
+
+jobs:
+  gateway-smoke:
+    name: 网关冒烟 + 配置校验
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 安装网关依赖（含安全约束）
+        run: pip install -r api-gateway/requirements.txt -c constraints.txt
+      - name: 网关冒烟测试（无需 GPU/模型）
+        run: python tests/ci_smoke.py
+      - name: Python 语法检查
+        run: python -m compileall -q api-gateway ai-service tests
+      - name: 校验 docker-compose 配置
+        run: docker compose -f docker-compose.yml config > /dev/null
+
+  state-store:
+    name: 状态持久化单测
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: 运行状态存储测试
+        run: python -m unittest tests/test_state_store.py -v
+      - name: 备份/恢复脚本语法检查
+        run: python -m py_compile infrastructure/backup/backup_data.py infrastructure/backup/restore_data.py

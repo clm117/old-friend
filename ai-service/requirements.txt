@@ -33,3 +33,5 @@ httpx==0.28.1
 websockets==17.1
 
 prometheus-client==0.24.0
+# 可选：配置 REDIS_URL 后状态双写 Redis（多实例共享），未配置时本地 JSON + 内存兜底
+redis==7.4.0

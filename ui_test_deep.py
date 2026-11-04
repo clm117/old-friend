@@ -28,6 +28,8 @@ BASE = os.environ.get("YUBAN_API_BASE", "http://127.0.0.1:8005")        # API �
 UI_BASE = os.environ.get("YUBAN_UI_BASE", "http://localhost:8899")      # 前端静态服务（port=8899 → 前端自动指向 8005）
 USER = "testuser"
 PASS = "Test@123456"
+# 登录限流按 IP 分桶：每次运行使用独立测试 IP，避免复用已运行服务时旧桶耗尽导致 A09 误报 429
+LOGIN_HEADERS = {"X-Forwarded-For": f"198.51.100.{int(time.time() * 10) % 200 + 2}"}
 # JWT 密钥由执行入口（run_tests.py）注入；独立运行时如未设置则用占位值，
 # 攻击面用例仍会因签名不匹配而返回 401（符合预期）。仓库中不硬编码真实密钥。
 JWT_SECRET = os.environ.get("JWT_SECRET", "unset-local-only-secret")
@@ -54,6 +56,15 @@ def wav_bytes(seconds=0.05, rate=16000):
 
 
 WAV = wav_bytes()
+
+# 语音定义用例需要一个真实文件输入；内容由路由 mock 拦截，不真正上传
+VOICE_FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_outputs", "voice_fixture.wav")
+
+
+def ensure_voice_fixture():
+    os.makedirs(os.path.dirname(VOICE_FIXTURE), exist_ok=True)
+    with open(VOICE_FIXTURE, "wb") as f:
+        f.write(WAV)
 
 
 def body(resp):
@@ -96,7 +107,7 @@ def make_jwt(payload, secret=None, alg="HS256", sign=True):
 # PART A：API 分支 / 数据类型 / 临界值
 # ============================================================
 def login_token(api):
-    r = api.post("/api/auth/login", data={"username": USER, "password": PASS})
+    r = api.post("/api/auth/login", data={"username": USER, "password": PASS}, headers=LOGIN_HEADERS)
     return (jbody(r) or {}).get("token")
 
 
@@ -128,48 +139,48 @@ def run_api(p):
 
     # ---------- A2 登录数据类型分支 ----------
     # 注意：登录接口限流 5/min，每次请求间隔 ≥ 0.3s 避免瞬时刷爆桶
-    r = api.post("/api/auth/login", form={"username": USER, "password": PASS})
+    r = api.post("/api/auth/login", form={"username": USER, "password": PASS}, headers=LOGIN_HEADERS)
     rec("A06", "API-登录", "非 JSON 请求体 → 400", r.status == 400 and "请求体必须是 JSON" in body(r),
         f"status={r.status} {body(r)[:60]}")
 
     time.sleep(0.3)
-    r = post_json(api, "/api/auth/login", ["a", "b"], {})
+    r = post_json(api, "/api/auth/login", ["a", "b"], LOGIN_HEADERS)
     rec("A07", "API-登录", "JSON 数组（非对象）→ 400", r.status == 400 and "请求体格式不正确" in body(r),
         f"status={r.status} {body(r)[:60]}")
 
     time.sleep(0.3)
-    r = api.post("/api/auth/login", data={"username": "", "password": PASS})
+    r = api.post("/api/auth/login", data={"username": "", "password": PASS}, headers=LOGIN_HEADERS)
     rec("A08", "API-登录", "username 空 → 400", r.status == 400 and "不能为空" in body(r), f"status={r.status}")
 
     time.sleep(0.3)
-    r = api.post("/api/auth/login", data={"username": USER, "password": ""})
+    r = api.post("/api/auth/login", data={"username": USER, "password": ""}, headers=LOGIN_HEADERS)
     rec("A09", "API-登录", "password 空 → 400", r.status == 400 and "不能为空" in body(r), f"status={r.status}")
 
     # login_token() + A06-A09 = 5 次登录（桶已满），等 62s 让窗口重置
     print("[API] 登录桶已满（5/min），等 62s 后继续 A10-A14 ...")
     time.sleep(62)
 
-    r = api.post("/api/auth/login", data={"username": "a" * 65, "password": PASS})
+    r = api.post("/api/auth/login", data={"username": "a" * 65, "password": PASS}, headers=LOGIN_HEADERS)
     rec("A10", "API-登录", "username=65 字符（上限 64）→ 400", r.status == 400 and "格式不正确" in body(r),
         f"status={r.status}")
 
     time.sleep(0.3)
-    r = api.post("/api/auth/login", data={"username": USER, "password": "p" * 257})
+    r = api.post("/api/auth/login", data={"username": USER, "password": "p" * 257}, headers=LOGIN_HEADERS)
     rec("A11", "API-登录", "password=257 字符（上限 256）→ 400", r.status == 400 and "格式不正确" in body(r),
         f"status={r.status}")
 
     time.sleep(0.3)
-    r = api.post("/api/auth/login", data={"username": USER, "password": "Wrong@123"})
+    r = api.post("/api/auth/login", data={"username": USER, "password": "Wrong@123"}, headers=LOGIN_HEADERS)
     rec("A12", "API-登录", "错误密码 → 401 统一文案", r.status == 401 and "账号或密码错误" in body(r),
         f"status={r.status}")
 
     time.sleep(0.3)
-    r = api.post("/api/auth/login", data={"username": "no_such_user_xyz", "password": "Whatever@1"})
+    r = api.post("/api/auth/login", data={"username": "no_such_user_xyz", "password": "Whatever@1"}, headers=LOGIN_HEADERS)
     rec("A13", "API-登录", "不存在的账号 → 401（防枚举同文案）", r.status == 401 and "账号或密码错误" in body(r),
         f"status={r.status}")
 
     time.sleep(0.3)
-    r = api.post("/api/auth/login", data={"username": USER, "password": PASS})
+    r = api.post("/api/auth/login", data={"username": USER, "password": PASS}, headers=LOGIN_HEADERS)
     j = jbody(r) or {}
     rec("A14", "API-登录", "正确凭证 → token/expires_in/token_type",
         r.status == 200 and bool(j.get("token")) and j.get("token_type") == "Bearer" and isinstance(j.get("expires_in"), int),
@@ -826,7 +837,6 @@ def run_ui(p):
     # WS 连接失败分支（需先关闭 B13 已建立的可用连接，否则会复用旧连接）
     page.evaluate("""() => {
         window.__savedWs = wsUrl;
-        if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
         if (chatWs) { try { chatWs.close(); } catch (e) {} chatWs = null; }
         wsUrl = 'ws://127.0.0.1:1';
     }""")
@@ -929,11 +939,14 @@ def run_ui(p):
     captured = {}
 
     def on_define(route):
-        captured["body"] = route.request.post_data or ""
+        raw = route.request.post_data_buffer or b""
+        captured["body"] = raw.decode("utf-8", "ignore")
         route.fulfill(status=200, headers={"content-type": "application/json"},
                       body=json.dumps({"voice_definition": "mock-voice-def", "voice_params": {}}))
 
     page.route("**/api/voice/define", on_define)
+    ensure_voice_fixture()
+    page.set_input_files("#voiceFileDefine", VOICE_FIXTURE)
     page.fill("#voiceNameDefine", "兜底描述语音")
     page.fill("#voiceDescriptionDefine", "")
     page.click("#defineVoiceBtn")
@@ -948,10 +961,12 @@ def run_ui(p):
 
     # 失败分支
     def on_define_fail(route):
-        route.fulfill(status=500, headers={"content-type": "application/json"}, body='{"error":"mock"}')
+        # 不含 error 字段：验证前端回退到「HTTP <状态码>」的兜底提示
+        route.fulfill(status=500, headers={"content-type": "application/json"}, body='{"detail":"mock"}')
 
     page.unroute("**/api/voice/define", on_define)
     page.route("**/api/voice/define", on_define_fail)
+    page.set_input_files("#voiceFileDefine", VOICE_FIXTURE)
     page.fill("#voiceNameDefine", "失败分支语音")
     page.click("#defineVoiceBtn")
     page.wait_for_timeout(900)
@@ -1341,7 +1356,6 @@ def run_ui(p):
     st = page.evaluate("""async () => {
         try {
             wsUrl = 'ws://127.0.0.1:8005';
-            if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
             if (chatWs) { try { chatWs.close(); } catch (e) {} chatWs = null; }
             await connectChatWebSocket();
             await connectChatWebSocket();
@@ -1540,7 +1554,6 @@ def run_ui(p):
         pass
     page.evaluate("""() => {
         localStorage.setItem('yuban_token', 'forged.bad.token');
-        if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
         if (chatWs) { try { chatWs.close(); } catch (e) {} chatWs = null; }
         connectChatWebSocket().catch(() => {});
     }""")

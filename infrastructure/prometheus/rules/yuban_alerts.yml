@@ -1,0 +1,111 @@
+groups:
+  - name: yuban-availability
+    rules:
+      - alert: GatewayDown
+        expr: up{job="api-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api-gateway
+        annotations:
+          summary: "API 网关不可达"
+          description: "Prometheus 连续 1 分钟抓取不到 api-gateway:8005/metrics"
+
+      - alert: AIServiceDown
+        expr: up{job="ai-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: ai-service
+        annotations:
+          summary: "AI 服务不可达"
+          description: "Prometheus 连续 1 分钟抓取不到 ai-service:8084/metrics"
+
+  - name: yuban-errors
+    rules:
+      - alert: Gateway5xxRateHigh
+        expr: |
+          sum(rate(gateway_requests_total{status=~"5.."}[5m]))
+          / clamp_min(sum(rate(gateway_requests_total[5m])), 1) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "网关 5xx 比例超过 5%"
+          description: "近 5 分钟网关 5xx 占比 {{ $value | humanizePercentage }}"
+
+      - alert: AIServiceErrorRateHigh
+        expr: |
+          sum(rate(ai_requests_total{status=~"error|5.."}[5m]))
+          / clamp_min(sum(rate(ai_requests_total[5m])), 1) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: ai-service
+        annotations:
+          summary: "AI 服务错误率超过 5%"
+          description: "近 5 分钟 AI 服务错误占比 {{ $value | humanizePercentage }}"
+
+      - alert: AuthFailureSpike
+        expr: sum(rate(gateway_auth_failures_total[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "鉴权失败次数异常升高"
+          description: "近 5 分钟鉴权失败速率 {{ $value | humanize }} /s，可能存在爆破"
+
+  - name: yuban-latency
+    rules:
+      - alert: GatewayP95LatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(gateway_request_duration_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "网关 P95 延迟超过 5 秒"
+          description: "当前 P95 {{ $value | humanizeDuration }}"
+
+      - alert: AITTSLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(ai_request_duration_seconds_bucket{endpoint=~".*tts.*"}[5m])) by (le)
+          ) > 15
+        for: 5m
+        labels:
+          severity: warning
+          service: ai-service
+        annotations:
+          summary: "TTS P95 延迟超过 15 秒"
+          description: "当前 P95 {{ $value | humanizeDuration }}"
+
+  - name: yuban-gpu
+    rules:
+      - alert: GPUMemoryHigh
+        expr: |
+          ai_gpu_memory_used_bytes / clamp_min(ai_gpu_memory_total_bytes, 1) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: ai-service
+        annotations:
+          summary: "GPU 显存占用超过 90%"
+          description: "显存占用 {{ $value | humanizePercentage }}，可能出现 OOM"
+
+      - alert: StateStoreFileMissing
+        expr: absent(ai_gpu_memory_used_bytes) and on() (up{job="ai-service"} == 1)
+        for: 5m
+        labels:
+          severity: info
+          service: ai-service
+        annotations:
+          summary: "AI 服务未上报 GPU 指标"
+          description: "若当前为 CPU/云 TTS 模式可忽略；否则检查 CUDA 与 nvidia-smi"

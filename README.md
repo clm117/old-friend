@@ -66,6 +66,24 @@
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+## 实现现状与降级说明
+
+上图包含规划中的能力，当前代码实际落地情况如下（避免误判生产就绪度）：
+
+| 能力 | 当前状态 | 说明 |
+|---|---|---|
+| 前端 + Koa/FastAPI 网关 + AI 服务 | 已实现 | nginx 反代、JWT 鉴权、限流、上传校验、CORS 白名单 |
+| 本地 VoxCPM2 TTS | 已接入，GPU 未验证 | `TTS_PROVIDER=voxcpm2`；CPU RTF 很高，实时交互必须 GPU；GPU 真机容量未压测 |
+| 云 TTS / 云 LLM / 云 ASR | 已接入 | `TTS_PROVIDER=cloud` 时不加载本地模型，声音定义/克隆接口不可用 |
+| 全双工语音对话（Fun-Audio-Chat 8B） | 占位/未启用 | 代码中为 mock 分支，不属于当前关键路径 |
+| 性格/角色引擎 | 已实现 | 自定义角色 JSON 持久化（`ai-service/data/custom_characters.json`） |
+| 会话/对话历史/情感/语音绑定 | 已实现持久化 | JSON 落盘 + 可选 Redis；见 `ai-service/state_store.py` |
+| Redis | 可选，非默认 | 未配置时内存 + 本地文件兜底；多实例需启用 |
+| RocketMQ / Milvus / OSS / SLS / Jaeger | 未实现 | 架构图中的规划项，代码库不存在对应集成 |
+| CI/CD | GitHub Actions 新增；GitLab CI 已废弃 | 见 `.github/workflows/ci.yml` 与 `infrastructure/gitlab/.gitlab-ci.yml` 顶部说明 |
+| 监控告警 | 已提供可启动配置 | Prometheus + Alertmanager + Grafana 已接入 compose；告警渠道仍需替换为真实 webhook |
+| 隐私政策 / 用户协议 | 已提供初版页面 | `frontend/privacy.html`、`frontend/terms.html`；运营主体与联系方式待上线前补齐 |
+
 ## 目录结构
 
 ```
