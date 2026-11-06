@@ -11,6 +11,7 @@ import atexit
 import json
 import logging
 import os
+import secrets
 import threading
 import time
 from pathlib import Path
@@ -21,7 +22,10 @@ logger = logging.getLogger("yuban.state")
 _STATE_VERSION = 1
 _MAX_DIALOGUE_PER_SESSION = 200
 _MAX_SESSIONS = 2000
+_MAX_TOMBSTONES = 5000
 _REDIS_KEY = "yuban:ai:state"
+_MAX_PAGE_SIZE = 100
+_DEFAULT_PAGE_SIZE = 20
 
 
 def _default_data_dir() -> Path:
@@ -47,6 +51,10 @@ class PersistentStateStore:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self._sessions: dict[str, dict[str, Any]] = {}
+        # 归属索引：owner -> session_id 集合，列表接口只扫索引，避免会话增长后全表扫描
+        self._owner_index: dict[str, set[str]] = {}
+        # 删除墓碑：会话删除后保留 sid，用于「删后读 404 / WS 1008」而不是重新隐式创建
+        self._deleted: dict[str, float] = {}
         self._dirty = False
         self._timer: Optional[threading.Timer] = None
         self._redis = None
@@ -80,7 +88,16 @@ class PersistentStateStore:
                         entry.setdefault("short_term", {})
                         entry.setdefault("dialogue_history", [])
                         entry.setdefault("updated_at", time.time())
+                        entry.setdefault("created_at", entry["updated_at"])
                         self._sessions[str(sid)] = entry
+            deleted = data.get("deleted_sessions", {})
+            if isinstance(deleted, dict):
+                for sid, ts in deleted.items():
+                    try:
+                        self._deleted[str(sid)] = float(ts)
+                    except (TypeError, ValueError):
+                        self._deleted[str(sid)] = time.time()
+            self._rebuild_index()
             logger.info("[state] 已恢复 %d 个会话（%s）", len(self._sessions), self.state_file)
         except (json.JSONDecodeError, OSError, AttributeError) as e:
             logger.error("[state] 状态文件损坏，已忽略并保留原文件: %s", e)
@@ -111,6 +128,34 @@ class PersistentStateStore:
             logger.warning("[state] Redis 读取失败，回退本地文件: %s", e)
             return None
 
+    # ---------- 归属索引 ----------
+    def _rebuild_index(self) -> None:
+        self._owner_index = {}
+        for sid, entry in self._sessions.items():
+            owner = entry.get("short_term", {}).get("owner")
+            if owner:
+                self._owner_index.setdefault(owner, set()).add(sid)
+
+    def _index_add(self, session_id: str, owner: Optional[str]) -> None:
+        if owner:
+            self._owner_index.setdefault(owner, set()).add(session_id)
+
+    def _index_remove(self, session_id: str) -> None:
+        for owned in self._owner_index.values():
+            owned.discard(session_id)
+
+    def _drop_session(self, session_id: str) -> None:
+        self._sessions.pop(session_id, None)
+        self._index_remove(session_id)
+
+    def _prune_tombstones(self) -> None:
+        if len(self._deleted) <= _MAX_TOMBSTONES:
+            return
+        overflow = len(self._deleted) - _MAX_TOMBSTONES
+        oldest = sorted(self._deleted.items(), key=lambda item: item[1])[:overflow]
+        for sid, _ in oldest:
+            self._deleted.pop(sid, None)
+
     def _schedule_save(self) -> None:
         with self._lock:
             self._dirty = True
@@ -133,6 +178,7 @@ class PersistentStateStore:
                     "version": _STATE_VERSION,
                     "updated_at": time.time(),
                     "sessions": self._sessions,
+                    "deleted_sessions": self._deleted,
                 },
                 ensure_ascii=False,
                 separators=(",", ":"),
@@ -161,7 +207,13 @@ class PersistentStateStore:
     def _session(self, session_id: str) -> dict[str, Any]:
         entry = self._sessions.get(session_id)
         if entry is None:
-            entry = {"short_term": {}, "dialogue_history": [], "updated_at": time.time()}
+            now = time.time()
+            entry = {
+                "short_term": {},
+                "dialogue_history": [],
+                "created_at": now,
+                "updated_at": now,
+            }
             self._sessions[session_id] = entry
             self._prune_sessions()
         return entry
@@ -172,7 +224,7 @@ class PersistentStateStore:
         overflow = len(self._sessions) - _MAX_SESSIONS
         oldest = sorted(self._sessions.items(), key=lambda item: item[1].get("updated_at", 0))[:overflow]
         for sid, _ in oldest:
-            self._sessions.pop(sid, None)
+            self._drop_session(sid)
 
     def set_short_term_memory(self, session_id: str, key: str, value: Any) -> None:
         with self._lock:
@@ -187,6 +239,134 @@ class PersistentStateStore:
             if not entry:
                 return None
             return entry.get("short_term", {}).get(key)
+
+    def delete_short_term_memory(self, session_id: str, key: str) -> bool:
+        """删除单个短期记忆键；键不存在返回 False（便于幂等语义）"""
+        with self._lock:
+            entry = self._sessions.get(session_id)
+            if not entry:
+                return False
+            existed = key in entry.get("short_term", {})
+            entry.get("short_term", {}).pop(key, None)
+            if existed:
+                entry["updated_at"] = time.time()
+        self._schedule_save()
+        return existed
+
+    # ---------- 会话归属（多用户隔离） ----------
+    def has_session(self, session_id: str) -> bool:
+        with self._lock:
+            return session_id in self._sessions
+
+    def get_session_owner(self, session_id: str) -> Optional[str]:
+        """返回会话归属账号；会话不存在或历史会话未记录归属时返回 None"""
+        with self._lock:
+            entry = self._sessions.get(session_id)
+            if not entry:
+                return None
+            return entry.get("short_term", {}).get("owner")
+
+    def create_session(self, owner: str, title: str = "") -> str:
+        """服务端生成不可预测的会话 ID，并绑定归属账号"""
+        session_id = "s_" + secrets.token_urlsafe(24)
+        now = time.time()
+        with self._lock:
+            self._sessions[session_id] = {
+                "short_term": {"owner": owner, **({"title": title} if title else {})},
+                "dialogue_history": [],
+                "created_at": now,
+                "updated_at": now,
+            }
+            self._index_add(session_id, owner)
+            self._prune_sessions()
+        self._schedule_save()
+        return session_id
+
+    def claim_session(self, session_id: str, owner: str) -> str:
+        """会话不存在则创建；历史会话无归属时回填。返回归属账号"""
+        with self._lock:
+            entry = self._session(session_id)
+            current = entry.get("short_term", {}).get("owner")
+            if not current:
+                entry["short_term"]["owner"] = owner
+                entry["updated_at"] = time.time()
+                self._index_add(session_id, owner)
+                current = owner
+        self._schedule_save()
+        return current
+
+    # ---------- 会话管理（列表 / 重命名 / 删除） ----------
+    def is_deleted(self, session_id: str) -> bool:
+        with self._lock:
+            return session_id in self._deleted
+
+    def delete_session(self, session_id: str) -> bool:
+        """删除会话并写入墓碑；不存在返回 False"""
+        with self._lock:
+            if session_id not in self._sessions:
+                return False
+            self._drop_session(session_id)
+            self._deleted[session_id] = time.time()
+            self._prune_tombstones()
+        self._schedule_save()
+        return True
+
+    def rename_session(self, session_id: str, title: str) -> bool:
+        with self._lock:
+            entry = self._sessions.get(session_id)
+            if entry is None:
+                return False
+            entry.setdefault("short_term", {})["title"] = title
+            entry["updated_at"] = time.time()
+        self._schedule_save()
+        return True
+
+    def get_session_meta(self, session_id: str) -> Optional[dict[str, Any]]:
+        with self._lock:
+            entry = self._sessions.get(session_id)
+            if entry is None:
+                return None
+            short = entry.get("short_term", {})
+            return {
+                "session_id": session_id,
+                "title": short.get("title", ""),
+                "owner": short.get("owner"),
+                "character_id": short.get("character_id"),
+                "message_count": len(entry.get("dialogue_history", [])),
+                "created_at": entry.get("created_at", entry.get("updated_at")),
+                "updated_at": entry.get("updated_at"),
+            }
+
+    def list_sessions(self, owner: str, limit: int = _DEFAULT_PAGE_SIZE,
+                      offset: int = 0) -> tuple[list[dict[str, Any]], int]:
+        """按归属账号列出会话，返回 (当前页, 总数)；排序按 updated_at 倒序"""
+        limit = max(1, min(int(limit), _MAX_PAGE_SIZE))
+        offset = max(0, int(offset))
+        with self._lock:
+            owned = set(self._owner_index.get(owner, set()))
+            # 兜底：索引缺失（如旧状态未重建）时按 short_term.owner 扫一遍
+            for sid, entry in self._sessions.items():
+                if entry.get("short_term", {}).get("owner") == owner:
+                    owned.add(sid)
+                else:
+                    owned.discard(sid)
+            items: list[dict[str, Any]] = []
+            for sid in owned:
+                entry = self._sessions.get(sid)
+                if not entry:
+                    continue
+                short = entry.get("short_term", {})
+                items.append({
+                    "session_id": sid,
+                    "title": short.get("title", ""),
+                    "character_id": short.get("character_id"),
+                    "message_count": len(entry.get("dialogue_history", [])),
+                    "created_at": entry.get("created_at", entry.get("updated_at")),
+                    "updated_at": entry.get("updated_at"),
+                })
+            items.sort(key=lambda item: item.get("updated_at") or 0, reverse=True)
+            total = len(items)
+            return items[offset:offset + limit], total
 
     def update_dialogue_history(self, session_id: str, message) -> None:
         text = message.decode("utf-8", errors="replace") if isinstance(message, (bytes, bytearray)) else str(message)
@@ -212,5 +392,6 @@ class PersistentStateStore:
             "backend": "redis+file" if self._redis is not None else "file",
             "state_file": str(self.state_file),
             "sessions": sessions,
+            "deleted_sessions": len(self._deleted),
             "dialogue_messages": messages,
         }

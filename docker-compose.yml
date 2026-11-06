@@ -66,6 +66,10 @@ services:
       AI_SERVICE_URL: http://ai-service:8084
       AI_SERVICE_WS_URL: ws://ai-service:8084
       JWT_SECRET: ${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
+      # 网关 → AI 内部身份签名密钥（必须与 ai-service 同值）
+      AI_INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN:-${JWT_SECRET}}
+      # 仅信任反代来源的 XFF；容器网络内 nginx 属于私网段
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:-172.16.0.0/12,127.0.0.1/32,::1/128}
       # 安全加固相关（生产按 .env 覆盖）
       AUTH_REQUIRED: ${AUTH_REQUIRED:-false}
       # 账号表由 auth-init 服务播种到宿主机 ./authdata（下方便以卷挂载）
@@ -114,6 +118,9 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-qwen}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-qwen-plus}
+      # 内部身份签名密钥（与网关同值）；未配置时回退 JWT_SECRET
+      AI_INTERNAL_TOKEN: ${AI_INTERNAL_TOKEN:-${JWT_SECRET}}
+      JWT_SECRET: ${JWT_SECRET:-}
       # TTS：voxcpm2 本地模型（需 GPU）| cloud 云 TTS（验证期）
       TTS_PROVIDER: ${TTS_PROVIDER:-voxcpm2}
       # 安全加固：CORS 白名单与上传上限（与网关保持一致）

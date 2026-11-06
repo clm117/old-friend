@@ -37,6 +37,22 @@
             <!-- 语音对话界面 -->
             <section class="tab-content active" id="chat">
                 <div class="chat-container">
+                    <!-- 历史会话侧栏：仅展示当前账号的会话，支持新建/切换/重命名/删除 -->
+                    <div id="sessionPanel" style="border:1px solid #e3e6ea; border-radius:12px; padding:10px 12px; margin:0 0 10px; background:#fff;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                            <strong style="font-size:0.95rem;">历史会话</strong>
+                            <div style="display:flex; gap:6px;">
+                                <button type="button" id="newSessionBtn" style="padding:4px 10px; border:none; border-radius:6px; background:#4CAF50; color:#fff; cursor:pointer; font-size:0.85rem;">新建</button>
+                                <button type="button" id="sessionCollapseBtn" style="padding:4px 10px; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; font-size:0.85rem;">收起</button>
+                            </div>
+                        </div>
+                        <div id="sessionListBody">
+                            <div id="sessionList" style="display:flex; flex-direction:column; gap:6px; margin-top:8px; max-height:170px; overflow-y:auto;"></div>
+                            <div style="text-align:center; margin-top:6px;">
+                                <button type="button" id="sessionMoreBtn" style="display:none; padding:4px 12px; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; font-size:0.85rem;">加载更多</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="chat-history" id="chatHistory">
                         <!-- 对话历史将在这里显示 -->
                         <div class="chat-welcome">
@@ -229,6 +245,7 @@
                     </div>
 
                     <button class="submit-btn" id="saveEmotionBtn">保存情感配置</button>
+                    <button type="button" id="resetEmotionBtn" style="margin-left:8px; padding:10px 16px; border:1px solid #ccc; border-radius:8px; background:#fff; cursor:pointer;">恢复默认</button>
                     <div class="response" id="emotionConfigResponse"></div>
 
                     <h4 class="section-title">已保存的情感配置</h4>
@@ -290,6 +307,7 @@
                         <textarea id="charFreeDesc" placeholder="其他想补充的人设背景，可留空"></textarea>
                     </div>
                     <button class="submit-btn" id="createCharacterBtn">创建角色</button>
+                    <button type="button" id="cancelCharacterEditBtn" style="display:none; margin-left:8px; padding:10px 16px; border:1px solid #ccc; border-radius:8px; background:#fff; cursor:pointer;">取消编辑</button>
                     <div class="response" id="characterResponse"></div>
                 </div>
             </section>

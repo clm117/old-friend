@@ -256,8 +256,9 @@ def run_api(p):
                      multipart={"session_id": "d1", "description": "低沉男声",
                                 "audio": {"name": "a.wav", "mimeType": "audio/wav", "buffer": WAV}},
                      headers=AUTH, timeout=8000)
-        rec("A29", "API-定义", "合法 wav + 描述 → 通过校验", r.status in (200, 422) and "为空" not in body(r) and "不支持" not in body(r),
-            f"status={r.status} {body(r)[:60]}")
+        rec("A29", "API-定义", "合法 wav：cloud 模式 501 明确不支持，local 模式通过校验",
+            (r.status == 501 and (jbody(r) or {}).get("code") == "voice_define_unsupported") or r.status in (200, 422),
+            f"status={r.status} {body(r)[:80]}")
     except Exception as e:
         rec("A29", "API-定义", "合法 wav + 描述 → 通过校验", "timed out" in str(e).lower() or "Timeout" in str(e),
             "校验通过并进入模型处理（超时属预期）")
@@ -269,9 +270,9 @@ def run_api(p):
         fields = {"description": "测试", kv[0]: kv[1]}
         try:
             r = define(**fields)
-            rec(cid, "API-定义", label + " → 服务不崩溃", r.status < 500, f"status={r.status} {body(r)[:60]}")
+            rec(cid, "API-定义", label + " → 服务不崩溃/明确不支持", r.status < 500 or r.status == 501, f"status={r.status} {body(r)[:60]}")
         except Exception as e:
-            rec(cid, "API-定义", label + " → 服务不崩溃", True, "进入模型处理（超时属预期）")
+            rec(cid, "API-定义", label + " → 服务不崩溃/明确不支持", True, "进入模型处理（超时属预期）")
 
     # ---------- A6 情感配置 ----------
     r = api.post("/api/emotion-config", form={"session_id": "e1", "emotion_name": "全零", "happiness": 0, "sadness": 0, "anger": 0, "fear": 0, "disgust": 0, "surprise": 0}, headers=AUTH, timeout=15000)

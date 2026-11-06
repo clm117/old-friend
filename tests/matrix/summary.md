@@ -1,0 +1,150 @@
+# 语伴矩阵化功能测试报告
+
+> 结论：计划 **437** 条，实际执行 **383** 条；T1 通过 **368**、失败 **0**、能力缺失 **7**；T2 阻塞 **54** 条（LLM 不可用），T3 阻塞 **8** 条。能力缺失集中在：GAP-04、GAP-05、GAP-06、GAP-07、GAP-08、GAP-09、GAP-11。
+
+- 时间：2026-11-06T14:57:11 → 2026-11-06T14:58:12，耗时 61.2s（预算 90 分钟内）
+- 环境：网关 :8005 / AI :8084 / TTS=cloud；限流保持产品默认 5/120/20，未放宽
+- 测试数据目录：`D:\ProgramFile\语伴\tests\matrix\runtime\data`（独立于产品数据）
+
+## 一、分层统计（计划 / 执行 / 通过 / 失败 / 能力缺失 / 阻塞 / 跳过）
+
+| 层 | 计划 | 执行 | 通过 | 失败 | 能力缺失 | 阻塞 | 跳过 | 耗时(s) |
+|---|---|---|---|---|---|---|---|---|
+| T1 | 375 | 375 | 368 | 0 | 7 | 0 | 0 | 37.07 |
+| T2 | 54 | 0 | 0 | 0 | 0 | 54 | 0 | 0.0 |
+| T3 | 8 | 8 | 0 | 0 | 0 | 8 | 0 | 9.02 |
+| 合计 | 437 | 383 | 368 | 0 | 7 | 62 | 0 | 61.2 |
+
+说明：BLOCKED / CAPABILITY_GAP 均不计入 PASS。T2 未真实执行时 executed=0。
+
+## 二、维度取值与来源
+
+| 维度 | 取值 | 来源 |
+|---|---|---|
+| 角色 | 6 个官方预设 + 自定义（长名/特殊字符/空值/重名等边界） | product_preset + human_extension |
+| 人群 | 老年(product_preset)、中年(product_preset)、青少年(product_preset)、青年(product_preset)、儿童(能力缺失)、幼儿(能力缺失) | product_preset / capability_gap |
+| 音色 | 2 性别 × 10 标签 + 语速 0.7–1.3；方言/童声/情感音色/克隆 | product_preset / capability_gap |
+| 情感 | 6 类型（人为扩展）× 6 强度值(-1.0/0/0.5/1.0/2.0/非法) | human_extension + product_preset |
+| 会话 | 隐式新建/绑定/切换/多轮/重启；解绑与 CRUD 缺失 | product_preset / capability_gap |
+
+## 三、交叉通过情况
+
+### 3.1 角色 × 人群（跨 5 种情感，T1 全交叉 120 条）
+
+| 角色 \ 人群 | 老年 | 中年 | 青少年 | 青年 |
+|---|---|---|---|---|
+| 温柔学姐 | 5/5 | 5/5 | 5/5 | 5/5 |
+| 沉稳大叔 | 5/5 | 5/5 | 5/5 | 5/5 |
+| 元气同桌 | 5/5 | 5/5 | 5/5 | 5/5 |
+| 职场前辈 | 5/5 | 5/5 | 5/5 | 5/5 |
+| 暖心陪伴 | 5/5 | 5/5 | 5/5 | 5/5 |
+| 搞笑兄弟 | 5/5 | 5/5 | 5/5 | 5/5 |
+
+### 3.2 情感类型 × 强度（T1 真跑）
+
+| 情感 \ 强度 | -1.0 | 0.0 | 0.5 | 1.0 | 2.0 | abc |
+|---|---|---|---|---|---|---|
+| 平静 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 开心 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 悲伤 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 焦虑 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 生气 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| 惊讶 | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+### 3.3 性别 × 音色标签（voice_prompt 映射）
+
+| 性别 | 温柔 | 甜美 | 磁性 | 元气 | 低沉 | 沉稳 | 活泼 | 成熟 | 清脆 | 沙哑 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| female | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| male | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+### 3.4 角色 × 情感（每格为 4 个人群的配置链路通过数）
+
+| 角色 \ 情感 | 平静 | 开心 | 悲伤 | 焦虑 | 生气 |
+|---|---|---|---|---|---|
+| 温柔学姐 | 4/4 | 4/4 | 4/4 | 4/4 | 4/4 |
+| 沉稳大叔 | 4/4 | 4/4 | 4/4 | 4/4 | 4/4 |
+| 元气同桌 | 4/4 | 4/4 | 4/4 | 4/4 | 4/4 |
+| 职场前辈 | 4/4 | 4/4 | 4/4 | 4/4 | 4/4 |
+| 暖心陪伴 | 4/4 | 4/4 | 4/4 | 4/4 | 4/4 |
+| 搞笑兄弟 | 4/4 | 4/4 | 4/4 | 4/4 | 4/4 |
+
+### 3.5 人群 × 情感（每格为 6 个角色的配置链路通过数）
+
+| 人群 \ 情感 | 平静 | 开心 | 悲伤 | 焦虑 | 生气 |
+|---|---|---|---|---|---|
+| 老年 | 6/6 | 6/6 | 6/6 | 6/6 | 6/6 |
+| 中年 | 6/6 | 6/6 | 6/6 | 6/6 | 6/6 |
+| 青少年 | 6/6 | 6/6 | 6/6 | 6/6 | 6/6 |
+| 青年 | 6/6 | 6/6 | 6/6 | 6/6 | 6/6 |
+
+说明：3.1/3.4/3.5 均来自 T1 `CRS` 全交叉（6 预设 × 4 人群 × 5 情感 = 120 条），验证的是「绑定角色 → 写入情感 → 双读回一致」的配置链路，不代表 LLM 对话表现；对话质量属于 T2（当前 BLOCKED）。
+
+## 四、T1 失败用例（产品缺陷）
+
+无失败用例。
+
+## 五、缺陷清单（仅统计本轮 FAIL 用例；CAPABILITY_GAP / BLOCKED 不计入）
+
+无产品缺陷记录。
+
+## 六、产品能力缺失（如实标注，不记为测试失败）
+
+| 编号 | 能力 | 最小补齐建议 | 证据 |
+|---|---|---|---|
+| GAP-04 | age_group 无儿童/幼儿年龄段（产品决策不做，出列） | 不排期：合规与年龄段扩展取消 | T1-POP-141, T1-POP-142 |
+| GAP-05 | 音色谱无方言/童声/老年音/情感音色（仅批准 3 种方言） | 第 2 批目录重构；第 3 批仅粤语/四川话/东北话 | T1-VOX-163 |
+| GAP-06 | 无声音克隆端点（P3 仅需求验证，不排实施） | 不排实施；如需再做需 GPU + 声纹合规评审 | T1-VOX-164 |
+| GAP-07 | cloud 模式声音定义不可用（第 1 批降级为显式 501） | cloud 模式 501 + code=voice_define_unsupported；云能力属第 3 批 | T3-PRB-434 |
+| GAP-08 | speed 仅落库、不进入 voice_prompt/TTS 入参 | voice_profile_to_prompt 增加语速描述，或将 speed 传入 TTS | T1-VOX-165 |
+| GAP-09 | 情感类型无枚举/无预设 | 提供 emotion 预设枚举（平静/开心/悲伤…）映射到 6 轴向量 | T1-EMO-208 |
+| GAP-11 | 会话角色解绑（未排期，不属于第 1 批） | 新增 DELETE /api/sessions/{sid}/character 或在绑定接口支持 character_id 为空 | T1-SES-239 |
+
+## 七、T2 / T3 阻塞与解锁条件
+
+### T2 依赖 LLM：54 条全部 BLOCKED
+
+- DashScope 探测：HTTP 400，返回 `{"error":{"message":"Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#over`
+- 解锁：为 DashScope 账号充值（解除 Arrearage）或更换可用 LLM_API_KEY，然后重跑 run_matrix.py
+- 解锁后复跑：`.venv\Scripts\python.exe tests/matrix/run_matrix.py`（生成器无需重跑）
+
+### T3 依赖 TTS/GPU：只探测不硬跑
+
+| 探测项 | 结论 | 证据摘要 |
+|---|---|---|
+| T3-PRB-430 本机 GPU 可用性 | BLOCKED | False 2.15.0+cpu 0 |
+| T3-PRB-431 本地 VoxCPM2 模型与 CUDA 依赖 | BLOCKED |  |
+| T3-PRB-432 云 TTS 合成（qwen3-tts-flash） | BLOCKED | 400 |
+| T3-PRB-433 ASR paraformer-realtime-v2 转写 | BLOCKED | Access denied, please make sure your account is in good standing. |
+| T3-PRB-434 声音定义 voice design（/api/voice/define） | BLOCKED | 501 |
+| T3-PRB-435 声音克隆端点 | BLOCKED | 404 |
+| T3-PRB-436 情感音色效果（情感参数驱动 TTS） | BLOCKED |  |
+| T3-PRB-437 语音回放/播放链路 | BLOCKED |  |
+
+- 解锁条件：具备 CUDA GPU 且安装 VoxCPM2 模型（`TTS_PROVIDER=local`），或云侧开通 voice design / TTS 配额
+- 明确未使用「HTTP 200 + 错误文案」作为通过依据
+
+### 覆盖限制与风险观察（不计入缺陷统计）
+
+- T1 不覆盖「连续多轮对话 / 话术一致性 / 上下文保持」：这类用例必须真实调用 LLM，已全部归入 T2；T2 当前 BLOCKED，因此本轮无法给出对话质量结论。
+- DEF-05（XFF 伪造绕过限流）：已改为仅当直连来源落在 `TRUSTED_PROXY_CIDRS` 内才采信 X-Forwarded-For，否则以 socket 对端地址分桶；实测远端伪造 XFF 不生效（xf_remote_trusted=false）。
+- DEF-06（就绪探针不反映云依赖）：已改为真实探测云 TTS，依赖不可用时 `/ready` 返回 503 `not_ready` 并附 `cloud_dependency` 明细；实测 503 + problems 含 cloud_tts_unavailable。
+
+## 八、组合策略、抽样与耗时裁剪
+
+- T1：穷举 + 边界值。T1 全部为本地 HTTP/WS 调用，单例耗时 <200ms，可以穷举；角色×人群×情感交叉 6×4×5=120 也全部真跑
+- T2：贪心 pairwise + 分层补充 3 轮用例。真实对话每轮含 LLM(+TTS) 网络耗时，全量笛卡尔积 9×4×5=180 无法在 90 分钟内跑完；pairwise 保证任意两维取值组合至少出现一次，规模约 45 条；另取约 1/8 用例扩展为 3 轮验证上下文保持（计划 54 条）
+- T3：只探测不硬跑。本地无 GPU；CPU TTS RTF 35-88，单句需数分钟；声音定义/克隆依赖 VoxCPM2（cloud 模式不可用），硬跑会耗尽时间预算
+- 各阶段耗时：`{"service_start": 4.12, "login": 0.5, "run_T1": 37.07, "ai_restart": 5.07, "run_restart": 0.12, "block_T2": 0.0, "run_T3": 9.02}`
+- 裁剪说明：T2 若解锁，按 pairwise 抽样只跑约 45 条（全量 180 条约需 3-4 小时）；T3 不硬跑原因是 CPU TTS RTF 35-88，单句需数分钟，超出 90 分钟预算
+
+## 九、复跑与约束
+
+```powershell
+.venv\Scripts\python.exe tests/matrix/generate_matrix.py
+.venv\Scripts\python.exe tests/matrix/run_matrix.py
+```
+
+- 未使用 mock / route 拦截 / 事件注入；所有 T1 用例真实打到网关与 AI 服务
+- 未 commit / push；未启停付费 GPU；测试数据全部位于 tests/matrix/runtime
+- 限流用例使用独立 X-Forwarded-For 桶，未放宽任何限额

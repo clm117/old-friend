@@ -1,0 +1,723 @@
+{
+  "generated_at": "2026-11-06T10:56:42",
+  "suite": "tests/e2e_real（真实链路，无 mock/route/事件注入）",
+  "environment": {
+    "host": "O20106096806301",
+    "os": "win32",
+    "python": "3.11.2",
+    "cpu": "Intel64 Family 6 Model 142 Stepping 12, GenuineIntel / 8 logical",
+    "ram_total_mb": 16192,
+    "gpu": "无（torch.cuda.is_available()=false, nvidia-smi 不存在）",
+    "tts_provider": "cloud（ai-service/.env）",
+    "auth_required": "true（网关测试实例）",
+    "ram_available_mb_at_start": 7402
+  },
+  "service": {
+    "ai_port": 8084,
+    "gateway_port": 8005,
+    "started": true,
+    "gateway_python": "D:\\Program Files (x86)\\Python 3.11\\python.exe",
+    "ai_health": 200,
+    "ai_start_seconds": 3.05,
+    "gateway_health": 200,
+    "gateway_start_seconds": 1.05,
+    "users_file": "D:\\ProgramFile\\语伴\\tests\\e2e_real\\runtime\\users_e2e.json"
+  },
+  "summary": {
+    "PASS": 6,
+    "FAIL": 7,
+    "SKIP": 5,
+    "total": 18
+  },
+  "cases": [
+    {
+      "id": "D05",
+      "name": "测试语音素材（系统 TTS 合成）",
+      "category": "依赖探测",
+      "status": "PASS",
+      "elapsed_seconds": 0,
+      "assertions": [
+        {
+          "name": "16kHz/16bit/单声道",
+          "ok": true,
+          "detail": "{'sample_rate': 16000, 'channels': 1, 'sampwidth': 2, 'duration_seconds': 3.29}"
+        }
+      ],
+      "evidence": {
+        "path": "D:\\ProgramFile\\语伴\\tests\\e2e_real\\runtime\\asr_input.wav",
+        "sample_rate": 16000,
+        "channels": 1,
+        "sampwidth": 2,
+        "duration_seconds": 3.29
+      },
+      "classification": null,
+      "notes": "仅证明测试素材可用，不代表产品 TTS 能力"
+    },
+    {
+      "id": "D04",
+      "name": "本机 GPU 可用性",
+      "category": "依赖探测",
+      "status": "SKIP",
+      "elapsed_seconds": 0,
+      "assertions": [
+        {
+          "name": "torch.cuda.is_available()",
+          "ok": false,
+          "detail": "False"
+        },
+        {
+          "name": "nvidia-smi 存在",
+          "ok": false,
+          "detail": "None"
+        }
+      ],
+      "evidence": {
+        "cuda_available": false,
+        "torch": "2.15.0+cpu",
+        "nvidia_smi": "未安装"
+      },
+      "classification": "环境能力缺失",
+      "notes": "无 NVIDIA 驱动/GPU，本地 VoxCPM2 只能走 CPU 降级路径"
+    },
+    {
+      "id": "D01",
+      "name": "DashScope LLM（qwen）可用性",
+      "category": "依赖探测",
+      "status": "FAIL",
+      "elapsed_seconds": 0.3,
+      "assertions": [
+        {
+          "name": "HTTP 200",
+          "ok": false,
+          "detail": "400"
+        },
+        {
+          "name": "返回非空文本",
+          "ok": false,
+          "detail": ""
+        }
+      ],
+      "evidence": {
+        "http_status": 400,
+        "body": "{\"error\":{\"message\":\"Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment\",\"type\":\"Arrearage\",\"param\":null,\"code\":\"Arrearage\"},\"id\":\"chatcmpl-096d8ffe-3316-9616-b4f8-5cb333d02908\",\"request_id\":\"096d8ffe",
+        "content": ""
+      },
+      "classification": "外部依赖不可用",
+      "notes": "DashScope 返回 Arrearage/欠费或无有效 Key"
+    },
+    {
+      "id": "D02",
+      "name": "云 TTS（qwen3-tts-flash）可用性",
+      "category": "依赖探测",
+      "status": "FAIL",
+      "elapsed_seconds": 0.24,
+      "assertions": [
+        {
+          "name": "HTTP 200",
+          "ok": false,
+          "detail": "400"
+        },
+        {
+          "name": "返回音频 URL",
+          "ok": false,
+          "detail": "None"
+        },
+        {
+          "name": "WAV 可解码且时长>0",
+          "ok": false,
+          "detail": "None"
+        }
+      ],
+      "evidence": {
+        "http_status": 400,
+        "body": "{\"code\":\"Arrearage\",\"message\":\"Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#overdue-payment\",\"request_id\":\"4c7432cb-1494-9f03-a0d4-96c88ff9bd44\"}",
+        "audio": null
+      },
+      "classification": "外部依赖不可用",
+      "notes": "DashScope 欠费或未开通该模型"
+    },
+    {
+      "id": "D03",
+      "name": "ASR（paraformer-realtime-v2）可用性",
+      "category": "依赖探测",
+      "status": "FAIL",
+      "elapsed_seconds": 3.39,
+      "assertions": [
+        {
+          "name": "收到 task-started",
+          "ok": true,
+          "detail": "True"
+        },
+        {
+          "name": "收到语音内容",
+          "ok": false,
+          "detail": ""
+        },
+        {
+          "name": "语义匹配（你好/天气/很好）",
+          "ok": false,
+          "detail": ""
+        }
+      ],
+      "evidence": {
+        "events": [
+          {
+            "event": "task-started",
+            "error": null
+          }
+        ],
+        "task_started": true,
+        "text": "",
+        "error": "WebSocket 关闭 code=1011 reason=Access to model denied. Please make sure you are eligible for using the model.",
+        "audio": {
+          "sample_rate": 16000,
+          "bytes": 105120
+        }
+      },
+      "classification": "外部依赖不可用",
+      "notes": "WebSocket 关闭 code=1011 reason=Access to model denied. Please make sure you are eligible for using the model."
+    },
+    {
+      "id": "E01",
+      "name": "真实文字对话（WS → LLM → 回复）",
+      "category": "文字对话",
+      "status": "FAIL",
+      "elapsed_seconds": 0.37,
+      "assertions": [
+        {
+          "name": "收到非空回复",
+          "ok": false,
+          "detail": ""
+        },
+        {
+          "name": "无 error 事件",
+          "ok": false,
+          "detail": "服务内部错误"
+        },
+        {
+          "name": "非固定 mock 文案",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "evidence": {
+        "events": [
+          {
+            "type": "status",
+            "status": "generating"
+          },
+          {
+            "type": "error",
+            "message": "服务内部错误"
+          }
+        ],
+        "audio_frames": 0,
+        "first_text_seconds": null,
+        "answer": "",
+        "error": "服务内部错误"
+      },
+      "classification": "外部依赖不可用",
+      "notes": "LLM 不可用（DashScope 欠费）：AI 服务返回 error 事件后关闭连接"
+    },
+    {
+      "id": "E02",
+      "name": "真实语音输入（WAV → ASR → 文本）",
+      "category": "语音输入",
+      "status": "FAIL",
+      "elapsed_seconds": 15.45,
+      "assertions": [
+        {
+          "name": "HTTP 200",
+          "ok": true,
+          "detail": "200"
+        },
+        {
+          "name": "status=ok 且文本非空",
+          "ok": false,
+          "detail": ""
+        },
+        {
+          "name": "语义匹配",
+          "ok": false,
+          "detail": ""
+        }
+      ],
+      "evidence": {
+        "http_status": 200,
+        "body": "{\"error\":\"服务内部错误\"}",
+        "text": "",
+        "expected_keywords": [
+          "你好",
+          "天气",
+          "很好"
+        ],
+        "error": null
+      },
+      "classification": "外部依赖不可用（根因）；产品缺陷（HTTP 200 错误语义）",
+      "notes": "ASR 依赖不可用；若 HTTP 200 但 body 为 error，则同时存在状态码误用"
+    },
+    {
+      "id": "E03",
+      "name": "真实 TTS 合成（文本 → WAV）",
+      "category": "TTS",
+      "status": "FAIL",
+      "elapsed_seconds": 0.33,
+      "assertions": [
+        {
+          "name": "返回音频",
+          "ok": false,
+          "detail": "application/json"
+        },
+        {
+          "name": "非错误 JSON",
+          "ok": false,
+          "detail": "{\"error\":\"上游返回非 JSON\",\"upstream_status\":500}"
+        }
+      ],
+      "evidence": {
+        "http_status": 500,
+        "content_type": "application/json",
+        "body": "{\"error\":\"上游返回非 JSON\",\"upstream_status\":500}"
+      },
+      "classification": "外部依赖不可用（根因）；错误语义可接受（502）",
+      "notes": "AI 侧未捕获异常返回 500 纯文本，网关无法解析 JSON 后统一转 502；建议 AI 返回 503 JSON"
+    },
+    {
+      "id": "E05",
+      "name": "声音定义（cloud 模式）",
+      "category": "声音定义/克隆",
+      "status": "SKIP",
+      "elapsed_seconds": 0.03,
+      "assertions": [
+        {
+          "name": "provider 支持声音定义",
+          "ok": false,
+          "detail": "当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用"
+        }
+      ],
+      "evidence": {
+        "http_status": 200,
+        "body": "{\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+      },
+      "classification": "环境能力缺失（cloud 不支持）；产品缺陷（HTTP 200 错误语义）",
+      "notes": "cloud 模式明确不支持声音定义；HTTP 200 + error 文案，属状态码误用"
+    },
+    {
+      "id": "E06",
+      "name": "声音克隆",
+      "category": "声音定义/克隆",
+      "status": "SKIP",
+      "elapsed_seconds": 0,
+      "assertions": [
+        {
+          "name": "存在专用克隆端点",
+          "ok": false,
+          "detail": "main.py 路由清单仅 define-voice（声音设计），无 clone 端点"
+        }
+      ],
+      "evidence": {
+        "routes_checked": [
+          "/api/ai/define-voice",
+          "/api/voice/define"
+        ],
+        "clone_endpoint": null
+      },
+      "classification": "功能缺口",
+      "notes": "产品未提供独立声音克隆接口；VoxCPM2 的克隆能力未暴露为 HTTP 端点"
+    },
+    {
+      "id": "E04",
+      "name": "真实语音对话全链路（音频→ASR→LLM→TTS→音频）",
+      "category": "全链路",
+      "status": "SKIP",
+      "elapsed_seconds": 0,
+      "assertions": [
+        {
+          "name": "前置链路均可用",
+          "ok": false,
+          "detail": "ASR 不可用、LLM 不可用、TTS 不可用"
+        }
+      ],
+      "evidence": {
+        "asr_ok": false,
+        "llm_ok": false,
+        "tts_ok": false
+      },
+      "classification": "外部依赖不可用",
+      "notes": "前置依赖缺失，未执行；未用 mock 补位"
+    },
+    {
+      "id": "E07a",
+      "name": "重启恢复：会话/角色绑定/情感配置",
+      "category": "重启恢复",
+      "status": "PASS",
+      "elapsed_seconds": 65.12,
+      "assertions": [
+        {
+          "name": "AI 重启成功",
+          "ok": true,
+          "detail": "200"
+        },
+        {
+          "name": "角色绑定仍在",
+          "ok": true,
+          "detail": "preset_senior_sister"
+        },
+        {
+          "name": "情感配置仍在",
+          "ok": true,
+          "detail": "e2e_persist"
+        }
+      ],
+      "evidence": {
+        "session_id": "e2e_persist_20261106_105508",
+        "character_id": "preset_senior_sister",
+        "state_file": "D:\\ProgramFile\\语伴\\tests\\e2e_real\\runtime\\data_cloud\\state.json",
+        "state_keys_before_restart": {
+          "short_term_keys": [
+            "character_id",
+            "emotion_config",
+            "owner",
+            "voice_description"
+          ],
+          "has_chat_history": false,
+          "has_dialogue_history": false
+        },
+        "restart_health": 200,
+        "restart_elapsed": 3.05,
+        "ready_after": false,
+        "character_after": {
+          "id": "preset_senior_sister",
+          "name": "温柔学姐"
+        },
+        "emotion_after": {
+          "name": "e2e_persist",
+          "description": "重启恢复测试",
+          "params": {
+            "happiness": 0.8,
+            "sadness": 0.1,
+            "anger": 0.1,
+            "fear": 0.1,
+            "disgust": 0.1,
+            "surprise": 0.3
+          }
+        }
+      },
+      "classification": null,
+      "notes": ""
+    },
+    {
+      "id": "E07b",
+      "name": "重启恢复：对话历史",
+      "category": "重启恢复",
+      "status": "SKIP",
+      "elapsed_seconds": 0,
+      "assertions": [
+        {
+          "name": "存在真实对话历史",
+          "ok": false,
+          "detail": "False"
+        }
+      ],
+      "evidence": {
+        "state_keys_before_restart": {
+          "short_term_keys": [
+            "character_id",
+            "emotion_config",
+            "owner",
+            "voice_description"
+          ],
+          "has_chat_history": false,
+          "has_dialogue_history": false
+        },
+        "evidence": "LLM 欠费导致无法产生真实对话；main.py L799-802 仅在 assistant_reply 非空时写 chat_history"
+      },
+      "classification": "外部依赖不可用",
+      "notes": "未用 /api/ai/process 的 mock 音频路径制造历史；该项不计 PASS"
+    },
+    {
+      "id": "E08",
+      "name": "多用户隔离：跨账号访问他人会话（HTTP）",
+      "category": "多用户隔离",
+      "status": "PASS",
+      "elapsed_seconds": 0.13,
+      "assertions": [
+        {
+          "name": "B 读取 A 会话被拒绝",
+          "ok": true,
+          "detail": "403 {\"error\":\"无权访问该会话\"}"
+        },
+        {
+          "name": "B 写入 A 会话被拒绝",
+          "ok": true,
+          "detail": "403 {\"error\":\"无权访问该会话\"}"
+        }
+      ],
+      "evidence": {
+        "sid_a": "e2e_iso_a_20261106_105508",
+        "sid_b": "e2e_iso_b_20261106_105508",
+        "b_read_status": 403,
+        "b_read_body": "{\"error\":\"无权访问该会话\"}",
+        "leaked_character_id": null,
+        "b_write_status": 403,
+        "b_write_body": "{\"error\":\"无权访问该会话\"}"
+      },
+      "classification": null,
+      "notes": ""
+    },
+    {
+      "id": "E09",
+      "name": "多用户隔离：跨账号连接他人会话（WS）",
+      "category": "多用户隔离",
+      "status": "PASS",
+      "elapsed_seconds": 0.03,
+      "assertions": [
+        {
+          "name": "B 连接 A 会话被拒绝/关闭",
+          "ok": true,
+          "detail": "{'closed_code': 1008, 'reason': 'forbidden'}"
+        }
+      ],
+      "evidence": {
+        "sid_a": "e2e_iso_a_20261106_105508",
+        "b_token_used": true,
+        "accepted": false,
+        "close_info": {
+          "closed_code": 1008,
+          "reason": "forbidden"
+        }
+      },
+      "classification": null,
+      "notes": ""
+    },
+    {
+      "id": "E12",
+      "name": "就绪探针是否反映外部依赖故障",
+      "category": "可观测性",
+      "status": "PASS",
+      "elapsed_seconds": 0.03,
+      "assertions": [
+        {
+          "name": "就绪状态与状态码语义一致",
+          "ok": true,
+          "detail": "{'http_status': 503, 'status': 'not_ready'}"
+        },
+        {
+          "name": "暴露云依赖探测结果",
+          "ok": true,
+          "detail": "{'cloud_dependency': {'ok': False, 'detail': 'RuntimeError: 云 TTS 失败: HTTP 400 {\"code\":\"Arrearage\",\"message\":\"Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh'}, 'problems': ['ai_service_not_ready']}"
+        }
+      ],
+      "evidence": {
+        "http_status": 503,
+        "body": "{\"status\":\"not_ready\",\"problems\":[\"ai_service_not_ready\"],\"ai_service\":{\"status\":\"not_ready\",\"problems\":[\"cloud_tts_unavailable\"],\"device\":\"cpu\",\"tts_service\":\"cloud\",\"cloud_dependency\":{\"ok\":false,\"detail\":\"RuntimeError: 云 TTS 失败: HTTP 400 {\\\"code\\\":\\\"Arrearage\\\",\\\"message\\\":\\\"Access denied, please"
+      },
+      "classification": null,
+      "notes": ""
+    },
+    {
+      "id": "E10",
+      "name": "CPU TTS 默认路径（VoxCPM2 on CPU）",
+      "category": "CPU TTS",
+      "status": "FAIL",
+      "elapsed_seconds": 71.5,
+      "assertions": [
+        {
+          "name": "模型加载",
+          "ok": true,
+          "detail": "57.05"
+        },
+        {
+          "name": "推理成功",
+          "ok": false,
+          "detail": "IndexError: Dimension out of range (expected to be in range of [-1, 0], but got -2)"
+        }
+      ],
+      "evidence": {
+        "case": "CPU-TTS-DIRECT",
+        "text": "你好，很高兴认识你",
+        "quick_mode": true,
+        "python": "3.11.2 (tags/v3.11.2:878ead1, Feb  7 2023, 16:38:35) [MSC v.1934 64 bit (AMD64)]",
+        "model_path": "D:\\ProgramFile\\语伴\\models\\voxcpm2",
+        "mem_before": {
+          "total_mb": 16192,
+          "available_mb": 2527
+        },
+        "started_at": "2026-11-06T08:13:37",
+        "status": "FAIL",
+        "torch": "2.15.0+cpu",
+        "cuda_available": false,
+        "device": "cpu",
+        "load_seconds": 57.05,
+        "load_ok": true,
+        "mem_after_load_mb": {
+          "total_mb": 16192,
+          "available_mb": 5490
+        },
+        "error": "IndexError: Dimension out of range (expected to be in range of [-1, 0], but got -2)",
+        "traceback": "\\.venv\\Lib\\site-packages\\torch\\utils\\_contextlib.py\", line 71, in inference_mode\n    response = gen.send(None)\n               ^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\model\\voxcpm2.py\", line 933, in _generate_with_prompt_cache\n    latent_pred, pred_audio_feat, context_len = next(inference_result)\n                                                ^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\torch\\utils\\_contextlib.py\", line 71, in inference_mode\n    response = gen.send(None)\n               ^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\model\\voxcpm2.py\", line 1082, in _inference\n    lm_hidden = self.base_lm.forward_step(\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\modules\\minicpm4\\model.py\", line 406, in forward_step\n    hidden_states = decoder_layer.forward_step(\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\modules\\minicpm4\\model.py\", line 298, in forward_step\n    hidden_states = self.self_attn.forward_step(\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\modules\\minicpm4\\model.py\", line 206, in forward_step\n    attn_output = torch.nn.functional.scaled_dot_product_attention(\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nIndexError: Dimension out of range (expected to be in range of [-1, 0], but got -2)\n",
+        "total_seconds": 71.5,
+        "finished_at": "2026-11-06T08:14:48"
+      },
+      "classification": "产品缺陷（依赖兼容性）",
+      "notes": "默认路径推理失败；根因见 evidence.traceback"
+    },
+    {
+      "id": "E11",
+      "name": "CPU TTS 诊断路径（SDPA mask 形状补丁）",
+      "category": "CPU TTS",
+      "status": "PASS",
+      "elapsed_seconds": 161.95,
+      "assertions": [
+        {
+          "name": "WAV 可解码",
+          "ok": true,
+          "detail": "{'bytes': 322604, 'sample_rate': 48000, 'channels': 1, 'sampwidth': 2, 'duration_seconds': 3.36}"
+        },
+        {
+          "name": "时长>0",
+          "ok": true,
+          "detail": "{'bytes': 322604, 'sample_rate': 48000, 'channels': 1, 'sampwidth': 2, 'duration_seconds': 3.36}"
+        }
+      ],
+      "evidence": {
+        "case": "CPU-TTS-DIRECT",
+        "text": "你好，很高兴认识你",
+        "quick_mode": true,
+        "python": "3.11.2 (tags/v3.11.2:878ead1, Feb  7 2023, 16:38:35) [MSC v.1934 64 bit (AMD64)]",
+        "model_path": "D:\\ProgramFile\\语伴\\models\\voxcpm2",
+        "mem_before": {
+          "total_mb": 16192,
+          "available_mb": 11120
+        },
+        "started_at": "2026-11-06T08:15:56",
+        "status": "PASS",
+        "torch": "2.15.0+cpu",
+        "cuda_available": false,
+        "workaround": "SDPA 1D attn_mask -> [1,1,1,N]（仅诊断用，非产品默认路径）",
+        "device": "cpu",
+        "load_seconds": 40.51,
+        "load_ok": true,
+        "mem_after_load_mb": {
+          "total_mb": 16192,
+          "available_mb": 5079
+        },
+        "synth_seconds": 117.44,
+        "peak_rss_mb": 5969,
+        "mem_after_synth_mb": {
+          "total_mb": 16192,
+          "available_mb": 4473
+        },
+        "audio": {
+          "bytes": 322604,
+          "sample_rate": 48000,
+          "channels": 1,
+          "sampwidth": 2,
+          "duration_seconds": 3.36
+        },
+        "wav_path": "D:\\ProgramFile\\语伴\\tests\\e2e_real\\runtime\\cpu_tts.wav",
+        "rtf": 34.95,
+        "first_byte_seconds": 117.44,
+        "total_seconds": 161.95,
+        "finished_at": "2026-11-06T08:18:38"
+      },
+      "classification": null,
+      "notes": "仅诊断用，不代表产品默认路径可用；RTF=34.95"
+    }
+  ],
+  "defects": [
+    {
+      "id": "DEF-02",
+      "severity": "高",
+      "title": "CPU TTS 默认路径不可用（torch 2.15 的 SDPA 拒绝 1D attn_mask）",
+      "evidence": "E10 实测：模型加载 57s 成功，首句推理抛 IndexError: Dimension out of range (expected [-1,0], got -2)，位置 .venv/Lib/site-packages/voxcpm/modules/minicpm4/model.py:206-212。",
+      "minimal_fix": "锁定与 voxcpm 2.0.2 兼容的 torch 版本（当前环境 torch 2.15.0+cpu），或向上游提交 mask 形状修复；短期在 /ready 中标记 tts=unavailable，避免误判可用。",
+      "kind": "实测"
+    },
+    {
+      "id": "DEF-03",
+      "severity": "低",
+      "title": "TTS 上游异常未结构化（AI 侧 500，网关转 502）",
+      "evidence": "E03 实测：DashScope 欠费时 /api/voice/tts 返回 502 JSON；日志显示 AI 侧抛出 RuntimeError（HTTP 400 Arrearage），网关因响应非 JSON 走通用 502 分支。",
+      "minimal_fix": "在 ai-service /api/ai/tts 捕获上游异常并返回 503 JSON；网关透传 503，前端按状态码降级。",
+      "kind": "实测"
+    },
+    {
+      "id": "DEF-04",
+      "severity": "中",
+      "title": "ASR/声音定义失败返回 HTTP 200 + error 文案",
+      "evidence": "E02/E05 实测：上游不可用时 /api/voice/transcribe 仍为 200；cloud 模式 define 返回 200 + error。",
+      "minimal_fix": "失败分支返回 422/503（JSON error），前端按 HTTP 状态处理；不要把业务错误塞进 200。",
+      "kind": "实测"
+    },
+    {
+      "id": "DEF-06",
+      "severity": "中",
+      "title": "无独立声音克隆端点",
+      "evidence": "E06 静态核对：main.py 仅有 /api/ai/define-voice 与 /api/voice/define（声音设计），无 clone 路由。",
+      "minimal_fix": "若产品范围包含克隆：新增 /api/ai/clone-voice（参考音频 + 文本），复用 VoxCPM2 的克隆能力；否则在文档/前端移除克隆入口。",
+      "kind": "静态核对"
+    },
+    {
+      "id": "DEF-07",
+      "severity": "中",
+      "title": "voxcpm2 模式下启动会 eager 加载 FunAudioChat-8B，CPU 机器可能 OOM",
+      "evidence": "静态推断：main.py L119-127 在非 cloud 模式实例化 FunAudioChatService；fun_audio_chat_service.py L18-23 在 __init__ 中 from_pretrained 8B（fp16 约 16GB）。本机 16GB/可用约 2.5-5.5GB。",
+      "minimal_fix": "将 FunAudioChat 改为懒加载，或增加 ENABLE_FUN_AUDIO_CHAT=false 开关；CPU 降级路径只加载 VoxCPM2。",
+      "kind": "静态推断"
+    },
+    {
+      "id": "DEF-08",
+      "severity": "低",
+      "title": "WS 无心跳/空闲超时，半开连接可能长期占用",
+      "evidence": "静态推断：ai-service ws_chat 在 while True 中 await ws.receive_json()；网关 gather 两个 relay 无超时；前端断网/休眠后连接可能悬挂。",
+      "minimal_fix": "网关 websockets.connect 设置 ping_interval/ping_timeout；服务端对 idle 设置 wait_for 超时；前端增加心跳与重连上限。",
+      "kind": "静态推断"
+    },
+    {
+      "id": "DEF-09",
+      "severity": "中",
+      "title": "真实语音链路因欠费完全不可验证（LLM/ASR/云 TTS 均被拒）",
+      "evidence": "D01/D02 实测 HTTP 400 Arrearage；D03 实测 WS task-failed：\"Access denied, please make sure your account is in good standing.\"",
+      "minimal_fix": "结清阿里云百炼欠费或更换有余额的 Key；充值后按报告命令复跑。",
+      "kind": "实测"
+    },
+    {
+      "id": "DEF-10",
+      "severity": "中",
+      "title": "JWT 以查询参数写入网关访问日志",
+      "evidence": "实测：gateway.log 的 WebSocket 访问日志包含完整 ?token=<JWT>，可被日志读取者复用。",
+      "minimal_fix": "访问日志脱敏 query；或改为短期 WS ticket；同时评估 Sec-WebSocket-Protocol 传递令牌。",
+      "kind": "实测（日志取证）"
+    },
+    {
+      "id": "DEF-11",
+      "severity": "低",
+      "title": "项目 .venv 缺 PyJWT，网关无法按文档命令启动",
+      "evidence": "实测：gateway.log 报 ModuleNotFoundError: No module named 'jwt'；本套件改为回退全局 Python 3.11 启动网关。",
+      "minimal_fix": "在 .venv 安装 PyJWT 并按 requirements/constraints 锁定，确保文档启动命令可直接运行。",
+      "kind": "实测（环境）"
+    }
+  ],
+  "unlock_conditions": {
+    "dashscope": {
+      "problem": "LLM/ASR/云 TTS 均返回 HTTP 400 Arrearage",
+      "unlock": "结清阿里云百炼欠费，或使用有可用余额/已开通 paraformer-realtime-v2 与 qwen3-tts-flash 的 Key",
+      "estimated_minimum_charge_cny": "10-50（估算；本套件消耗极小，最终以控制台账单为准）",
+      "rerun": [
+        "在项目根目录设置新的 LLM_API_KEY（环境变量优先于 ai-service/.env）：",
+        "$env:LLM_API_KEY='sk-...'; D:\\ProgramFile\\语伴\\.venv\\Scripts\\python.exe tests\\e2e_real\\e2e_real.py",
+        "或更新 ai-service/.env 的 LLM_API_KEY 后直接复跑同一命令"
+      ]
+    },
+    "gpu": {
+      "problem": "本机无 NVIDIA GPU（torch.cuda.is_available()=false，nvidia-smi 不存在）",
+      "unlock": "在 ≥8GB 显存且安装 NVIDIA Container Toolkit 的机器上启动 GPU 版 VoxCPM2",
+      "rerun": "在 GPU 机器执行 docker compose up -d --build 后，将 BASE_URL 指向该环境复跑同一套件"
+    },
+    "cpu_tts": {
+      "problem": "CPU 默认路径触发 torch 2.15 SDPA 维度错误（IndexError）",
+      "unlock": "锁定兼容 torch 版本或修复 voxcpm 1D attn_mask；诊断补丁可绕过但不属于产品默认路径"
+    }
+  }
+}

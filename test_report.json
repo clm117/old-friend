@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-11-04 12:34:25",
+  "generated_at": "2026-11-06 14:56:19",
   "environment": {
     "api_base": "http://127.0.0.1:8005",
     "ui_base": "http://localhost:8899",
     "ai_base": "http://127.0.0.1:8084",
-    "test_python": "D:\\Program Files (x86)\\Python 3.11\\python.exe",
-    "service_python": "D:\\Program Files (x86)\\Python 3.11\\python.exe",
+    "test_python": "D:\\ProgramFile\\语伴\\.venv\\Scripts\\python.exe",
+    "service_python": "python",
     "services_started": [
       "ai-service",
       "api-gateway",
@@ -13,15 +13,15 @@
     ]
   },
   "summary": {
-    "total": 165,
-    "passed": 165,
+    "total": 198,
+    "passed": 197,
     "failed": 0,
-    "blocked": 0
+    "blocked": 1
   },
   "suites": {
     "deep": {
       "desc": "深度套件：API 分支/数据类型/状态/临界值/安全攻击面 + UI 全界面",
-      "elapsed_s": 321.0,
+      "elapsed_s": 323.0,
       "summary": {
         "total": 165,
         "passed": 165,
@@ -188,7 +188,7 @@
           "area": "API-TTS",
           "case": "text=1000 字（下边界）通过校验",
           "status": "PASS",
-          "detail": "status=502"
+          "detail": "status=500"
         },
         {
           "id": "A25",
@@ -221,30 +221,30 @@
         {
           "id": "A29",
           "area": "API-定义",
-          "case": "合法 wav + 描述 → 通过校验",
+          "case": "合法 wav：cloud 模式 501 明确不支持，local 模式通过校验",
           "status": "PASS",
-          "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+          "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\",\"mode\":\"cloud\"}"
         },
         {
           "id": "A29b",
           "area": "API-定义",
-          "case": "pitch 负数 → 服务不崩溃",
+          "case": "pitch 负数 → 服务不崩溃/明确不支持",
           "status": "PASS",
-          "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+          "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\","
         },
         {
           "id": "A29c",
           "area": "API-定义",
-          "case": "speed=0 → 服务不崩溃",
+          "case": "speed=0 → 服务不崩溃/明确不支持",
           "status": "PASS",
-          "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+          "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\","
         },
         {
           "id": "A29d",
           "area": "API-定义",
-          "case": "volume 非数字 → 服务不崩溃",
+          "case": "volume 非数字 → 服务不崩溃/明确不支持",
           "status": "PASS",
-          "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+          "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\","
         },
         {
           "id": "A31",
@@ -349,7 +349,7 @@
           "area": "API-角色",
           "case": "speed 非数字 → 校验拒绝（float_parsing），不创建角色",
           "status": "PASS",
-          "detail": "status=200 [{'type': 'float_parsing', 'loc': ['body', 'voice_profile', "
+          "detail": "status=422 [{'type': 'float_parsing', 'loc': ['body', 'voice_profile', "
         },
         {
           "id": "A46",
@@ -363,7 +363,7 @@
           "area": "API-角色",
           "case": "不存在的角色 id → 非 500",
           "status": "PASS",
-          "detail": "status=200 {\"error\":\"角色不存在\"}"
+          "detail": "status=404 {\"error\":\"角色不存在\"}"
         },
         {
           "id": "A48",
@@ -384,7 +384,7 @@
           "area": "API-角色",
           "case": "绑定不存在的角色 → 返回 error 字段",
           "status": "PASS",
-          "detail": "status=200 body={\"error\":\"角色不存在\"}"
+          "detail": "status=404 body={\"error\":\"角色不存在\"}"
         },
         {
           "id": "A51",
@@ -1021,14 +1021,14 @@
           "area": "UI-数据",
           "case": "emoji/引号/尖括号/换行 名称正常处理",
           "status": "PASS",
-          "detail": "resp=角色「🎤\"'<>& 换行」创建成功！可在上方列表点\"选择\"绑定到当前会话。"
+          "detail": "resp=角色「<img src=x onerror=\"window.__xss_char=1\">」创建成功！可在上方列表点\"选择"
         },
         {
           "id": "B66",
           "area": "UI-数据",
           "case": "名称 500 字（超长）不崩溃",
           "status": "PASS",
-          "detail": "resp_len=37"
+          "detail": "resp_len=92"
         },
         {
           "id": "B67",
@@ -1119,14 +1119,14 @@
           "area": "UI-性能",
           "case": "120 条历史消息渲染 < 1000ms",
           "status": "PASS",
-          "detail": "res={'ms': 11, 'nodes': 120}"
+          "detail": "res={'ms': 39, 'nodes': 120}"
         },
         {
           "id": "B84",
           "area": "UI-性能",
           "case": "150 个角色列表渲染 < 2000ms",
           "status": "PASS",
-          "detail": "res={'ms': 9, 'preset': 75, 'custom': 75}"
+          "detail": "res={'ms': 34, 'preset': 75, 'custom': 75}"
         },
         {
           "id": "B85",
@@ -1140,7 +1140,7 @@
           "area": "UI-性能",
           "case": "首屏 load 基线 < 3000ms（本地静态）",
           "status": "PASS",
-          "detail": "load=177ms"
+          "detail": "load=484ms"
         },
         {
           "id": "B80",
@@ -1154,7 +1154,7 @@
           "area": "UI-无障碍",
           "case": "登录门禁 Tab 链：起点用户名 → 密码 → 提交键可达",
           "status": "PASS",
-          "detail": "first=authUsername seq=['authPassword', 'authSubmitBtn', 'micBtn']"
+          "detail": "first=authUsername seq=['authPassword', 'authSubmitBtn', 'newSessionBtn']"
         },
         {
           "id": "Z04",
@@ -1186,6 +1186,250 @@
         }
       ],
       "log": "D:\\ProgramFile\\语伴\\test_outputs\\deep_run.log"
+    },
+    "base": {
+      "desc": "基础回归：登录 + 7 个标签页按钮/表单/边界值",
+      "elapsed_s": 18.4,
+      "summary": {
+        "total": 33,
+        "passed": 32,
+        "failed": 0,
+        "blocked": 1
+      },
+      "results": [
+        {
+          "id": "登录-页面加载",
+          "area": "",
+          "case": "登录-页面加载",
+          "status": "PASS",
+          "detail": "打开首页"
+        },
+        {
+          "id": "登录-遮罩可见",
+          "area": "",
+          "case": "登录-遮罩可见",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "登录-提交成功",
+          "area": "",
+          "case": "登录-提交成功",
+          "status": "PASS",
+          "detail": "遮罩隐藏=True"
+        },
+        {
+          "id": "登录-token存储",
+          "area": "",
+          "case": "登录-token存储",
+          "status": "PASS",
+          "detail": "token=有"
+        },
+        {
+          "id": "对话-发送按钮存在",
+          "area": "",
+          "case": "对话-发送按钮存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "对话-麦克风按钮存在",
+          "area": "",
+          "case": "对话-麦克风按钮存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "对话-空输入拦截",
+          "area": "",
+          "case": "对话-空输入拦截",
+          "status": "PASS",
+          "detail": "空文本不应发送"
+        },
+        {
+          "id": "对话-文字发送",
+          "area": "",
+          "case": "对话-文字发送",
+          "status": "PASS",
+          "detail": "用户消息应出现在历史中"
+        },
+        {
+          "id": "录入-录制按钮存在",
+          "area": "",
+          "case": "录入-录制按钮存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "录入-停止按钮隐藏",
+          "area": "",
+          "case": "录入-停止按钮隐藏",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "录入-点击录制不崩溃",
+          "area": "",
+          "case": "录入-点击录制不崩溃",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "录入-停止按钮显示",
+          "area": "",
+          "case": "录入-停止按钮显示",
+          "status": "BLOCKED",
+          "detail": "无麦克风环境：录制未启动，停止按钮分支不可达"
+        },
+        {
+          "id": "定义-表单存在",
+          "area": "",
+          "case": "定义-表单存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "定义-滑块默认值",
+          "area": "",
+          "case": "定义-滑块默认值",
+          "status": "PASS",
+          "detail": "pitch=1 speed=1 volume=1"
+        },
+        {
+          "id": "定义-空名称拦截",
+          "area": "",
+          "case": "定义-空名称拦截",
+          "status": "PASS",
+          "detail": "alert=请输入语音名称"
+        },
+        {
+          "id": "情感-6维滑块齐全",
+          "area": "",
+          "case": "情感-6维滑块齐全",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "情感-滑块联动显示",
+          "area": "",
+          "case": "情感-滑块联动显示",
+          "status": "PASS",
+          "detail": "happinessValue=0.9"
+        },
+        {
+          "id": "情感-保存响应",
+          "area": "",
+          "case": "情感-保存响应",
+          "status": "PASS",
+          "detail": "响应: 情感配置结果\n\n情感配置保存成功！\n\n名称: 测试情感\n\n描述:\n\n愉悦: 0.9\n\n悲伤: 0.1\n\n愤怒: 0.1\n\n恐惧: 0.1\n\n厌恶: 0.1\n\n惊"
+        },
+        {
+          "id": "角色-创建按钮存在",
+          "area": "",
+          "case": "角色-创建按钮存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "角色-预设列表加载",
+          "area": "",
+          "case": "角色-预设列表加载",
+          "status": "PASS",
+          "detail": "内容长度=351"
+        },
+        {
+          "id": "角色-空名称拦截",
+          "area": "",
+          "case": "角色-空名称拦截",
+          "status": "PASS",
+          "detail": "alert=请填写角色名称"
+        },
+        {
+          "id": "角色-创建角色",
+          "area": "",
+          "case": "角色-创建角色",
+          "status": "PASS",
+          "detail": "name_val=测试角色UI 响应: 角色「测试角色UI」创建成功！可在上方列表点\"选择\"绑定到当前会话。"
+        },
+        {
+          "id": "角色-超长名称边界",
+          "area": "",
+          "case": "角色-超长名称边界",
+          "status": "PASS",
+          "detail": "响应长度=92"
+        },
+        {
+          "id": "合成-文本框存在",
+          "area": "",
+          "case": "合成-文本框存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "合成-合成按钮存在",
+          "area": "",
+          "case": "合成-合成按钮存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "合成-空文本拦截",
+          "area": "",
+          "case": "合成-空文本拦截",
+          "status": "PASS",
+          "detail": "响应: 请输入合成文本"
+        },
+        {
+          "id": "合成-超长文本边界",
+          "area": "",
+          "case": "合成-超长文本边界",
+          "status": "PASS",
+          "detail": "响应长度=29"
+        },
+        {
+          "id": "设置-API地址输入存在",
+          "area": "",
+          "case": "设置-API地址输入存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "设置-会话ID输入存在",
+          "area": "",
+          "case": "设置-会话ID输入存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "设置-保存按钮存在",
+          "area": "",
+          "case": "设置-保存按钮存在",
+          "status": "PASS",
+          "detail": ""
+        },
+        {
+          "id": "设置-保存设置",
+          "area": "",
+          "case": "设置-保存设置",
+          "status": "PASS",
+          "detail": "点击保存无异常"
+        },
+        {
+          "id": "控制台-无未捕获错误",
+          "area": "",
+          "case": "控制台-无未捕获错误",
+          "status": "PASS",
+          "detail": "实际错误数=0（已过滤预期错误 6 条）"
+        },
+        {
+          "id": "页面-无JS异常",
+          "area": "",
+          "case": "页面-无JS异常",
+          "status": "PASS",
+          "detail": "异常数=0"
+        }
+      ],
+      "log": "D:\\ProgramFile\\语伴\\test_outputs\\base_run.log"
     }
   },
   "failures": []

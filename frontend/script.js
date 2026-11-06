@@ -11,7 +11,9 @@ let apiUrl = _servedByProxy
 let wsUrl = _servedByProxy
     ? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
     : `ws://${window.location.hostname || 'localhost'}:8005`;
-let sessionId = 'session_' + Math.floor(Math.random() * 1000000);
+// 会话 ID 由服务端生成；'' 表示尚未创建，旧版本本地缓存的 session_xxx 会被替换
+let sessionId = localStorage.getItem('sessionId') || '';
+if (sessionId && !/^s_/.test(sessionId)) sessionId = '';
 let voices = [];
 let emotions = [];
 let chatWs = null;  // WebSocket 连接
@@ -409,10 +411,190 @@ async function uploadAndTranscribe(wavBlob) {
     }
 }
 
+// 确保已向服务端申请会话（服务端生成不可预测的 session_id）
+async function ensureSession() {
+    if (sessionId) return sessionId;
+    if (authRequired && !getToken()) return '';  // 未登录时等登录后重载页面
+    try {
+        const resp = await fetch(`${apiUrl}/api/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.session_id) {
+                sessionId = data.session_id;
+                localStorage.setItem('sessionId', sessionId);
+                const el = document.getElementById('sessionId');
+                if (el) el.value = sessionId;
+                loadSessions(true);
+                return sessionId;
+            }
+        }
+        console.warn('创建会话失败:', resp.status);
+    } catch (e) {
+        console.warn('创建会话异常:', e.message);
+    }
+    return '';
+}
+
+// ---------- 历史会话侧栏（GAP-03） ----------
+const SESSION_PAGE_SIZE = 10;
+let sessionCache = [];
+let sessionTotal = 0;
+let sessionLoading = false;
+
+function sessionTitleOf(item) {
+    if (item && item.title) return item.title;
+    const t = item && item.updated_at ? new Date(item.updated_at * 1000) : new Date();
+    return `会话 ${t.getMonth() + 1}-${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+}
+
+function renderSessionList() {
+    const box = document.getElementById('sessionList');
+    if (!box) return;
+    if (sessionCache.length === 0) {
+        box.innerHTML = '<div style="color:#888; font-size:0.85rem; padding:6px 2px;">暂无历史会话</div>';
+    } else {
+        box.innerHTML = sessionCache.map((item) => {
+            const sid = item.session_id;
+            const active = sid === sessionId;
+            return `<div style="display:flex; align-items:center; gap:6px; padding:6px 8px; border-radius:8px; border:1px solid ${active ? '#4CAF50' : '#eee'}; background:${active ? '#f1fbf1' : '#fafafa'};">
+                <div style="flex:1; min-width:0; cursor:pointer;" onclick="switchSession('${sid}')">
+                    <div style="font-size:0.85rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(sessionTitleOf(item))}${active ? '（当前）' : ''}</div>
+                    <div style="font-size:0.72rem; color:#999;">${item.message_count || 0} 条消息</div>
+                </div>
+                <button type="button" title="重命名" onclick="renameSessionById('${sid}')" style="border:none; background:transparent; cursor:pointer; font-size:0.8rem;">重命名</button>
+                <button type="button" title="删除" onclick="deleteSessionById('${sid}')" style="border:none; background:transparent; color:#d9534f; cursor:pointer; font-size:0.8rem;">删除</button>
+            </div>`;
+        }).join('');
+    }
+    const more = document.getElementById('sessionMoreBtn');
+    if (more) more.style.display = sessionCache.length < sessionTotal ? 'inline-block' : 'none';
+}
+
+async function loadSessions(reset = true) {
+    if (authRequired && !getToken()) return;
+    if (sessionLoading) return;
+    sessionLoading = true;
+    try {
+        const offset = reset ? 0 : sessionCache.length;
+        const resp = await fetch(`${apiUrl}/api/sessions?limit=${SESSION_PAGE_SIZE}&offset=${offset}`);
+        if (!resp.ok) {
+            console.warn('加载会话列表失败:', resp.status);
+            return;
+        }
+        const data = await resp.json();
+        const items = data.sessions || [];
+        sessionCache = reset ? items : sessionCache.concat(items);
+        sessionTotal = data.total || 0;
+        renderSessionList();
+    } catch (e) {
+        console.warn('加载会话列表异常:', e.message);
+    } finally {
+        sessionLoading = false;
+    }
+}
+
+async function createNewSession() {
+    try {
+        if (chatWs) { try { chatWs.close(); } catch (e) {} chatWs = null; }
+        sessionId = '';
+        localStorage.removeItem('sessionId');
+        await ensureSession();
+        currentCharacterId = null;
+        const charEl = document.getElementById('currentCharacterName');
+        if (charEl) charEl.textContent = '未选择';
+        await loadSessionCharacter();
+        await loadSessions(true);
+    } catch (e) {
+        console.warn('新建会话失败:', e.message);
+    }
+}
+
+async function switchSession(sid) {
+    if (!sid || sid === sessionId) return;
+    if (chatWs) { try { chatWs.close(); } catch (e) {} chatWs = null; }
+    sessionId = sid;
+    localStorage.setItem('sessionId', sessionId);
+    const el = document.getElementById('sessionId');
+    if (el) el.value = sessionId;
+    currentCharacterId = null;
+    await loadSessionCharacter();
+    renderSessionList();
+}
+
+async function renameSessionById(sid) {
+    const item = sessionCache.find((s) => s.session_id === sid);
+    const next = window.prompt('新的会话标题（最多 64 字）', item ? sessionTitleOf(item) : '');
+    if (next === null) return;
+    try {
+        const resp = await fetch(`${apiUrl}/api/sessions/${encodeURIComponent(sid)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: next })
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            alert(`重命名失败（HTTP ${resp.status}）：${err.error || ''}`);
+            return;
+        }
+        await loadSessions(true);
+    } catch (e) {
+        alert('重命名失败：' + e.message);
+    }
+}
+
+async function deleteSessionById(sid) {
+    if (!window.confirm('删除后该会话的聊天记录不可恢复，确认删除？')) return;
+    try {
+        if (chatWs && sid === sessionId) { try { chatWs.close(); } catch (e) {} chatWs = null; }
+        const resp = await fetch(`${apiUrl}/api/sessions/${encodeURIComponent(sid)}`, { method: 'DELETE' });
+        if (!resp.ok && resp.status !== 204) {
+            const err = await resp.json().catch(() => ({}));
+            alert(`删除失败（HTTP ${resp.status}）：${err.error || ''}`);
+            return;
+        }
+        if (sid === sessionId) {
+            sessionId = '';
+            localStorage.removeItem('sessionId');
+            localStorage.removeItem(`session_character_${sid}`);
+            await ensureSession();
+            currentCharacterId = null;
+            await loadSessionCharacter();
+        }
+        await loadSessions(true);
+    } catch (e) {
+        alert('删除失败：' + e.message);
+    }
+}
+
+function setupSessionPanel() {
+    const newBtn = document.getElementById('newSessionBtn');
+    if (newBtn) newBtn.addEventListener('click', createNewSession);
+    const moreBtn = document.getElementById('sessionMoreBtn');
+    if (moreBtn) moreBtn.addEventListener('click', () => loadSessions(false));
+    const collapseBtn = document.getElementById('sessionCollapseBtn');
+    if (collapseBtn) {
+        collapseBtn.addEventListener('click', () => {
+            const body = document.getElementById('sessionListBody');
+            if (!body) return;
+            const hidden = body.style.display === 'none';
+            body.style.display = hidden ? 'block' : 'none';
+            collapseBtn.textContent = hidden ? '收起' : '展开';
+        });
+    }
+}
+
 // 建立 WebSocket 连接（幂等：已有可用连接时直接复用，避免重复建连泄漏）
-function connectChatWebSocket() {
+async function connectChatWebSocket() {
     if (chatWs && chatWs.readyState === WebSocket.OPEN) {
         return Promise.resolve();
+    }
+    await ensureSession();
+    if (!sessionId) {
+        return Promise.reject(new Error('尚未创建会话，请先登录再试'));
     }
     return new Promise((resolve, reject) => {
         // WebSocket 无法自定义 Header，强制鉴权时通过 ?token= 传递
@@ -453,11 +635,28 @@ function connectChatWebSocket() {
         };
 
         chatWs.onclose = (event) => {
-            console.log('WebSocket closed', event ? event.code : '');
+            console.log('WebSocket closed', event ? event.code : '', event ? event.reason : '');
             chatWs = null;
             setInputLocked(false);
+            if (!event || event.code !== 1008) return;
+            const reason = event.reason || '';
+            if (reason.indexOf('session_deleted') >= 0) {
+                // 会话已被删除：清本地会话并自动重建，提示后由下一次发送重连
+                sessionId = '';
+                localStorage.removeItem('sessionId');
+                addMessage('ai', '当前会话已被删除，已为你新建会话，请重新发送。');
+                ensureSession().then(() => loadSessions(true));
+                return;
+            }
+            if (reason.indexOf('forbidden') >= 0) {
+                addMessage('ai', '无权访问该会话，请切换到自己的会话。');
+                sessionId = '';
+                localStorage.removeItem('sessionId');
+                ensureSession().then(() => loadSessions(true));
+                return;
+            }
             // 服务端因鉴权失败关闭（1008）→ 回登录页
-            if (authRequired && event && event.code === 1008) {
+            if (authRequired) {
                 tokenInvalidated = true;
                 setToken('');
                 showAuthOverlay(true, '登录状态已失效，请重新登录');
@@ -814,6 +1013,14 @@ function setupVoiceDefine() {
             });
             
             if (!response.ok) {
+                // 501：cloud 模式明确不支持自定义音色（GAP-07 降级），提示用户而非当成功
+                if (response.status === 501) {
+                    let errBody = {};
+                    try { errBody = await response.json(); } catch (_) {}
+                    document.getElementById('voiceDefineResponse').innerHTML =
+                        `<p style="color: red;">当前音色模式不支持自定义音色${errBody && errBody.error ? '（' + escapeHtml(errBody.error) + '）' : ''}</p>`;
+                    return;
+                }
                 // 透出服务端的具体错误（session_id/描述/音频格式等），避免只看到状态码无原因
                 let detail = `HTTP ${response.status}`;
                 try {
@@ -922,6 +1129,12 @@ function setupEmotionConfig() {
             alert('请输入情感配置名称');
             return;
         }
+
+        await ensureSession();
+        if (!sessionId) {
+            alert('尚未创建会话，请稍后重试');
+            return;
+        }
         
         try {
             // 构建表单数据
@@ -1014,6 +1227,36 @@ function setupEmotionConfig() {
             responseDiv.innerHTML = `<p style="color: red;">保存情感配置时出错: ${escapeHtml(error.message)}</p>`;
         }
     });
+
+    // 恢复默认：DELETE 清空服务端情感配置（GAP-02）
+    const resetEmotionBtn = document.getElementById('resetEmotionBtn');
+    if (resetEmotionBtn) {
+        resetEmotionBtn.addEventListener('click', async function() {
+            await ensureSession();
+            if (!sessionId) {
+                alert('尚未创建会话');
+                return;
+            }
+            try {
+                const resp = await fetch(`${apiUrl}/api/emotion-config/${encodeURIComponent(sessionId)}`, {
+                    method: 'DELETE'
+                });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    alert(`恢复默认失败（HTTP ${resp.status}）：${err.error || ''}`);
+                    return;
+                }
+                document.getElementById('emotionProfileName').value = '';
+                document.getElementById('emotionDescription').value = '';
+                document.getElementById('emotionConfigResponse').innerHTML =
+                    '<p style="color: green;">已恢复默认情感配置（服务端配置已清空）。</p>';
+                const saved = document.getElementById('savedEmotions');
+                if (saved) saved.innerHTML = '<p style="color:#999;">暂无已保存的情感配置</p>';
+            } catch (e) {
+                alert('恢复默认失败：' + e.message);
+            }
+        });
+    }
 }
 
 // 设置保存
@@ -1528,6 +1771,9 @@ function setupCharacters() {
     loadCharacters();
     loadSessionCharacter();
     document.getElementById('createCharacterBtn').addEventListener('click', createCharacter);
+    const cancelBtn = document.getElementById('cancelCharacterEditBtn');
+    if (cancelBtn) cancelBtn.addEventListener('click', resetCharacterEdit);
+    setupSessionPanel();
 }
 
 // 加载枚举选项并填充下拉框/标签
@@ -1606,12 +1852,19 @@ function renderCharacterList(containerId, characters) {
         const delBtn = isCustom && !active
             ? `<button onclick="deleteCharacter('${escapeHtml(ch.id)}')" style="margin-left:8px; padding:6px 12px; background:#ff5252; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.85rem;">删除</button>`
             : '';
+        const editBtn = isCustom && !ch.shared
+            ? `<button onclick="editCharacter('${escapeHtml(ch.id)}')" style="margin-left:8px; padding:6px 12px; background:#1976d2; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.85rem;">编辑</button>`
+            : '';
+        const sharedTip = isCustom && ch.shared
+            ? '<span style="color:#999; font-size:0.8rem; margin-left:6px;">共享只读</span>'
+            : '';
         return `
         <div style="border:1px solid ${active ? '#4CAF50' : '#ddd'}; border-radius:10px; padding:12px; background:${active ? '#f1f8f2' : '#fff'};">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong>${escapeHtml(ch.name)} ${active ? '<span style="color:#4CAF50; font-size:0.8rem;">✓ 使用中</span>' : ''}</strong>
+                <strong>${escapeHtml(ch.name)} ${active ? '<span style="color:#4CAF50; font-size:0.8rem;">✓ 使用中</span>' : ''}${sharedTip}</strong>
                 <div>
                     <button onclick="bindCharacter('${escapeHtml(ch.id)}')" style="padding:6px 14px; background:${active ? '#ccc' : '#4CAF50'}; color:#fff; border:none; border-radius:6px; cursor:pointer;">${active ? '已选择' : '选择'}</button>
+                    ${editBtn}
                     ${delBtn}
                 </div>
             </div>
@@ -1627,17 +1880,21 @@ function renderCharacterList(containerId, characters) {
 
 // 绑定角色到当前会话
 async function bindCharacter(characterId) {
+    await ensureSession();
     const formData = new FormData();
     formData.append('character_id', characterId);
     try {
         const resp = await fetch(`${apiUrl}/api/sessions/${sessionId}/character`, {
             method: 'POST', body: formData
         });
-        const result = await resp.json();
-        if (result.error) {
-            alert('绑定失败：' + result.error);
+        // 以 HTTP 状态码判定成败：403 越权 / 404 角色不存在 / 409 冲突都不再伪装成 200
+        if (!resp.ok) {
+            let detail = `HTTP ${resp.status}`;
+            try { const err = await resp.json(); if (err && err.error) detail = err.error; } catch (_) {}
+            alert('绑定失败：' + detail);
             return;
         }
+        const result = await resp.json();
         currentCharacterId = characterId;
         // 持久化到 localStorage，刷新后恢复
         localStorage.setItem(`session_character_${sessionId}`, characterId);
@@ -1660,11 +1917,13 @@ async function deleteCharacter(characterId) {
     if (!confirm('确认删除该自定义角色？')) return;
     try {
         const resp = await fetch(`${apiUrl}/api/characters/${characterId}`, { method: 'DELETE' });
-        const result = await resp.json();
-        if (result.error) {
-            alert('删除失败：' + result.error);
+        if (!resp.ok) {
+            let detail = `HTTP ${resp.status}`;
+            try { const err = await resp.json(); if (err && err.error) detail = err.error; } catch (_) {}
+            alert('删除失败：' + detail);
             return;
         }
+        await resp.json();
         // 如果删的是当前会话绑定角色，解绑
         if (currentCharacterId === characterId) {
             currentCharacterId = null;
@@ -1679,8 +1938,17 @@ async function deleteCharacter(characterId) {
 // 查询当前会话已绑定的角色
 async function loadSessionCharacter() {
     if (authRequired && !getToken()) return;
+    await ensureSession();
+    if (!sessionId) return;
     try {
         const resp = await fetch(`${apiUrl}/api/sessions/${sessionId}/character`);
+        if (resp.status === 404) {
+            // 会话已被删除：清理本地会话，等待下一次操作自动重建
+            sessionId = '';
+            localStorage.removeItem('sessionId');
+            loadSessions(true);
+            return;
+        }
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const result = await resp.json();
         if (result.character) {
@@ -1699,10 +1967,68 @@ async function loadSessionCharacter() {
     }
 }
 
-// 创建自定义角色
+// 编辑自定义角色：回填表单，保存时走 PUT（GAP-01）
+let editingCharacterId = null;
+
+async function editCharacter(characterId) {
+    try {
+        const resp = await fetch(`${apiUrl}/api/characters/${characterId}`);
+        if (!resp.ok) {
+            alert(`加载角色失败（HTTP ${resp.status}）`);
+            return;
+        }
+        const result = await resp.json();
+        const ch = result.character || {};
+        const vp = ch.voice_profile || {};
+        const pp = ch.persona_profile || {};
+        document.getElementById('charName').value = ch.name || '';
+        document.getElementById('charGender').value = vp.gender || 'female';
+        document.getElementById('charAgeGroup').value = vp.age_group || 'youth';
+        document.getElementById('charRelation').value = pp.relation || 'friend';
+        document.getElementById('charIdentity').value = pp.identity || '';
+        document.getElementById('charStyle').value = pp.speaking_style || '';
+        document.getElementById('charFreeDesc').value = pp.free_description || '';
+        const voiceTags = new Set(vp.voice_tags || []);
+        document.querySelectorAll('#charVoiceTags input[data-group="voice"]').forEach(cb => {
+            cb.checked = voiceTags.has(cb.value);
+        });
+        const personaTags = new Set(pp.personality_tags || []);
+        document.querySelectorAll('#charPersonalityTags input[data-group="personality"]').forEach(cb => {
+            cb.checked = personaTags.has(cb.value);
+        });
+        editingCharacterId = characterId;
+        const btn = document.getElementById('createCharacterBtn');
+        btn.textContent = '保存修改';
+        const cancelBtn = document.getElementById('cancelCharacterEditBtn');
+        if (cancelBtn) cancelBtn.style.display = 'inline-block';
+        const form = document.getElementById('charName');
+        if (form && form.scrollIntoView) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        showCharacterStatus(`正在编辑角色「${ch.name}」`);
+    } catch (e) {
+        alert('加载角色失败：' + e.message);
+    }
+}
+
+function resetCharacterEdit() {
+    editingCharacterId = null;
+    ['charName', 'charIdentity', 'charStyle', 'charFreeDesc'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.querySelectorAll('#charVoiceTags input:checked, #charPersonalityTags input:checked').forEach(cb => cb.checked = false);
+    const btn = document.getElementById('createCharacterBtn');
+    if (btn) { btn.disabled = false; btn.textContent = '创建角色'; }
+    const cancelBtn = document.getElementById('cancelCharacterEditBtn');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    const response = document.getElementById('characterResponse');
+    if (response) response.innerHTML = '';
+}
+
+// 创建 / 修改自定义角色
 async function createCharacter() {
     const name = document.getElementById('charName').value.trim();
-    if (!name) {
+    const isEdit = !!editingCharacterId;
+    if (!isEdit && !name) {
         alert('请填写角色名称');
         return;
     }
@@ -1725,30 +2051,30 @@ async function createCharacter() {
 
     const btn = document.getElementById('createCharacterBtn');
     btn.disabled = true;
-    btn.textContent = '创建中...';
+    btn.textContent = isEdit ? '保存中...' : '创建中...';
     try {
-        const resp = await fetch(`${apiUrl}/api/characters`, {
-            method: 'POST',
+        const url = isEdit ? `${apiUrl}/api/characters/${editingCharacterId}` : `${apiUrl}/api/characters`;
+        const resp = await fetch(url, {
+            method: isEdit ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const result = await resp.json();
-        if (result.error) {
-            alert('创建失败：' + result.error);
+        if (!resp.ok) {
+            let detail = `HTTP ${resp.status}`;
+            try { const err = await resp.json(); if (err && err.error) detail = err.error; } catch (_) {}
+            alert((isEdit ? '保存失败：' : '创建失败：') + detail);
         } else {
+            const result = await resp.json();
+            resetCharacterEdit();
             document.getElementById('characterResponse').innerHTML =
-                `<p style="color:green;">角色「${escapeHtml(result.character.name)}」创建成功！可在上方列表点"选择"绑定到当前会话。</p>`;
-            document.getElementById('charName').value = '';
-            document.getElementById('charIdentity').value = '';
-            document.getElementById('charStyle').value = '';
-            document.getElementById('charFreeDesc').value = '';
-            document.querySelectorAll('#charVoiceTags input:checked, #charPersonalityTags input:checked').forEach(cb => cb.checked = false);
+                `<p style="color:green;">角色「${escapeHtml(result.character.name)}」${isEdit ? '修改' : '创建'}成功！${isEdit ? '' : '可在上方列表点"选择"绑定到当前会话。'}</p>`;
             loadCharacters();
+            loadSessionCharacter();
         }
     } catch (e) {
-        alert('创建失败：' + e.message);
+        alert((isEdit ? '保存失败：' : '创建失败：') + e.message);
     } finally {
         btn.disabled = false;
-        btn.textContent = '创建角色';
+        btn.textContent = editingCharacterId ? '保存修改' : '创建角色';
     }
 }

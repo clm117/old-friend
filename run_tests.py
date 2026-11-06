@@ -188,12 +188,16 @@ def service_specs(service_py):
         "EXPENSIVE_RATE_LIMIT_PER_MINUTE": "120",
         "AI_SERVICE_URL": AI_BASE,
         "AI_SERVICE_WS_URL": AI_BASE.replace("http", "ws", 1),
+        "AI_INTERNAL_TOKEN": os.environ.get("AI_INTERNAL_TOKEN",
+                                            os.environ.get("JWT_SECRET", DEFAULT_JWT_SECRET)),
     }
     ai_env = {
         "TTS_PROVIDER": os.environ.get("TTS_PROVIDER", dotenv.get("TTS_PROVIDER", "cloud")),
         "LLM_PROVIDER": os.environ.get("LLM_PROVIDER", dotenv.get("LLM_PROVIDER", "qwen")),
         "LLM_MODEL": os.environ.get("LLM_MODEL", dotenv.get("LLM_MODEL", "qwen-plus")),
         "LLM_API_KEY": os.environ.get("LLM_API_KEY", dotenv.get("LLM_API_KEY", "")),
+        "AI_INTERNAL_TOKEN": os.environ.get("AI_INTERNAL_TOKEN",
+                                            os.environ.get("JWT_SECRET", DEFAULT_JWT_SECRET)),
         # 测试数据隔离：不污染 ai-service/data 中的真实角色与会话
         "YUBAN_DATA_DIR": str(LOG_DIR / "test_data"),
         "YUBAN_STATE_FILE": str(LOG_DIR / "test_data" / "state.json"),
@@ -209,8 +213,8 @@ def service_specs(service_py):
             "host": host_ai, "port": port_ai,
             "args": [service_py, "main.py"], "cwd": ROOT / "ai-service",
             "env": ai_env, "log": LOG_DIR / "service_ai.log",
-            # ai-service 已提供 /ready（启动期 503、就绪 200），优先用它
-            "health": AI_BASE.rstrip("/") + "/ready",
+            # 用 /health 判存活；/ready 会因云依赖（额度/模型）不可用而 503，属预期降级
+            "health": AI_BASE.rstrip("/") + "/health",
             # torch/模型冷启动可达 60s+，就绪等待单独放宽，避免卡边界误判
             "ready_timeout": int(os.environ.get("YUBAN_AI_READY_SECONDS", "240")),
         },

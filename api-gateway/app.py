@@ -13,6 +13,9 @@
 - 响应头：补充 nosniff / frame / referrer 等安全头
 """
 import asyncio
+import hashlib
+import hmac
+import ipaddress
 import logging
 import os
 import re
@@ -90,6 +93,28 @@ AI_SERVICE_TTS_TIMEOUT = float(os.environ.get("AI_SERVICE_TTS_TIMEOUT", "600"))
 # ===== 鉴权配置 =====
 JWT_SECRET = os.environ.get("JWT_SECRET", "secret")
 JWT_ALGORITHM = "HS256"
+# 网关 → AI 服务的内部身份签名密钥（AI 侧必须配置同值；未单独配置时退化用 JWT_SECRET）
+AI_INTERNAL_TOKEN = (os.environ.get("AI_INTERNAL_TOKEN") or JWT_SECRET).strip()
+# 仅信任受控反代来源的 X-Forwarded-For；直连客户端伪造的 XFF 一律忽略
+TRUSTED_PROXY_CIDRS = os.environ.get(
+    "TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128"
+).strip()
+
+
+def _parse_trusted_proxies(raw: str):
+    nets = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            logger.warning("TRUSTED_PROXY_CIDRS 含非法网段，已忽略: %s", part)
+    return nets
+
+
+_TRUSTED_PROXY_NETS = _parse_trusted_proxies(TRUSTED_PROXY_CIDRS)
 # 强制鉴权开关：生产务必置 true；本地无登录入口时可置 false 以兼容前端
 AUTH_REQUIRED = os.environ.get("AUTH_REQUIRED", "false").lower() == "true"
 # 签发令牌有效期（分钟）与登录接口独立限流（防口令爆破）
@@ -131,7 +156,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOW_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
     max_age=600,
 )
@@ -207,12 +232,56 @@ def _validate_audio(audio_bytes: bytes) -> str | None:
 _rate_limiter = RateLimitStore(os.environ.get("GATEWAY_REDIS_URL", "").strip() or None)
 
 
+def _is_trusted_proxy(host: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return any(ip in net for net in _TRUSTED_PROXY_NETS)
+
+
 def _client_ip(request: Request) -> str:
-    """nginx 反代场景取 X-Forwarded-For 首个地址，否则回退到直连地址"""
+    """仅当直连来源是受控反代时才采信 X-Forwarded-For，否则用 TCP 对端地址"""
+    client = request.client.host if request.client else "unknown"
     xff = request.headers.get("x-forwarded-for")
-    if xff:
+    if xff and _is_trusted_proxy(client):
         return xff.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    return client
+
+
+def _user_of(request: Request) -> str | None:
+    """当前请求的账号标识；关闭鉴权的本地开发环境退化为单一 anonymous 身份"""
+    uid = getattr(request.state, "user_id", None)
+    if uid:
+        return uid
+    return "anonymous" if not AUTH_REQUIRED else None
+
+
+def _internal_headers(user_id: str | None) -> dict:
+    """构造 AI 服务可信身份头：HMAC-SHA256(账号|时间戳)，防止直连伪造"""
+    if not user_id:
+        return {}
+    ts = str(int(time.time()))
+    sig = hmac.new(
+        AI_INTERNAL_TOKEN.encode(), f"{user_id}|{ts}".encode(), hashlib.sha256
+    ).hexdigest()
+    return {"X-Yuban-User": user_id, "X-Yuban-Ts": ts, "X-Yuban-Sig": sig}
+
+
+def _relay_json(resp):
+    """透传上游状态码与 JSON 体，避免把 4xx/5xx 伪装成 200"""
+    try:
+        body = resp.json()
+    except ValueError:
+        body = {"error": "上游返回非 JSON", "upstream_status": resp.status_code}
+    return JSONResponse(content=body, status_code=resp.status_code)
+
+
+def _relay_or_empty(resp):
+    """DELETE 等无响应体场景：204 直接透传，其它状态码仍走 JSON 透传"""
+    if resp.status_code == 204 or not getattr(resp, "content", b""):
+        return Response(status_code=resp.status_code)
+    return _relay_json(resp)
 
 
 def _rate_limited(request: Request) -> bool:
@@ -237,7 +306,7 @@ def _extract_token(request: Request) -> str | None:
 
 def _upstream_error(endpoint: str, exc: Exception) -> JSONResponse:
     """对外隐藏异常细节，仅记录内部日志"""
-    logger.error("[%s] 调用 AI 服务失败: %s", endpoint, exc)
+    logger.exception("[%s] 调用 AI 服务失败: %s", endpoint, exc)
     return JSONResponse({"error": "服务暂时不可用，请稍后重试"}, status_code=502)
 
 
@@ -318,7 +387,7 @@ async def connect(session_id: str):
 
 # 语音处理接口
 @app.post("/api/voice/process")
-async def process_voice(session_id: str = Form(...), audio: UploadFile = File(...)):
+async def process_voice(request: Request, session_id: str = Form(...), audio: UploadFile = File(...)):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     audio_data = await audio.read()
@@ -332,15 +401,16 @@ async def process_voice(session_id: str = Form(...), audio: UploadFile = File(..
             "post",
             f"{AI_SERVICE_URL}/api/ai/process",
             json={"session_id": session_id, "audio_data": audio_data.hex()},
+            headers=_internal_headers(_user_of(request)),
         )
-        return response.json()
+        return _relay_json(response)
     except Exception as e:
         return _upstream_error("voice/process", e)
 
 
 # TTS语音合成接口（透传到核心AI服务）
 @app.post("/api/voice/tts")
-async def tts(session_id: str = Form(...), text: str = Form(""), description: str = Form(None), quick_mode: str = Form("false")):
+async def tts(request: Request, session_id: str = Form(...), text: str = Form(""), description: str = Form(None), quick_mode: str = Form("false")):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     if not text.strip():
@@ -357,6 +427,7 @@ async def tts(session_id: str = Form(...), text: str = Form(""), description: st
                 "description": description or "",
                 "quick_mode": "true" if quick_mode in ("true", "True", "1", True) else "false",
             },
+            headers=_internal_headers(_user_of(request)),
             timeout=AI_SERVICE_TTS_TIMEOUT,
         )
         if response.headers.get("content-type") == "audio/wav":
@@ -365,14 +436,14 @@ async def tts(session_id: str = Form(...), text: str = Form(""), description: st
                 media_type="audio/wav",
                 headers={"X-Sample-Rate": response.headers.get("X-Sample-Rate", "16000")},
             )
-        return response.json()
+        return _relay_json(response)
     except Exception as e:
         return _upstream_error("voice/tts", e)
 
 
 # 语音转写（语音输入：wav → 文本），转发 multipart 到核心AI服务
 @app.post("/api/voice/transcribe")
-async def transcribe_voice(session_id: str = Form("default"), audio: UploadFile = File(...)):
+async def transcribe_voice(request: Request, session_id: str = Form("default"), audio: UploadFile = File(...)):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     audio_bytes = await audio.read()
@@ -385,23 +456,25 @@ async def transcribe_voice(session_id: str = Form("default"), audio: UploadFile 
             f"{AI_SERVICE_URL}/api/ai/transcribe",
             data={"session_id": session_id},
             files={"audio": ("recording.wav", audio_bytes, "audio/wav")},
+            headers=_internal_headers(_user_of(request)),
         )
-        return response.json()
+        return _relay_json(response)
     except Exception as e:
         return _upstream_error("voice/transcribe", e)
 
 
 # 获取AI响应
 @app.get("/api/ai/response/{session_id}")
-async def get_response(session_id: str):
+async def get_response(session_id: str, request: Request):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     try:
         response = await _async_request(
             "get",
             f"{AI_SERVICE_URL}/api/ai/response/{session_id}",
+            headers=_internal_headers(_user_of(request)),
         )
-        return response.json()
+        return _relay_json(response)
     except Exception as e:
         return _upstream_error("ai/response", e)
 
@@ -409,6 +482,7 @@ async def get_response(session_id: str):
 # 语音定义接口
 @app.post("/api/voice/define")
 async def define_voice(
+    request: Request,
     session_id: str = Form(...),
     description: str = Form(""),
     audio: UploadFile = File(...),
@@ -442,8 +516,9 @@ async def define_voice(
                 "emotion_intensity": emotion_intensity,
             },
             files={"audio": (audio.filename, audio_data, audio.content_type or "application/octet-stream")},
+            headers=_internal_headers(_user_of(request)),
         )
-        return response.json()
+        return _relay_json(response)
     except Exception as e:
         return _upstream_error("voice/define", e)
 
@@ -451,6 +526,7 @@ async def define_voice(
 # 情感配置接口
 @app.post("/api/emotion-config")
 async def emotion_config(
+    request: Request,
     session_id: str = Form(...),
     emotion_name: str = Form(...),
     emotion_description: str = Form(""),
@@ -463,6 +539,10 @@ async def emotion_config(
 ):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
+    if len(emotion_name) > 64:
+        return JSONResponse({"error": "emotion_name 过长（上限 64 字）"}, status_code=400)
+    if len(emotion_description) > 500:
+        return JSONResponse({"error": "emotion_description 过长（上限 500 字）"}, status_code=400)
     # 情感值 clamp 到 [0, 1]，与文档注释一致
     _clamp = lambda x: max(0.0, min(1.0, float(x)))
     happiness, sadness, anger = _clamp(happiness), _clamp(sadness), _clamp(anger)
@@ -483,25 +563,43 @@ async def emotion_config(
                 "disgust": disgust,
                 "surprise": surprise,
             },
+            headers=_internal_headers(_user_of(request)),
         )
-        return response.json()
+        return _relay_json(response)
     except Exception as e:
         return _upstream_error("emotion-config", e)
 
 
 # 获取情感配置接口
 @app.get("/api/emotion-config/{session_id}")
-async def get_emotion_config(session_id: str):
+async def get_emotion_config(session_id: str, request: Request):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     try:
         response = await _async_request(
             "get",
             f"{AI_SERVICE_URL}/api/ai/emotion-config/{session_id}",
+            headers=_internal_headers(_user_of(request)),
         )
-        return response.json()
+        return _relay_json(response)
     except Exception as e:
         return _upstream_error("emotion-config/get", e)
+
+
+@app.delete("/api/emotion-config/{session_id}")
+async def delete_emotion_config(session_id: str, request: Request):
+    """解绑情感配置：清空该会话的情感配置（幂等）"""
+    if not _safe_id(session_id):
+        return JSONResponse({"error": "session_id 非法"}, status_code=400)
+    try:
+        response = await _async_request(
+            "delete",
+            f"{AI_SERVICE_URL}/api/ai/emotion-config/{session_id}",
+            headers=_internal_headers(_user_of(request)),
+        )
+        return _relay_or_empty(response)
+    except Exception as e:
+        return _upstream_error("emotion-config/delete", e)
 
 
 # ===== 角色管理接口（透传到核心AI服务）=====
@@ -509,64 +607,171 @@ async def get_emotion_config(session_id: str):
 async def character_options():
     try:
         resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/characters/options")
-        return resp.json()
+        return _relay_json(resp)
     except Exception as e:
         return _upstream_error("characters/options", e)
 
 
 @app.get("/api/characters")
-async def list_characters():
+async def list_characters(request: Request):
     try:
-        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/characters")
-        return resp.json()
+        resp = await _async_request(
+            "get",
+            f"{AI_SERVICE_URL}/api/ai/characters",
+            headers=_internal_headers(_user_of(request)),
+        )
+        return _relay_json(resp)
     except Exception as e:
         return _upstream_error("characters/list", e)
 
 
 @app.get("/api/characters/{character_id}")
-async def get_character(character_id: str):
+async def get_character(character_id: str, request: Request):
     if not _safe_id(character_id):
         return JSONResponse({"error": "character_id 非法"}, status_code=400)
     try:
         resp = await _async_request(
             "get",
             f"{AI_SERVICE_URL}/api/ai/characters/{character_id}",
+            headers=_internal_headers(_user_of(request)),
         )
-        return resp.json()
+        return _relay_json(resp)
     except Exception as e:
         return _upstream_error("characters/get", e)
+
+
+@app.put("/api/characters/{character_id}")
+@app.patch("/api/characters/{character_id}")
+async def update_character(character_id: str, request: Request):
+    """修改自定义角色：仅归属者；请求体按 JSON 透传，状态码原样返回"""
+    if not _safe_id(character_id):
+        return JSONResponse({"error": "character_id 非法"}, status_code=400)
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "请求体必须是合法 JSON"}, status_code=400)
+    if not isinstance(payload, dict):
+        return JSONResponse({"error": "请求体必须是 JSON 对象"}, status_code=400)
+    try:
+        resp = await _async_request(
+            request.method.lower(),
+            f"{AI_SERVICE_URL}/api/ai/characters/{character_id}",
+            json=payload,
+            headers=_internal_headers(_user_of(request)),
+        )
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("characters/update", e)
 
 
 @app.post("/api/characters")
 async def create_character(request: Request):
     try:
         payload = await request.json()
+    except Exception:
+        return JSONResponse({"error": "请求体必须是合法 JSON"}, status_code=400)
+    if not isinstance(payload, dict):
+        return JSONResponse({"error": "请求体必须是 JSON 对象"}, status_code=400)
+    try:
         resp = await _async_request(
             "post",
             f"{AI_SERVICE_URL}/api/ai/characters",
             json=payload,
+            headers=_internal_headers(_user_of(request)),
         )
-        return resp.json()
+        return _relay_json(resp)
     except Exception as e:
         return _upstream_error("characters/create", e)
 
 
 @app.delete("/api/characters/{character_id}")
-async def delete_character(character_id: str):
+async def delete_character(character_id: str, request: Request):
     if not _safe_id(character_id):
         return JSONResponse({"error": "character_id 非法"}, status_code=400)
     try:
         resp = await _async_request(
             "delete",
             f"{AI_SERVICE_URL}/api/ai/characters/{character_id}",
+            headers=_internal_headers(_user_of(request)),
         )
-        return resp.json()
+        return _relay_json(resp)
     except Exception as e:
         return _upstream_error("characters/delete", e)
 
 
+@app.post("/api/sessions")
+async def create_session(request: Request):
+    """创建会话：session_id 由服务端随机生成，前端不再自行拼随机数"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        resp = await _async_request(
+            "post",
+            f"{AI_SERVICE_URL}/api/ai/sessions",
+            json=body if isinstance(body, dict) else {},
+            headers=_internal_headers(_user_of(request)),
+        )
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("sessions/create", e)
+
+
+@app.get("/api/sessions")
+async def list_sessions(request: Request, limit: int = 20, offset: int = 0):
+    """会话列表：仅返回当前账号的会话，分页透传给 AI 服务"""
+    try:
+        resp = await _async_request(
+            "get",
+            f"{AI_SERVICE_URL}/api/ai/sessions",
+            params={"limit": limit, "offset": offset},
+            headers=_internal_headers(_user_of(request)),
+        )
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("sessions/list", e)
+
+
+@app.patch("/api/sessions/{session_id}")
+async def rename_session(session_id: str, request: Request):
+    if not _safe_id(session_id):
+        return JSONResponse({"error": "session_id 非法"}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "请求体必须是合法 JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "请求体必须是 JSON 对象"}, status_code=400)
+    try:
+        resp = await _async_request(
+            "patch",
+            f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}",
+            json=body,
+            headers=_internal_headers(_user_of(request)),
+        )
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("sessions/rename", e)
+
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str, request: Request):
+    if not _safe_id(session_id):
+        return JSONResponse({"error": "session_id 非法"}, status_code=400)
+    try:
+        resp = await _async_request(
+            "delete",
+            f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}",
+            headers=_internal_headers(_user_of(request)),
+        )
+        return _relay_or_empty(resp)
+    except Exception as e:
+        return _upstream_error("sessions/delete", e)
+
+
 @app.post("/api/sessions/{session_id}/character")
-async def bind_character(session_id: str, character_id: str = Form(...)):
+async def bind_character(session_id: str, request: Request, character_id: str = Form(...)):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     if not _safe_id(character_id):
@@ -576,22 +781,24 @@ async def bind_character(session_id: str, character_id: str = Form(...)):
             "post",
             f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/character",
             data={"character_id": character_id},
+            headers=_internal_headers(_user_of(request)),
         )
-        return resp.json()
+        return _relay_json(resp)
     except Exception as e:
         return _upstream_error("sessions/bind-character", e)
 
 
 @app.get("/api/sessions/{session_id}/character")
-async def get_session_character(session_id: str):
+async def get_session_character(session_id: str, request: Request):
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
     try:
         resp = await _async_request(
             "get",
             f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/character",
+            headers=_internal_headers(_user_of(request)),
         )
-        return resp.json()
+        return _relay_json(resp)
     except Exception as e:
         return _upstream_error("sessions/get-character", e)
 
@@ -609,8 +816,9 @@ async def bind_voice_style(session_id: str, request: Request):
             "post",
             f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/voice-style",
             json=body,
+            headers=_internal_headers(_user_of(request)),
         )
-        return resp.json()
+        return _relay_json(resp)
     except Exception as e:
         return _upstream_error("sessions/bind-voice-style", e)
 
@@ -662,7 +870,7 @@ async def auth_login(request: Request):
 @app.get("/api/auth/me")
 async def auth_me(request: Request):
     """返回当前令牌对应的账号，供前端校验会话是否仍然有效"""
-    username = getattr(request.state, "user_id", None)
+    username = _user_of(request)
     if not username:
         return JSONResponse({"error": "缺少访问凭证"}, status_code=401)
     return {"username": username, "auth_required": AUTH_REQUIRED}
@@ -737,10 +945,12 @@ async def ws_chat_proxy(ws: WebSocket, session_id: str):
         return
 
     # WebSocket 无法自定义 Header，鉴权场景下通过 ?token= 传递
+    user_id = "anonymous" if not AUTH_REQUIRED else None
     if AUTH_REQUIRED:
         token = ws.query_params.get("token")
         try:
-            jwt.decode(token or "", JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            payload = jwt.decode(token or "", JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            user_id = payload.get("sub")
         except JWTError:
             await ws.accept()
             await ws.close(code=1008, reason="unauthorized")
@@ -749,8 +959,32 @@ async def ws_chat_proxy(ws: WebSocket, session_id: str):
     target_url = f"{AI_SERVICE_WS_URL}/ws/chat/{session_id}"
     await ws.accept()
 
+    # 建连前校验会话归属：跨账号连接直接 1008 关闭，避免把越权连接转给上游
     try:
-        async with websockets.connect(target_url) as upstream:
+        info_resp = await _async_request(
+            "get",
+            f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/owner",
+            headers=_internal_headers(user_id),
+            timeout=3,
+        )
+        owner_info = info_resp.json()
+    except Exception as e:
+        logger.warning("[ws/chat] 归属校验失败 session=%s err=%s", session_id, e)
+        owner_info = {}
+    if owner_info.get("deleted"):
+        await ws.close(code=1008, reason="session_deleted")
+        return
+    if owner_info.get("exists") and owner_info.get("owner") and owner_info.get("owner") != user_id:
+        await ws.close(code=1008, reason="forbidden")
+        return
+
+    try:
+        upstream_headers = _internal_headers(user_id)
+        try:
+            upstream_cm = websockets.connect(target_url, additional_headers=upstream_headers)
+        except TypeError:
+            upstream_cm = websockets.connect(target_url, extra_headers=upstream_headers)
+        async with upstream_cm as upstream:
 
             async def client_to_upstream():
                 try:

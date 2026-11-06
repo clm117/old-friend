@@ -1,0 +1,26 @@
+{
+  "case": "CPU-TTS-DIRECT",
+  "text": "你好，很高兴认识你",
+  "quick_mode": true,
+  "python": "3.11.2 (tags/v3.11.2:878ead1, Feb  7 2023, 16:38:35) [MSC v.1934 64 bit (AMD64)]",
+  "model_path": "D:\\ProgramFile\\语伴\\models\\voxcpm2",
+  "mem_before": {
+    "total_mb": 16192,
+    "available_mb": 2527
+  },
+  "started_at": "2026-11-06T08:13:37",
+  "status": "FAIL",
+  "torch": "2.15.0+cpu",
+  "cuda_available": false,
+  "device": "cpu",
+  "load_seconds": 57.05,
+  "load_ok": true,
+  "mem_after_load_mb": {
+    "total_mb": 16192,
+    "available_mb": 5490
+  },
+  "error": "IndexError: Dimension out of range (expected to be in range of [-1, 0], but got -2)",
+  "traceback": "\\.venv\\Lib\\site-packages\\torch\\utils\\_contextlib.py\", line 71, in inference_mode\n    response = gen.send(None)\n               ^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\model\\voxcpm2.py\", line 933, in _generate_with_prompt_cache\n    latent_pred, pred_audio_feat, context_len = next(inference_result)\n                                                ^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\torch\\utils\\_contextlib.py\", line 71, in inference_mode\n    response = gen.send(None)\n               ^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\model\\voxcpm2.py\", line 1082, in _inference\n    lm_hidden = self.base_lm.forward_step(\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\modules\\minicpm4\\model.py\", line 406, in forward_step\n    hidden_states = decoder_layer.forward_step(\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\modules\\minicpm4\\model.py\", line 298, in forward_step\n    hidden_states = self.self_attn.forward_step(\n                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\ProgramFile\\语伴\\.venv\\Lib\\site-packages\\voxcpm\\modules\\minicpm4\\model.py\", line 206, in forward_step\n    attn_output = torch.nn.functional.scaled_dot_product_attention(\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nIndexError: Dimension out of range (expected to be in range of [-1, 0], but got -2)\n",
+  "total_seconds": 71.5,
+  "finished_at": "2026-11-06T08:14:48"
+}

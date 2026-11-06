@@ -156,6 +156,10 @@ PRESET_CHARACTERS = [
 ]
 
 
+# 历史自定义角色（owner 字段出现前创建）迁移后的归属账号；标记 shared 只读共享
+LEGACY_CHARACTER_OWNER = os.environ.get("LEGACY_CHARACTER_OWNER", "system").strip() or "system"
+
+
 class CharacterEngine:
     """角色引擎：预设角色 + 用户自定义角色 + 档案 → prompt 转换"""
 
@@ -198,12 +202,27 @@ class CharacterEngine:
 
     # ---------- 查询 ----------
 
-    def list_characters(self):
-        """列出全部角色（预设在前）"""
-        return list(self._presets.values()) + list(self._custom.values())
+    def list_characters(self, owner=None):
+        """列出当前用户可见的角色：预设 + 历史共享角色 + 自己创建的自定义角色"""
+        customs = [
+            c for c in self._custom.values()
+            if c.get("shared") or (owner is not None and c.get("owner") == owner)
+        ]
+        return list(self._presets.values()) + customs
 
     def get_character(self, character_id):
         return self._presets.get(character_id) or self._custom.get(character_id)
+
+    @staticmethod
+    def is_accessible(ch, owner):
+        """预设角色人人可用；历史共享角色只读可用；自定义角色仅归属者可用"""
+        if not ch:
+            return False
+        if ch.get("is_preset"):
+            return True
+        if ch.get("shared"):
+            return True
+        return owner is not None and ch.get("owner") == owner
 
     def list_options(self):
         """供前端下拉/向导使用的枚举字典"""
@@ -217,17 +236,21 @@ class CharacterEngine:
 
     # ---------- 创建/删除 ----------
 
-    def create_character(self, name, voice_profile=None, persona_profile=None):
+    def create_character(self, name, voice_profile=None, persona_profile=None, owner=None):
         """
         创建自定义角色。声学项缺省时给安全默认值（保证 TTS 可控）。
         voice_profile: {gender, age_group, voice_tags[], speed}
         persona_profile: {identity, relation, personality_tags[], speaking_style, free_description}
+        owner: 创建者账号（JWT sub），用于归属隔离
         """
         character_id = f"custom_{uuid.uuid4().hex[:12]}"
+        # 纯空白名称回退默认名（先 strip 再判断，避免落库空串）
+        clean_name = (name or "").strip()[:64] or "未命名角色"
         character = {
             "id": character_id,
-            "name": (name or "未命名角色").strip()[:64],
+            "name": clean_name,
             "is_preset": False,
+            "owner": owner,
             "created_at": time.time(),
             "voice_profile": self._normalize_voice_profile(voice_profile),
             "persona_profile": self._normalize_persona_profile(persona_profile),
@@ -236,6 +259,40 @@ class CharacterEngine:
             self._custom[character_id] = character
             self._save()
         return character
+
+    def update_character(self, character_id, name=None, voice_profile=None, persona_profile=None):
+        """
+        修改自定义角色（仅归属者，预设/共享只读由调用方先校验）。
+        未传字段保持原值；名称 strip 后为空回退默认名。
+        """
+        with self._lock:
+            ch = self._custom.get(character_id)
+            if ch is None:
+                return None
+            if name is not None:
+                ch["name"] = (name or "").strip()[:64] or "未命名角色"
+            if voice_profile is not None:
+                ch["voice_profile"] = self._normalize_voice_profile(voice_profile)
+            if persona_profile is not None:
+                ch["persona_profile"] = self._normalize_persona_profile(persona_profile)
+            ch["updated_at"] = time.time()
+            self._save()
+            return dict(ch)
+
+    def name_conflict(self, character_id, name, owner=None):
+        """名称冲突检测：预设 + 历史共享 + 当前用户自定义（排除自身）"""
+        clean = (name or "").strip()[:64]
+        if not clean:
+            return False
+        candidates = list(self._presets.values()) + list(self._custom.values())
+        for ch in candidates:
+            if ch.get("id") == character_id:
+                continue
+            if not self.is_accessible(ch, owner):
+                continue
+            if (ch.get("name") or "").strip() == clean:
+                return True
+        return False
 
     def delete_character(self, character_id):
         """删除自定义角色。预设角色不可删除。返回 True/False 表示是否删除成功。"""

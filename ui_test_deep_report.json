@@ -165,7 +165,7 @@
       "area": "API-TTS",
       "case": "text=1000 字（下边界）通过校验",
       "status": "PASS",
-      "detail": "status=502"
+      "detail": "status=500"
     },
     {
       "id": "A25",
@@ -198,30 +198,30 @@
     {
       "id": "A29",
       "area": "API-定义",
-      "case": "合法 wav + 描述 → 通过校验",
+      "case": "合法 wav：cloud 模式 501 明确不支持，local 模式通过校验",
       "status": "PASS",
-      "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+      "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\",\"mode\":\"cloud\"}"
     },
     {
       "id": "A29b",
       "area": "API-定义",
-      "case": "pitch 负数 → 服务不崩溃",
+      "case": "pitch 负数 → 服务不崩溃/明确不支持",
       "status": "PASS",
-      "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+      "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\","
     },
     {
       "id": "A29c",
       "area": "API-定义",
-      "case": "speed=0 → 服务不崩溃",
+      "case": "speed=0 → 服务不崩溃/明确不支持",
       "status": "PASS",
-      "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+      "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\","
     },
     {
       "id": "A29d",
       "area": "API-定义",
-      "case": "volume 非数字 → 服务不崩溃",
+      "case": "volume 非数字 → 服务不崩溃/明确不支持",
       "status": "PASS",
-      "detail": "status=200 {\"error\":\"当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用\"}"
+      "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\","
     },
     {
       "id": "A31",
@@ -326,7 +326,7 @@
       "area": "API-角色",
       "case": "speed 非数字 → 校验拒绝（float_parsing），不创建角色",
       "status": "PASS",
-      "detail": "status=200 [{'type': 'float_parsing', 'loc': ['body', 'voice_profile', "
+      "detail": "status=422 [{'type': 'float_parsing', 'loc': ['body', 'voice_profile', "
     },
     {
       "id": "A46",
@@ -340,7 +340,7 @@
       "area": "API-角色",
       "case": "不存在的角色 id → 非 500",
       "status": "PASS",
-      "detail": "status=200 {\"error\":\"角色不存在\"}"
+      "detail": "status=404 {\"error\":\"角色不存在\"}"
     },
     {
       "id": "A48",
@@ -361,7 +361,7 @@
       "area": "API-角色",
       "case": "绑定不存在的角色 → 返回 error 字段",
       "status": "PASS",
-      "detail": "status=200 body={\"error\":\"角色不存在\"}"
+      "detail": "status=404 body={\"error\":\"角色不存在\"}"
     },
     {
       "id": "A51",
@@ -998,14 +998,14 @@
       "area": "UI-数据",
       "case": "emoji/引号/尖括号/换行 名称正常处理",
       "status": "PASS",
-      "detail": "resp=角色「🎤\"'<>& 换行」创建成功！可在上方列表点\"选择\"绑定到当前会话。"
+      "detail": "resp=角色「<img src=x onerror=\"window.__xss_char=1\">」创建成功！可在上方列表点\"选择"
     },
     {
       "id": "B66",
       "area": "UI-数据",
       "case": "名称 500 字（超长）不崩溃",
       "status": "PASS",
-      "detail": "resp_len=37"
+      "detail": "resp_len=92"
     },
     {
       "id": "B67",
@@ -1096,14 +1096,14 @@
       "area": "UI-性能",
       "case": "120 条历史消息渲染 < 1000ms",
       "status": "PASS",
-      "detail": "res={'ms': 11, 'nodes': 120}"
+      "detail": "res={'ms': 39, 'nodes': 120}"
     },
     {
       "id": "B84",
       "area": "UI-性能",
       "case": "150 个角色列表渲染 < 2000ms",
       "status": "PASS",
-      "detail": "res={'ms': 9, 'preset': 75, 'custom': 75}"
+      "detail": "res={'ms': 34, 'preset': 75, 'custom': 75}"
     },
     {
       "id": "B85",
@@ -1117,7 +1117,7 @@
       "area": "UI-性能",
       "case": "首屏 load 基线 < 3000ms（本地静态）",
       "status": "PASS",
-      "detail": "load=177ms"
+      "detail": "load=484ms"
     },
     {
       "id": "B80",
@@ -1131,7 +1131,7 @@
       "area": "UI-无障碍",
       "case": "登录门禁 Tab 链：起点用户名 → 密码 → 提交键可达",
       "status": "PASS",
-      "detail": "first=authUsername seq=['authPassword', 'authSubmitBtn', 'micBtn']"
+      "detail": "first=authUsername seq=['authPassword', 'authSubmitBtn', 'newSessionBtn']"
     },
     {
       "id": "Z04",

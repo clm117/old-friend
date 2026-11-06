@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, UploadFile, File, Form
+from fastapi import FastAPI, Request, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi import Response
@@ -10,6 +10,8 @@ import logging
 import sys
 import os
 import asyncio
+import hashlib
+import hmac
 import time
 import torch
 
@@ -158,6 +160,49 @@ else:
 llm_service = LLMService()
 character_engine = CharacterEngine()
 
+# ===== 网关注入的可信用户身份 =====
+# 网关用共享密钥对 "账号|时间戳" 做 HMAC-SHA256，AI 服务只认签名，避免直连 8084 伪造 X-Yuban-User
+_INTERNAL_TOKEN = (os.environ.get("AI_INTERNAL_TOKEN") or os.environ.get("JWT_SECRET") or "").strip()
+_INTERNAL_TTL_SECONDS = 300
+
+
+def _trusted_user(request) -> Optional[str]:
+    """校验网关签名头，返回账号；不通过返回 None"""
+    user = (request.headers.get("x-yuban-user") or "").strip()
+    ts = (request.headers.get("x-yuban-ts") or "").strip()
+    sig = (request.headers.get("x-yuban-sig") or "").strip()
+    if not _INTERNAL_TOKEN or not user or not ts or not sig:
+        return None
+    try:
+        if abs(time.time() - int(ts)) > _INTERNAL_TTL_SECONDS:
+            return None
+    except ValueError:
+        return None
+    expected = hmac.new(
+        _INTERNAL_TOKEN.encode(), f"{user}|{ts}".encode(), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        return None
+    return user
+
+
+def _unauthorized(msg="缺少可信用户身份"):
+    return JSONResponse({"error": msg}, status_code=401)
+
+
+def _forbidden(msg="无权访问该会话"):
+    return JSONResponse({"error": msg}, status_code=403)
+
+
+def _session_owner_error(session_id: str, user: str):
+    """会话归属校验：已删除会话 404；历史会话（无 owner）放行；有 owner 且不等于当前用户则 403"""
+    if memory_storage.is_deleted(session_id):
+        return JSONResponse({"error": "会话不存在或已删除"}, status_code=404)
+    owner = memory_storage.get_session_owner(session_id)
+    if owner is not None and owner != user:
+        return _forbidden()
+    return None
+
 
 async def _synthesize_speech(text, style, emotion_params, quick_mode):
     """
@@ -208,6 +253,11 @@ class CharacterCreate(BaseModel):
     voice_profile: Optional[VoiceProfile] = None
     persona_profile: Optional[PersonaProfile] = None
 
+class CharacterUpdate(BaseModel):
+    name: Optional[str] = None
+    voice_profile: Optional[VoiceProfile] = None
+    persona_profile: Optional[PersonaProfile] = None
+
 
 @app.get("/api/ai/characters/options")
 async def get_character_options():
@@ -216,50 +266,186 @@ async def get_character_options():
 
 
 @app.get("/api/ai/characters")
-async def list_characters():
-    """列出全部角色（官方预设 + 用户自定义）"""
-    return {"status": "ok", "characters": character_engine.list_characters()}
+async def list_characters(request: Request):
+    """列出当前用户可见的角色（官方预设 + 历史共享 + 本人自定义）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    return {"status": "ok", "characters": character_engine.list_characters(owner=user)}
 
 
 @app.get("/api/ai/characters/{character_id}")
-async def get_character(character_id: str):
+async def get_character(character_id: str, request: Request):
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
     ch = character_engine.get_character(character_id)
     if not ch:
-        return {"error": "角色不存在"}
+        return JSONResponse({"error": "角色不存在"}, status_code=404)
+    if not character_engine.is_accessible(ch, user):
+        # 不向非归属者泄露角色是否存在
+        return JSONResponse({"error": "角色不存在"}, status_code=404)
     return {"status": "ok", "character": ch}
 
 
 @app.post("/api/ai/characters")
-async def create_character(payload: CharacterCreate):
-    """创建自定义角色"""
+async def create_character(payload: CharacterCreate, request: Request):
+    """创建自定义角色（归属当前登录账号）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
     ch = character_engine.create_character(
         name=payload.name,
         voice_profile=payload.voice_profile.dict() if payload.voice_profile else None,
         persona_profile=payload.persona_profile.dict() if payload.persona_profile else None,
+        owner=user,
     )
     return {"status": "ok", "character": ch}
 
 
-@app.delete("/api/ai/characters/{character_id}")
-async def delete_character(character_id: str):
-    """删除自定义角色（预设角色不可删除）"""
+@app.put("/api/ai/characters/{character_id}")
+@app.patch("/api/ai/characters/{character_id}")
+async def update_character(character_id: str, payload: CharacterUpdate, request: Request):
+    """修改自定义角色：仅归属者可改；预设/历史共享角色只读；重名 409"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
     ch = character_engine.get_character(character_id)
     if not ch:
-        return {"error": "角色不存在"}
+        return JSONResponse({"error": "角色不存在"}, status_code=404)
     if ch.get("is_preset"):
-        return {"error": "预设角色不可删除"}
-    ok = character_engine.delete_character(character_id)
-    if ok:
-        return {"status": "ok", "deleted_id": character_id}
-    return {"error": "删除失败"}
+        return JSONResponse({"error": "预设角色不可修改"}, status_code=403)
+    if ch.get("shared") or ch.get("owner") != user:
+        return JSONResponse({"error": "无权修改该角色"}, status_code=403)
+    if payload.name is not None and character_engine.name_conflict(character_id, payload.name, user):
+        return JSONResponse({"error": "角色名称已存在"}, status_code=409)
+    updated = character_engine.update_character(
+        character_id,
+        name=payload.name,
+        voice_profile=payload.voice_profile.dict() if payload.voice_profile else None,
+        persona_profile=payload.persona_profile.dict() if payload.persona_profile else None,
+    )
+    if not updated:
+        return JSONResponse({"error": "角色不存在"}, status_code=404)
+    return {"status": "ok", "character": updated}
+
+
+@app.delete("/api/ai/characters/{character_id}")
+async def delete_character(character_id: str, request: Request):
+    """删除自定义角色（预设角色不可删除；非归属者 403）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    ch = character_engine.get_character(character_id)
+    if not ch:
+        return JSONResponse({"error": "角色不存在"}, status_code=404)
+    if ch.get("is_preset"):
+        return JSONResponse({"error": "预设角色不可删除"}, status_code=400)
+    if not character_engine.is_accessible(ch, user) or ch.get("shared") or ch.get("owner") != user:
+        return JSONResponse({"error": "无权删除该角色"}, status_code=403)
+    character_engine.delete_character(character_id)
+    return {"status": "ok", "deleted_id": character_id}
+
+
+@app.post("/api/ai/sessions")
+async def create_session(request: Request):
+    """创建会话：session_id 由服务端随机生成并绑定归属账号"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    title = (body.get("title") or "").strip()[:64] if isinstance(body, dict) else ""
+    session_id = memory_storage.create_session(user, title=title)
+    return {"status": "ok", "session_id": session_id, "owner": user}
+
+
+@app.get("/api/ai/sessions")
+async def list_sessions(request: Request, limit: int = Query(20, ge=1, le=100),
+                        offset: int = Query(0, ge=0)):
+    """列出当前账号的会话（分页，按最近更新倒序）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    items, total = memory_storage.list_sessions(user, limit=limit, offset=offset)
+    return {
+        "status": "ok",
+        "sessions": items,
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+class SessionRename(BaseModel):
+    title: str
+
+
+@app.patch("/api/ai/sessions/{session_id}")
+async def rename_session(session_id: str, payload: SessionRename, request: Request):
+    """重命名会话（仅归属者）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    title = (payload.title or "").strip()
+    if not title:
+        return JSONResponse({"error": "会话标题不能为空"}, status_code=400)
+    if len(title) > 64:
+        return JSONResponse({"error": "会话标题过长（上限 64 字）"}, status_code=400)
+    if memory_storage.is_deleted(session_id) or not memory_storage.has_session(session_id):
+        return JSONResponse({"error": "会话不存在或已删除"}, status_code=404)
+    owner = memory_storage.get_session_owner(session_id)
+    if owner is not None and owner != user:
+        return _forbidden()
+    memory_storage.claim_session(session_id, user)
+    memory_storage.rename_session(session_id, title)
+    return {"status": "ok", "session": memory_storage.get_session_meta(session_id)}
+
+
+@app.delete("/api/ai/sessions/{session_id}")
+async def delete_session(session_id: str, request: Request):
+    """删除会话（仅归属者）；删除后写墓碑，后续读写 404、WS 1008"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    if memory_storage.is_deleted(session_id) or not memory_storage.has_session(session_id):
+        return JSONResponse({"error": "会话不存在或已删除"}, status_code=404)
+    owner = memory_storage.get_session_owner(session_id)
+    if owner is not None and owner != user:
+        return _forbidden()
+    memory_storage.delete_session(session_id)
+    return Response(status_code=204)
+
+
+@app.get("/api/ai/sessions/{session_id}/owner")
+async def get_session_owner(session_id: str):
+    """内部接口：供网关在 WS 建连前校验会话归属（不对外暴露）"""
+    return {
+        "status": "ok",
+        "exists": memory_storage.has_session(session_id),
+        "deleted": memory_storage.is_deleted(session_id),
+        "owner": memory_storage.get_session_owner(session_id),
+    }
 
 
 @app.post("/api/ai/sessions/{session_id}/character")
-async def bind_character(session_id: str, character_id: str = Form(...)):
+async def bind_character(session_id: str, request: Request, character_id: str = Form(...)):
     """为会话绑定角色（对话和合成均使用该角色的声音与人设）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
     ch = character_engine.get_character(character_id)
     if not ch:
-        return {"error": "角色不存在"}
+        return JSONResponse({"error": "角色不存在"}, status_code=404)
+    if not character_engine.is_accessible(ch, user):
+        return JSONResponse({"error": "无权使用该角色"}, status_code=403)
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
+    # 历史会话无归属时由首次写入者接管，避免旧数据全部不可用
+    memory_storage.claim_session(session_id, user)
     memory_storage.set_short_term_memory(session_id, "character_id", character_id)
     # 同步刷新会话语音描述（voice_profile → 英文 prompt），供 TTS 使用
     voice_prompt = character_engine.build_voice_prompt(character_id)
@@ -274,8 +460,14 @@ async def bind_character(session_id: str, character_id: str = Form(...)):
 
 
 @app.get("/api/ai/sessions/{session_id}/character")
-async def get_session_character(session_id: str):
+async def get_session_character(session_id: str, request: Request):
     """获取会话当前绑定的角色"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
     character_id = memory_storage.get_short_term_memory(session_id, "character_id")
     if not character_id:
         return {"status": "ok", "character": None}
@@ -290,8 +482,15 @@ class VoiceStyleBind(BaseModel):
 
 
 @app.post("/api/ai/sessions/{session_id}/voice-style")
-async def bind_voice_style(session_id: str, payload: VoiceStyleBind):
+async def bind_voice_style(session_id: str, payload: VoiceStyleBind, request: Request):
     """为会话绑定语音风格（覆盖角色自带的 voice_prompt）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
+    memory_storage.claim_session(session_id, user)
     if payload.description:
         memory_storage.set_short_term_memory(session_id, "voice_description", payload.description)
     if payload.voice_definition:
@@ -353,7 +552,13 @@ async def process_voice(request: Request):
 
 # 获取AI响应
 @app.get("/api/ai/response/{session_id}")
-async def get_response(session_id: str):
+async def get_response(session_id: str, request: Request):
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
     try:
         # 获取对话历史
         dialogue_history = memory_storage.get_dialogue_history(session_id)
@@ -371,6 +576,7 @@ async def get_response(session_id: str):
 # 语音定义接口
 @app.post("/api/ai/define-voice")
 async def define_voice(
+    request: Request,
     session_id: str = Form(...),
     description: str = Form(...),
     audio: UploadFile = File(...),
@@ -390,7 +596,18 @@ async def define_voice(
     emotion_intensity: 情感强度（范围：0.0-1.0，默认：0.5）
     """
     if voxcpm2_service is None:
-        return {"error": "当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用"}
+        return JSONResponse(
+            {"error": "当前音色模式不支持自定义音色", "code": "voice_define_unsupported",
+             "mode": _TTS_PROVIDER},
+            status_code=501,
+        )
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
+    memory_storage.claim_session(session_id, user)
 
     try:
         # 读取音频文件
@@ -431,6 +648,7 @@ async def define_voice(
 # 为了兼容API Gateway的调用，添加/api/voice/define端点
 @app.post("/api/voice/define")
 async def define_voice_compat(
+    request: Request,
     session_id: str = Form(...),
     description: str = Form(""),
     audio: UploadFile = File(...),
@@ -450,7 +668,18 @@ async def define_voice_compat(
     emotion_intensity: 情感强度（范围：0.0-1.0，默认：0.5）
     """
     if voxcpm2_service is None:
-        return {"error": "当前为云 TTS 验证模式（TTS_PROVIDER=cloud），声音定义不可用"}
+        return JSONResponse(
+            {"error": "当前音色模式不支持自定义音色", "code": "voice_define_unsupported",
+             "mode": _TTS_PROVIDER},
+            status_code=501,
+        )
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
+    memory_storage.claim_session(session_id, user)
 
     try:
         # 读取音频文件
@@ -573,6 +802,7 @@ async def transcribe_audio(session_id: str = Form("default"),
 # 情感配置接口
 @app.post("/api/ai/emotion-config")
 async def emotion_config(
+    request: Request,
     session_id: str = Form(...),
     emotion_name: str = Form(...),
     emotion_description: str = Form(""),
@@ -595,6 +825,17 @@ async def emotion_config(
     disgust: 厌恶程度（范围：0.0-1.0，默认：0.1）
     surprise: 惊讶程度（范围：0.0-1.0，默认：0.3）
     """
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    if len(emotion_name) > 64:
+        return JSONResponse({"error": "emotion_name 过长（上限 64 字）"}, status_code=400)
+    if len(emotion_description) > 500:
+        return JSONResponse({"error": "emotion_description 过长（上限 500 字）"}, status_code=400)
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
+    memory_storage.claim_session(session_id, user)
     try:
         # clamp 所有情感值到 [0, 1]，与文档注释一致
         _c = lambda x: max(0.0, min(1.0, float(x)))
@@ -626,11 +867,17 @@ async def emotion_config(
 
 # 获取情感配置接口
 @app.get("/api/ai/emotion-config/{session_id}")
-async def get_emotion_config(session_id: str):
+async def get_emotion_config(session_id: str, request: Request):
     """
     获取情感配置
     session_id: 会话ID
     """
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
     try:
         emotion_config = memory_storage.get_short_term_memory(session_id, "emotion_config")
         
@@ -641,7 +888,21 @@ async def get_emotion_config(session_id: str):
     except Exception as e:
         return _internal_error("api-handler", e)
 
-# 健康检查
+
+@app.delete("/api/ai/emotion-config/{session_id}")
+async def delete_emotion_config(session_id: str, request: Request):
+    """解绑情感配置：清空 short_term.emotion_config（幂等，GET 仍返回空配置）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
+    memory_storage.claim_session(session_id, user)
+    memory_storage.delete_short_term_memory(session_id, "emotion_config")
+    return Response(status_code=204)
+
+
 @app.get("/health")
 async def health_check():
     return {
@@ -652,14 +913,43 @@ async def health_check():
     }
 
 
-# 就绪探针：TTS 提供方已初始化 + 状态存储可写，供网关 /ready 与容器编排使用
+# 云 TTS 依赖探测结果缓存（避免每次就绪检查都发起合成请求）
+_READY_CLOUD_CACHE = {"ts": 0.0, "ok": None, "detail": ""}
+_READY_CLOUD_TTL = 120
+
+
+async def _cloud_ready_probe():
+    """真实探测云 TTS 依赖（欠费/鉴权失败时返回不可用），结果缓存 120 秒"""
+    if _TTS_PROVIDER != "cloud":
+        return True, ""
+    if cloud_tts_service is None:
+        return False, "cloud_tts_not_configured"
+    if not cloud_tts_service.available():
+        return False, "cloud_tts_api_key_missing"
+    now = time.time()
+    cached = _READY_CLOUD_CACHE
+    if cached["ok"] is not None and now - cached["ts"] < _READY_CLOUD_TTL:
+        return cached["ok"], cached["detail"]
+    ok, detail = False, ""
+    try:
+        wav, _sr = await cloud_tts_service.synthesize("好", quick_mode=True)
+        ok = bool(wav)
+        detail = "" if ok else "cloud_tts_returned_empty"
+    except Exception as e:
+        detail = f"{type(e).__name__}: {str(e)[:160]}"
+    _READY_CLOUD_CACHE.update({"ts": now, "ok": ok, "detail": detail})
+    return ok, detail
+
+
+# 就绪探针：TTS 提供方已初始化 + 云依赖可用 + 状态存储可写，供网关 /ready 与容器编排使用
 @app.get("/ready")
 async def readiness_check():
     problems: list[str] = []
     if _TTS_PROVIDER == "voxcpm2" and voxcpm2_service is None:
         problems.append("tts_model_not_loaded")
-    if _TTS_PROVIDER == "cloud" and cloud_tts_service is None:
-        problems.append("cloud_tts_not_configured")
+    cloud_ok, cloud_detail = await _cloud_ready_probe()
+    if not cloud_ok:
+        problems.append("cloud_tts_unavailable")
     try:
         memory_storage.flush(force=True)
         state_stats = memory_storage.stats()
@@ -671,6 +961,7 @@ async def readiness_check():
         "problems": problems,
         "device": "cuda" if _USE_GPU else "cpu",
         "tts_service": _TTS_PROVIDER,
+        "cloud_dependency": {"ok": cloud_ok, "detail": cloud_detail},
         "state_store": state_stats,
     }
     if problems:
@@ -696,6 +987,18 @@ async def metrics():
 @app.websocket("/ws/chat/{session_id}")
 async def ws_chat(ws: WebSocket, session_id: str):
     await ws.accept()
+
+    # 会话归属校验：先 accept 再带 1008 关闭，客户端才能收到明确鉴权失败语义
+    user = _trusted_user(ws)
+    if memory_storage.is_deleted(session_id):
+        await ws.close(code=1008, reason="session_deleted")
+        return
+    owner = memory_storage.get_session_owner(session_id)
+    if owner is not None and (not user or owner != user):
+        await ws.close(code=1008, reason="forbidden")
+        return
+    if owner is None and user:
+        memory_storage.claim_session(session_id, user)
 
     # 加载会话上下文
     emotion_config = memory_storage.get_short_term_memory(session_id, "emotion_config")
