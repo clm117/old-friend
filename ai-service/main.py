@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import time
 import torch
+from urllib.parse import quote
 
 # 添加当前目录和项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -62,10 +63,11 @@ from llm_service import LLMService
 from character_engine.character_engine import CharacterEngine
 from asr_service import asr_service
 from state_store import PersistentStateStore
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 import io
 import wave
+import voice_catalog
 
 # ===== Prometheus 指标 =====
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
@@ -150,12 +152,14 @@ else:
     from fun_audio_chat.fun_audio_chat_service import FunAudioChatService
     aio_service = FunAudioChatService()
 if _TTS_PROVIDER == "cloud":
-    # 云 TTS 验证模式：不实例化本地 VoxCPM2（声音定义/克隆端点同步不可用）
+    # 云 TTS 验证模式：不实例化本地 VoxCPM2（声音定义/克隆走云 voice-enrollment，见 cloud_voice_service）
     from cloud_tts_service import cloud_tts_service
+    from cloud_voice_service import cloud_voice_service as cloud_voice, CloudVoiceError
     voxcpm2_service = None
     print("[启动] TTS_PROVIDER=cloud，使用云 TTS（本地 VoxCPM2 不加载）")
 else:
     cloud_tts_service = None
+    cloud_voice = None
     voxcpm2_service = _ServiceClass()
 llm_service = LLMService()
 character_engine = CharacterEngine()
@@ -204,22 +208,26 @@ def _session_owner_error(session_id: str, user: str):
     return None
 
 
-async def _synthesize_speech(text, style, emotion_params, quick_mode):
+async def _synthesize_speech(text, style, emotion_params, quick_mode, speed=1.0, voice_id=None):
     """
     统一 TTS 入口：
-    - 云模式（cloud）：走 DashScope 云 TTS，style/emotion 参数忽略
+    - 云模式（cloud）：走 DashScope 云 TTS，style/emotion 参数忽略；voice_id 为云声音定义产物
     - 本地 GPU 版：synthesize 为 async，直接 await
     - 本地 CPU 版：同步推理放线程池，避免阻塞事件循环
+    speed: 语速（0.5-2.0），本地经 prompt 节奏描述生效；云侧暂不支持变速，仅记录
     返回 (wav_bytes, sample_rate)；wav_bytes 为 None 表示服务不可用
     """
     if _TTS_PROVIDER == "cloud":
-        return await cloud_tts_service.synthesize(text, quick_mode=quick_mode)
+        return await cloud_tts_service.synthesize(
+            text, voice=voice_id, quick_mode=quick_mode, speed=speed
+        )
     if _USE_GPU:
         return await voxcpm2_service.synthesize(
             text,
             style_description=style,
             emotion_params=emotion_params,
             quick_mode=quick_mode,
+            speed=speed,
         )
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
@@ -229,6 +237,7 @@ async def _synthesize_speech(text, style, emotion_params, quick_mode):
             style_description=style,
             emotion_params=emotion_params,
             quick_mode=quick_mode,
+            speed=speed,
         ),
     )
 
@@ -239,7 +248,10 @@ class VoiceProfile(BaseModel):
     gender: str = "female"          # female | male
     age_group: str = "young_adult"  # teen | young_adult | middle_aged | elderly
     voice_tags: List[str] = []      # gentle/sweet/magnetic/...
-    speed: float = 1.0
+    # 语速 0.5–2.0，默认 1.0；越界由 FastAPI 返回 422（GAP-08）
+    speed: float = Field(default=1.0, ge=0.5, le=2.0)
+    # 方言结构位（GAP-05 第 3 批）：yue/sichuan/dongbei；未就绪时回退普通话音色并提示
+    dialect: Optional[str] = None
 
 class PersonaProfile(BaseModel):
     identity: str = ""              # 身份/职业
@@ -263,6 +275,31 @@ class CharacterUpdate(BaseModel):
 async def get_character_options():
     """获取角色创建向导所需的枚举选项"""
     return {"status": "ok", "options": character_engine.list_options()}
+
+
+@app.get("/api/ai/voice-catalog")
+async def get_voice_catalog():
+    """音色目录（GAP-05）：标签/方言结构位/默认回退，供前端与后续扩展使用"""
+    return {"status": "ok", "catalog": voice_catalog.get_catalog()}
+
+
+@app.get("/api/ai/voice-design/capability")
+async def voice_design_capability():
+    """云声音定义能力（GAP-07）：支持范围/配额/限流/错误码；不做网络探测"""
+    if _TTS_PROVIDER == "cloud" and cloud_voice is not None:
+        cap = cloud_voice.capability()
+    else:
+        cap = {
+            "supported": voxcpm2_service is not None,
+            "provider": "voxcpm2",
+            "clone": {"supported": voxcpm2_service is not None, "reason": None},
+            "design": {"supported": False, "reason": "本地 VoxCPM2 不支持云端声音设计"},
+            "quota": {"limit": None, "used": None},
+            "rate_limit": None,
+            "last_error": None,
+            "verified": False,
+        }
+    return {"status": "ok", "capability": cap}
 
 
 @app.get("/api/ai/characters")
@@ -516,6 +553,94 @@ def _resolve_session_style(session_id: str, explicit_description: str = None):
             return voice_prompt
     return memory_storage.get_short_term_memory(session_id, "voice_description")
 
+
+def _resolve_session_speed(session_id: str, character_id: str = None) -> float:
+    """解析会话语速：绑定角色的 voice_profile.speed，缺省 1.0；越界兜底钳制（GAP-08）"""
+    cid = character_id or memory_storage.get_short_term_memory(session_id, "character_id")
+    if not cid:
+        return 1.0
+    ch = character_engine.get_character(cid)
+    vp = (ch or {}).get("voice_profile") or {}
+    try:
+        return max(0.5, min(2.0, float(vp.get("speed", 1.0))))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _resolve_session_voice(session_id: str, character_id: str = None):
+    """
+    解析云 voice_id，返回 (voice_id, notice)：
+    1. 会话已定义音色（cloud_voice 映射，target_model 匹配且部署就绪）
+    2. 角色方言音色（voice_catalog voice_ids；未就绪则回退默认音色 + 提示）
+    notice 为 None 表示无需提示；不静默失败
+    """
+    notice = None
+    if cloud_voice is not None:
+        voice_id, note = cloud_voice.get_voice(session_id)
+        notice = note
+        if voice_id:
+            return voice_id, notice
+    cid = character_id or memory_storage.get_short_term_memory(session_id, "character_id")
+    if cid:
+        _dialect, ids, dialect_note = character_engine.resolve_dialect_voice(cid)
+        if notice is None:
+            notice = dialect_note
+        if ids:
+            return ids[0], notice
+    return None, notice
+
+
+def _parse_hints(raw: str):
+    return [h.strip() for h in (raw or "").split(",") if h.strip()] or None
+
+
+async def _define_voice_cloud(request, session_id, description, audio, mode,
+                              voice_prompt, preview_text, language_hints):
+    """云声音定义统一走 voice-enrollment：设计/复刻 → voice_id 映射落库"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
+    memory_storage.claim_session(session_id, user)
+
+    try:
+        audio_data = await audio.read() if audio is not None else b""
+        if audio_data and _too_large(audio_data):
+            return JSONResponse(
+                {"error": f"音频文件超过上限（{_MAX_UPLOAD_BYTES // (1024 * 1024)}MB）"},
+                status_code=413,
+            )
+        is_design = mode == "design" or (not audio_data and (voice_prompt or "").strip())
+        if is_design:
+            entry = await cloud_voice.create_design(
+                session_id, voice_prompt, preview_text, description or voice_prompt
+            )
+            definition = f"design:{voice_prompt}"
+        else:
+            entry = await cloud_voice.create_clone(
+                session_id, audio_data, description, _parse_hints(language_hints)
+            )
+            definition = f"cloud:{entry['voice_id']}"
+        memory_storage.set_short_term_memory(session_id, "voice_definition", definition)
+        memory_storage.set_short_term_memory(session_id, "voice_description", description)
+        memory_storage.set_short_term_memory(session_id, "cloud_voice_id", entry["voice_id"])
+        return {
+            "status": "ok",
+            "mode": "cloud",
+            "voice_id": entry["voice_id"],
+            "target_model": entry["target_model"],
+            "definition_mode": entry["mode"],
+            "voice_definition": definition,
+            "voice_params": {"speed": 1.0},
+        }
+    except CloudVoiceError as e:
+        logger.warning("[define-voice] 云声音定义失败: %s %s", e.code, e.message)
+        return JSONResponse({**e.to_dict(), "mode": "cloud"}, status_code=e.status)
+    except Exception as e:
+        return _internal_error("define-voice-cloud", e)
+
 # 语音处理接口
 @app.post("/api/ai/process")
 async def process_voice(request: Request):
@@ -579,22 +704,27 @@ async def define_voice(
     request: Request,
     session_id: str = Form(...),
     description: str = Form(...),
-    audio: UploadFile = File(...),
+    audio: Optional[UploadFile] = File(None),
     pitch: float = Form(1.0),
     speed: float = Form(1.0),
     volume: float = Form(1.0),
-    emotion_intensity: float = Form(0.5)
+    emotion_intensity: float = Form(0.5),
+    mode: str = Form("auto"),
+    voice_prompt: str = Form(""),
+    preview_text: str = Form(""),
+    language_hints: str = Form(""),
 ):
     """
-    使用VoxCPM2定义语音
-    session_id: 会话ID
-    description: 语音描述（如"温暖的女声"、"低沉的男声"等）
-    audio: 参考音频文件
-    pitch: 音调（范围：0.5-1.5，默认：1.0）
-    speed: 语速（范围：0.5-2.0，默认：1.0）
-    volume: 音量（范围：0.5-1.5，默认：1.0）
-    emotion_intensity: 情感强度（范围：0.0-1.0，默认：0.5）
+    定义语音（duplicate endpoint，见 /api/voice/define）
+    - cloud 模式：走 voice-enrollment 复刻（上传音频）或设计（voice_prompt+preview_text）
+    - 本地模式：使用 VoxCPM2 自定义音色
+    失败分支统一返回明确 code（欠费 402 / 限流 429 / 超时 504 / 不可用 501）
     """
+    if _TTS_PROVIDER == "cloud":
+        return await _define_voice_cloud(
+            request, session_id, description, audio, mode, voice_prompt, preview_text, language_hints
+        )
+
     if voxcpm2_service is None:
         return JSONResponse(
             {"error": "当前音色模式不支持自定义音色", "code": "voice_define_unsupported",
@@ -651,22 +781,26 @@ async def define_voice_compat(
     request: Request,
     session_id: str = Form(...),
     description: str = Form(""),
-    audio: UploadFile = File(...),
+    audio: Optional[UploadFile] = File(None),
     pitch: float = Form(1.0),
     speed: float = Form(1.0),
     volume: float = Form(1.0),
-    emotion_intensity: float = Form(0.5)
+    emotion_intensity: float = Form(0.5),
+    mode: str = Form("auto"),
+    voice_prompt: str = Form(""),
+    preview_text: str = Form(""),
+    language_hints: str = Form(""),
 ):
     """
-    使用VoxCPM2定义语音
-    session_id: 会话ID
-    description: 语音描述（如"温暖的女声"、"低沉的男声"等）
-    audio: 参考音频文件
-    pitch: 音调（范围：0.5-1.5，默认：1.0）
-    speed: 语速（范围：0.5-2.0，默认：1.0）
-    volume: 音量（范围：0.5-1.5，默认：1.0）
-    emotion_intensity: 情感强度（范围：0.0-1.0，默认：0.5）
+    定义语音（网关兼容端点）
+    - cloud 模式：voice-enrollment 复刻/设计
+    - 本地模式：VoxCPM2 自定义音色
     """
+    if _TTS_PROVIDER == "cloud":
+        return await _define_voice_cloud(
+            request, session_id, description, audio, mode, voice_prompt, preview_text, language_hints
+        )
+
     if voxcpm2_service is None:
         return JSONResponse(
             {"error": "当前音色模式不支持自定义音色", "code": "voice_define_unsupported",
@@ -740,12 +874,14 @@ async def tts(
 
     # 风格优先级：显式 description > 会话绑定角色 voice_profile > 旧版语音定义
     style = _resolve_session_style(session_id, description)
+    speed = _resolve_session_speed(session_id)
+    voice_id, voice_notice = _resolve_session_voice(session_id)
     emotion_config = memory_storage.get_short_term_memory(session_id, "emotion_config")
     emotion_params = emotion_config.get("params") if emotion_config else None
 
     # 统一 TTS 入口（云/本地 GPU/CPU 分派见 _synthesize_speech）
     wav_bytes, sample_rate = await _synthesize_speech(
-        text, style, emotion_params if not style else None, quick_mode
+        text, style, emotion_params if not style else None, quick_mode, speed=speed, voice_id=voice_id
     )
 
     if wav_bytes is None:
@@ -755,10 +891,14 @@ async def tts(
 
     AI_REQUESTS.labels(endpoint="tts", status="200").inc()
     AI_LATENCY.labels(endpoint="tts").observe(time.time() - _start)
+    headers = {"X-Sample-Rate": str(sample_rate)}
+    if voice_notice:
+        # 中文提示放 header 需转义；前端 decodeURIComponent 还原
+        headers["X-Voice-Notice"] = quote(voice_notice)
     return Response(
         content=wav_bytes,
         media_type="audio/wav",
-        headers={"X-Sample-Rate": str(sample_rate)}
+        headers=headers
     )
 
 
@@ -798,6 +938,33 @@ async def transcribe_audio(session_id: str = Form("default"),
     except Exception as e:
         print(f"[ASR] 转写失败: {e}")
         return _internal_error("asr/transcribe", e)
+
+# 情感预设（GAP-09）：6 类预设映射到既有 6 轴向量；历史自由文本名称继续可存可读
+EMOTION_PRESETS = [
+    {"id": "calm",      "name": "平静", "description": "平和、稳定的语气",
+     "params": {"happiness": 0.3, "sadness": 0.1, "anger": 0.1, "fear": 0.1, "disgust": 0.1, "surprise": 0.1}},
+    {"id": "happy",     "name": "开心", "description": "轻快、愉悦的语气",
+     "params": {"happiness": 0.9, "sadness": 0.05, "anger": 0.05, "fear": 0.05, "disgust": 0.05, "surprise": 0.5}},
+    {"id": "sad",       "name": "悲伤", "description": "低落、柔和的语气",
+     "params": {"happiness": 0.1, "sadness": 0.9, "anger": 0.1, "fear": 0.2, "disgust": 0.1, "surprise": 0.1}},
+    {"id": "anxious",   "name": "焦虑", "description": "紧张、不安的语气",
+     "params": {"happiness": 0.1, "sadness": 0.4, "anger": 0.2, "fear": 0.8, "disgust": 0.1, "surprise": 0.5}},
+    {"id": "angry",     "name": "生气", "description": "强烈、急促的语气",
+     "params": {"happiness": 0.05, "sadness": 0.1, "anger": 0.9, "fear": 0.1, "disgust": 0.3, "surprise": 0.1}},
+    {"id": "surprised", "name": "惊讶", "description": "意外、上扬的语气",
+     "params": {"happiness": 0.4, "sadness": 0.05, "anger": 0.05, "fear": 0.2, "disgust": 0.05, "surprise": 0.9}},
+]
+
+
+@app.get("/api/ai/emotion-presets")
+async def list_emotion_presets():
+    """情感预设列表（前端下拉只列这 6 项；自定义名称仍可自由保存）"""
+    return {
+        "status": "ok",
+        "axes": ["happiness", "sadness", "anger", "fear", "disgust", "surprise"],
+        "presets": EMOTION_PRESETS,
+    }
+
 
 # 情感配置接口
 @app.post("/api/ai/emotion-config")
@@ -1009,8 +1176,11 @@ async def ws_chat(ws: WebSocket, session_id: str):
     style = None
     system_prompt = None
     character_name = None
+    voice_speed = 1.0
+    voice_id, voice_notice = _resolve_session_voice(session_id, character_id)
     if character_id:
         style = character_engine.build_voice_prompt(character_id)
+        voice_speed = _resolve_session_speed(session_id, character_id)
         system_prompt = character_engine.build_system_prompt(character_id)
         ch = character_engine.get_character(character_id)
         character_name = ch["name"] if ch else None
@@ -1048,18 +1218,22 @@ async def ws_chat(ws: WebSocket, session_id: str):
             style = None
             system_prompt = None
             character_name = None
+            voice_speed = 1.0
+            voice_id, voice_notice = _resolve_session_voice(session_id, character_id)
             if character_id:
                 style = character_engine.build_voice_prompt(character_id)
+                voice_speed = _resolve_session_speed(session_id, character_id)
                 system_prompt = character_engine.build_system_prompt(character_id)
                 ch = character_engine.get_character(character_id)
                 character_name = ch["name"] if ch else None
             if not style:
                 style = memory_storage.get_short_term_memory(session_id, "voice_description")
 
-            # 推送状态：开始生成（含当前角色名，前端可展示）
+            # 推送状态：开始生成（含当前角色名与方言回退提示，前端可展示）
             await safe_send_json({
                 "type": "status", "status": "generating",
-                "character": character_name
+                "character": character_name,
+                "voice_notice": voice_notice,
             })
 
             assistant_reply = ""
@@ -1076,6 +1250,8 @@ async def ws_chat(ws: WebSocket, session_id: str):
                         style,
                         emotion_params if not style else None,
                         quick_mode=not _USE_GPU,
+                        speed=voice_speed,
+                        voice_id=voice_id,
                     )
                     if wav_bytes:
                         await safe_send_bytes(wav_bytes)

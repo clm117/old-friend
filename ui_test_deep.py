@@ -256,9 +256,10 @@ def run_api(p):
                      multipart={"session_id": "d1", "description": "低沉男声",
                                 "audio": {"name": "a.wav", "mimeType": "audio/wav", "buffer": WAV}},
                      headers=AUTH, timeout=8000)
-        rec("A29", "API-定义", "合法 wav：cloud 模式 501 明确不支持，local 模式通过校验",
-            (r.status == 501 and (jbody(r) or {}).get("code") == "voice_define_unsupported") or r.status in (200, 422),
-            f"status={r.status} {body(r)[:80]}")
+        rec("A29", "API-定义", "合法 wav：云模式返回明确失败码（欠费 402 / 不支持 501 等），本地模式通过校验",
+            r.status_code in (200, 422) or (
+                r.status_code in (402, 429, 501, 502, 504) and (jbody(r) or {}).get("code")),
+            f"status={r.status_code} {body(r)[:80]}")
     except Exception as e:
         rec("A29", "API-定义", "合法 wav + 描述 → 通过校验", "timed out" in str(e).lower() or "Timeout" in str(e),
             "校验通过并进入模型处理（超时属预期）")
@@ -303,7 +304,7 @@ def run_api(p):
     rec("A36", "API-角色", "name=500 字 → 截断到 64", r.status == 200 and name_len == 64, f"name_len={name_len}")
 
     payload = {
-        "name": "非法枚举", "voice_profile": {"gender": "x", "age_group": "y", "voice_tags": ["bad"], "speed": 5},
+        "name": "非法枚举", "voice_profile": {"gender": "x", "age_group": "y", "voice_tags": ["bad"], "speed": 1.0},
         "persona_profile": {"identity": "i" * 60, "relation": "zzz", "personality_tags": ["bad"], "speaking_style": "s" * 300, "free_description": "f" * 600},
     }
     r = post_json(api, "/api/characters", payload, AUTH)
@@ -313,7 +314,11 @@ def run_api(p):
     rec("A38", "API-角色", "age_group 非法 → young_adult", vp.get("age_group") == "young_adult", f"age={vp.get('age_group')}")
     rec("A39", "API-角色", "relation 非法 → friend", pp.get("relation") == "friend", f"relation={pp.get('relation')}")
     rec("A40", "API-角色", "voice_tags 非法 → 默认标签", len(vp.get("voice_tags") or []) >= 1, f"tags={vp.get('voice_tags')}")
-    rec("A41", "API-角色", "speed=5 → clamp 1.3", vp.get("speed") == 1.3, f"speed={vp.get('speed')}")
+    # GAP-08 契约变更：越界语速由静默钳制改为 422 拒绝
+    r = post_json(api, "/api/characters", {"name": "speed-越界高", "voice_profile": {"speed": 5}}, AUTH)
+    j = jbody(r) or {}
+    rec("A41", "API-角色", "speed=5 → 422 拒绝，不创建角色",
+        r.status == 422 and not j.get("character"), f"status={r.status} {body(r)[:60]}")
     rec("A42", "API-角色", "identity=60 字 → 截断 50", len(pp.get("identity") or "") == 50, f"len={len(pp.get('identity') or '')}")
     rec("A43", "API-角色", "speaking_style=300 字 → 截断 200", len(pp.get("speaking_style") or "") == 200, f"len={len(pp.get('speaking_style') or '')}")
     rec("A44", "API-角色", "free_description=600 字 → 截断 500", len(pp.get("free_description") or "") == 500, f"len={len(pp.get('free_description') or '')}")
@@ -327,8 +332,9 @@ def run_api(p):
         f"status={r.status} {str(d)[:60]}")
 
     r = post_json(api, "/api/characters", {"name": "speed-零", "voice_profile": {"speed": 0}}, AUTH)
-    vp = ((jbody(r) or {}).get("character") or {}).get("voice_profile") or {}
-    rec("A46", "API-角色", "speed=0 → clamp 0.7", vp.get("speed") == 0.7, f"speed={vp.get('speed')}")
+    j = jbody(r) or {}
+    rec("A46", "API-角色", "speed=0 → 422 拒绝（低于 0.5 下界）",
+        r.status == 422 and not j.get("character"), f"status={r.status} {body(r)[:60]}")
 
     # ---------- A8 角色读取/绑定分支 ----------
     r = api.get("/api/characters/nonexistent_id", headers=AUTH)
@@ -972,7 +978,8 @@ def run_ui(p):
     page.click("#defineVoiceBtn")
     page.wait_for_timeout(900)
     resp = page.query_selector("#voiceDefineResponse").inner_text()
-    rec("B35", "UI-定义", "接口 500 → 红色错误提示", "定义语音时出错" in resp and "500" in resp, f"resp={resp[:60]}")
+    rec("B35", "UI-定义", "接口 500 → 红色错误提示（含 HTTP 状态码）",
+        ("语音定义失败" in resp or "定义语音时出错" in resp) and "500" in resp, f"resp={resp[:60]}")
     page.unroute("**/api/voice/define", on_define_fail)
 
     # ---------- B6 情感页 ----------

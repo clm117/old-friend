@@ -17,34 +17,13 @@ import time
 import uuid
 from pathlib import Path
 
-# ===== 枚举字典（前后端共用，前端向导下拉选项以此为准）=====
+# ===== 枚举字典（音色目录见 voice_catalog.py；此处保留同名引用保持向后兼容）=====
+from voice_catalog import (AGE_GROUPS, GENDERS, VOICE_TAGS, default_tag_ids,
+                           tag_options, resolve_tag_ids, resolve_dialect, dialect_status,
+                           default_dialect, dialect_available, dialect_notice, dialect_voice_ids)
 
-GENDERS = {
-    "female": "女",
-    "male": "男",
-}
-
-AGE_GROUPS = {
-    # key: (中文展示, 年龄段英文词，按性别区分在 voice_profile_to_prompt 中处理)
-    "teen":        ("少年/少女", "teenage"),
-    "young_adult": ("青年",     "young"),
-    "middle_aged": ("中年",     "middle-aged"),
-    "elderly":     ("老年",     "elderly"),
-}
-
-# 音色标签：中文展示 → 英文 prompt 词（VoxCPM2 对英文描述响应更稳定，与微调测试一致）
-VOICE_TAGS = {
-    "gentle":   ("温柔", "gentle"),
-    "sweet":    ("甜美", "sweet"),
-    "magnetic": ("磁性", "magnetic"),
-    "energetic":("元气", "energetic"),
-    "deep":     ("低沉", "deep"),
-    "calm":     ("沉稳", "calm"),
-    "lively":   ("活泼", "lively"),
-    "mature":   ("成熟", "mature"),
-    "crisp":    ("清脆", "crisp"),
-    "husky":    ("沙哑", "husky"),
-}
+# 语速合法区间（越界由接口层返回 422；内部再兜底钳制一次）
+SPEED_MIN, SPEED_MAX = 0.5, 2.0
 
 RELATIONS = {
     "friend":  "朋友",
@@ -229,9 +208,12 @@ class CharacterEngine:
         return {
             "genders": GENDERS,
             "age_groups": {k: v[0] for k, v in AGE_GROUPS.items()},
-            "voice_tags": {k: v[0] for k, v in VOICE_TAGS.items()},
+            "voice_tags": tag_options(),
             "relations": RELATIONS,
             "personality_tags": PERSONALITY_TAGS,
+            # GAP-05 第 3 批：方言结构位（真实音色未就绪时 enabled=False + notice）
+            "dialects": dialect_status(),
+            "default_dialect": default_dialect(),
         }
 
     # ---------- 创建/删除 ----------
@@ -314,15 +296,19 @@ class CharacterEngine:
         age_group = vp.get("age_group", "young_adult")
         if age_group not in AGE_GROUPS:
             age_group = "young_adult"
-        tags = [t for t in (vp.get("voice_tags") or []) if t in VOICE_TAGS]
+        tags = resolve_tag_ids(vp.get("voice_tags") or [])
         if not tags:
-            tags = ["gentle"] if gender == "female" else ["magnetic"]
+            tags = default_tag_ids(gender)
         try:
             speed = float(vp.get("speed", 1.0))
-            speed = max(0.7, min(1.3, speed))
+            # 接口层已对越界返回 422；这里兜底钳制到合法区间，历史脏数据不至于拖垮 TTS
+            speed = max(SPEED_MIN, min(SPEED_MAX, speed))
         except (TypeError, ValueError):
             speed = 1.0
-        return {"gender": gender, "age_group": age_group, "voice_tags": tags, "speed": speed}
+        # 方言只做结构位：已知 id 原样保存，未知/空值归一为 None（普通话默认）
+        dialect = resolve_dialect(vp.get("dialect"))
+        return {"gender": gender, "age_group": age_group, "voice_tags": tags,
+                "speed": speed, "dialect": dialect}
 
     @staticmethod
     def _normalize_persona_profile(pp):
@@ -345,11 +331,28 @@ class CharacterEngine:
         """
         voice_profile → VoxCPM2 英文语音描述
         例: "A young woman, gentle and sweet voice"
+        方言不参与 prompt（红线：既有 20 条标签映射逐字不变）
         """
         ch = self.get_character(character_id)
         if not ch:
             return None
         return self.voice_profile_to_prompt(ch["voice_profile"])
+
+    def resolve_dialect_voice(self, character_id):
+        """
+        角色方言 → (dialect_id, 可用 voice_ids, 用户提示)
+        - 未设置方言：全 None/空
+        - 已设置但音色未就绪：回退默认音色 + 明确提示（不静默失败）
+        """
+        ch = self.get_character(character_id) or {}
+        vp = ch.get("voice_profile") or {}
+        dialect_id = vp.get("dialect")
+        if not dialect_id:
+            return None, [], None
+        ids = dialect_voice_ids(dialect_id)
+        if ids:
+            return dialect_id, ids, None
+        return dialect_id, [], dialect_notice(dialect_id)
 
     @staticmethod
     def voice_profile_to_prompt(vp):
@@ -366,7 +369,27 @@ class CharacterEngine:
         article = "An" if person.startswith(("elderly",)) else "A"
         tag_words = [VOICE_TAGS[t][1] for t in vp["voice_tags"] if t in VOICE_TAGS]
         tail = ", ".join(tag_words) + " voice" if tag_words else "natural voice"
-        return f"{article} {person}, {tail}"
+        prompt = f"{article} {person}, {tail}"
+        pace = CharacterEngine.speed_to_phrase(vp.get("speed", 1.0))
+        # speed=1.0 时不追加任何描述，保证既有 20 条音色标签映射逐字不变
+        return f"{prompt}, {pace}" if pace else prompt
+
+    @staticmethod
+    def speed_to_phrase(speed):
+        """语速 → 英文节奏描述；1.0 返回空串（不改变既有 prompt）"""
+        try:
+            s = float(speed)
+        except (TypeError, ValueError):
+            return ""
+        if abs(s - 1.0) < 1e-9:
+            return ""
+        if s <= 0.75:
+            return "speaking very slowly"
+        if s < 1.0:
+            return "speaking slowly"
+        if s >= 1.5:
+            return "speaking very quickly"
+        return "speaking quickly"
 
     def build_system_prompt(self, character_id):
         """

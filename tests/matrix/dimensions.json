@@ -73,7 +73,14 @@
       ]
     },
     "voice": {
-      "description": "音色维度：性别 × 音色标签 × 语速，以及声音定义(voice design)参数；产品只有标签枚举，没有独立音色 ID/方言/童声/情感音色",
+      "description": "音色维度：性别 × 音色标签 × 语速，以及声音定义(voice design)参数。第 2 批起标签由 voice_catalog 目录承载；第 3 批接入 dialect 结构位（粤语/四川话/东北话，真实音色待配额），语速 0.5-2.0 进入 prompt/TTS，童声/情感音色仍未启用",
+      "catalog_endpoint": "gw:/api/voice-catalog",
+      "speed_range": [0.5, 2.0],
+      "dialects": [
+        {"id": "yue", "label": "粤语", "locale": "zh-yue", "enabled": false, "source": "product_preset"},
+        {"id": "sichuan", "label": "四川话", "locale": "zh-CN-sichuan", "enabled": false, "source": "product_preset"},
+        {"id": "dongbei", "label": "东北话", "locale": "zh-CN-dongbei", "enabled": false, "source": "product_preset"}
+      ],
       "genders": [
         {"id": "female", "label": "女声", "source": "product_preset"},
         {"id": "male", "label": "男声", "source": "product_preset"}
@@ -91,33 +98,36 @@
         {"id": "husky", "label": "沙哑", "en": "husky", "source": "product_preset"}
       ],
       "speed_values": [
-        {"value": 0.6, "expected": 0.7, "source": "product_preset"},
-        {"value": 0.7, "expected": 0.7, "source": "product_preset"},
+        {"value": 0.49, "expected": "reject", "source": "product_preset"},
+        {"value": 0.5, "expected": 0.5, "source": "product_preset"},
+        {"value": 0.6, "expected": 0.6, "source": "product_preset"},
         {"value": 1.0, "expected": 1.0, "source": "product_preset"},
-        {"value": 1.3, "expected": 1.3, "source": "product_preset"},
-        {"value": 1.4, "expected": 1.3, "source": "product_preset"},
+        {"value": 1.4, "expected": 1.4, "source": "product_preset"},
+        {"value": 2.0, "expected": 2.0, "source": "product_preset"},
+        {"value": 2.01, "expected": "reject", "source": "product_preset"},
         {"value": "abc", "expected": "reject", "source": "product_preset"},
         {"value": null, "expected": "reject", "source": "product_preset"}
       ],
       "capability_gaps": [
-        {"id": "dialect_voice", "label": "方言音色", "source": "capability_gap", "gap_reason": "voice_tags 无方言项，无独立音色 ID 体系"},
+        {"id": "dialect_voice", "label": "方言音色", "source": "capability_gap", "gap_reason": "方言结构位已接入，但真实 voice_id 待云配额；当前回退普通话+提示"},
         {"id": "child_voice", "label": "童声", "source": "capability_gap", "gap_reason": "voice_tags 无童声项，age_group 无儿童"},
         {"id": "elderly_voice", "label": "老年音", "source": "capability_gap", "gap_reason": "仅有 age_group=elderly 的 prompt 描述，无专属音色"},
         {"id": "emotion_voice", "label": "情感音色", "source": "capability_gap", "gap_reason": "无情感音色枚举；情感仅以 6 轴参数在本地 TTS 路径传入，云模式忽略"},
-        {"id": "voice_design", "label": "声音定义 voice design", "source": "capability_gap", "gap_reason": "需 VoxCPM2，cloud 模式直接返回 error"},
+        {"id": "voice_design", "label": "声音定义 voice design", "source": "capability_gap", "gap_reason": "云 voice-enrollment 路径已接入；账号欠费，真实创建 BLOCKED，待充值后验证"},
         {"id": "voice_clone", "label": "声音克隆", "source": "capability_gap", "gap_reason": "无 clone 路由"}
       ]
     },
     "emotion": {
-      "description": "情感维度。产品没有情感类型枚举，只有自由文本 name/description + 6 个数值轴（happiness/sadness/anger/fear/disgust/surprise），网关与 AI 服务均 clamp 到 [0,1]",
+      "description": "情感维度。第 2 批新增 6 类预设枚举（映射到 6 个数值轴），自定义名称仍保留；网关与 AI 服务均 clamp 到 [0,1]",
       "axes": ["happiness", "sadness", "anger", "fear", "disgust", "surprise"],
+      "preset_endpoint": "gw:/api/emotion-presets",
       "types": [
-        {"id": "calm", "label": "平静", "source": "human_extension", "params": {"happiness": 0.3, "sadness": 0.1, "anger": 0.1, "fear": 0.1, "disgust": 0.1, "surprise": 0.1}},
-        {"id": "happy", "label": "开心", "source": "human_extension", "params": {"happiness": 0.9, "sadness": 0.05, "anger": 0.05, "fear": 0.05, "disgust": 0.05, "surprise": 0.5}},
-        {"id": "sad", "label": "悲伤", "source": "human_extension", "params": {"happiness": 0.1, "sadness": 0.9, "anger": 0.1, "fear": 0.2, "disgust": 0.1, "surprise": 0.1}},
-        {"id": "anxious", "label": "焦虑", "source": "human_extension", "params": {"happiness": 0.1, "sadness": 0.4, "anger": 0.2, "fear": 0.8, "disgust": 0.1, "surprise": 0.5}},
-        {"id": "angry", "label": "生气", "source": "human_extension", "params": {"happiness": 0.05, "sadness": 0.1, "anger": 0.9, "fear": 0.1, "disgust": 0.3, "surprise": 0.1}},
-        {"id": "surprised", "label": "惊讶", "source": "human_extension", "params": {"happiness": 0.4, "sadness": 0.05, "anger": 0.05, "fear": 0.2, "disgust": 0.05, "surprise": 0.9}}
+        {"id": "calm", "label": "平静", "source": "product_preset", "params": {"happiness": 0.3, "sadness": 0.1, "anger": 0.1, "fear": 0.1, "disgust": 0.1, "surprise": 0.1}},
+        {"id": "happy", "label": "开心", "source": "product_preset", "params": {"happiness": 0.9, "sadness": 0.05, "anger": 0.05, "fear": 0.05, "disgust": 0.05, "surprise": 0.5}},
+        {"id": "sad", "label": "悲伤", "source": "product_preset", "params": {"happiness": 0.1, "sadness": 0.9, "anger": 0.1, "fear": 0.2, "disgust": 0.1, "surprise": 0.1}},
+        {"id": "anxious", "label": "焦虑", "source": "product_preset", "params": {"happiness": 0.1, "sadness": 0.4, "anger": 0.2, "fear": 0.8, "disgust": 0.1, "surprise": 0.5}},
+        {"id": "angry", "label": "生气", "source": "product_preset", "params": {"happiness": 0.05, "sadness": 0.1, "anger": 0.9, "fear": 0.1, "disgust": 0.3, "surprise": 0.1}},
+        {"id": "surprised", "label": "惊讶", "source": "product_preset", "params": {"happiness": 0.4, "sadness": 0.05, "anger": 0.05, "fear": 0.2, "disgust": 0.05, "surprise": 0.9}}
       ],
       "intensity_values": [
         {"input": -1.0, "expected": 0.0, "kind": "boundary", "source": "product_preset"},
@@ -161,7 +171,7 @@
     },
     "T3": {
       "method": "只探测不硬跑",
-      "rationale": "本地无 GPU；CPU TTS RTF 35-88，单句需数分钟；声音定义/克隆依赖 VoxCPM2（cloud 模式不可用），硬跑会耗尽时间预算"
+      "rationale": "本地无 GPU；CPU TTS RTF 35-88，单句需数分钟；云声音定义已接入但账号欠费（Arrearage），真实创建/合成 BLOCKED，硬跑会耗尽时间预算"
     }
   },
   "t3_probes": [

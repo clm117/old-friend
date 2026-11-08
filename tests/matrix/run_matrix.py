@@ -423,10 +423,10 @@ def render_summary(rep):
     pops = rep["dimensions"]["population"]["values"]
     lines.append(f"| 人群 | " + "、".join(f"{x['label']}({x['source']})".replace("capability_gap", "能力缺失")
                                        for x in pops) + " | product_preset / capability_gap |")
-    lines.append("| 音色 | 2 性别 × 10 标签 + 语速 0.7–1.3；方言/童声/情感音色/克隆 | product_preset / capability_gap |")
+    lines.append("| 音色 | 2 性别 × 10 标签 + 语速 0.5–2.0（越界 422）；方言/童声/情感音色/克隆 | product_preset / capability_gap |")
     emo = rep["dimensions"]["emotion"]
-    lines.append("| 情感 | 6 类型（人为扩展）× 6 强度值(-1.0/0/0.5/1.0/2.0/非法) | human_extension + product_preset |")
-    lines.append("| 会话 | 隐式新建/绑定/切换/多轮/重启；解绑与 CRUD 缺失 | product_preset / capability_gap |")
+    lines.append("| 情感 | 6 类预设（6 轴映射）+ 自定义名称兼容 × 6 强度值(-1.0/0/0.5/1.0/2.0/非法) | product_preset + human_extension |")
+    lines.append("| 会话 | 隐式新建/绑定/切换/多轮/重启；列表/重命名/解绑 CRUD 已补齐 | product_preset |")
     lines.append("")
 
     lines.append("## 三、交叉通过情况")

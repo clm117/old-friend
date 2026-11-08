@@ -28,12 +28,31 @@ TAG_EN = {t["id"]: t["en"] for t in DIM["dimensions"]["voice"]["tags"]}
 TAG_CN = {t["id"]: t["label"] for t in DIM["dimensions"]["voice"]["tags"]}
 
 
+def speed_phrase(speed):
+    """与 character_engine.CharacterEngine.speed_to_phrase 保持一致"""
+    try:
+        s = float(speed)
+    except (TypeError, ValueError):
+        return ""
+    if abs(s - 1.0) < 1e-9:
+        return ""
+    if s <= 0.75:
+        return "speaking very slowly"
+    if s < 1.0:
+        return "speaking slowly"
+    if s >= 1.5:
+        return "speaking very quickly"
+    return "speaking quickly"
+
+
 def expected_prompt(gender, age_group, tags, speed=1.0):
     age_key = AGE_WORD.get(age_group, "young")
     person = PERSON[age_key][0 if gender == "female" else 1]
     article = "An" if person.startswith("elderly") else "A"
     tail = ", ".join(TAG_EN[t] for t in tags if t in TAG_EN) + " voice"
-    return f"{article} {person}, {tail}"
+    prompt = f"{article} {person}, {tail}"
+    pace = speed_phrase(speed)
+    return f"{prompt}, {pace}" if pace else prompt
 
 
 class Plan:
@@ -212,9 +231,48 @@ def build_t1(p):
     p.add("T1", "VOX", "voice_gap_clone", "声音克隆端点不存在",
           {"voice": "voice_clone"}, {"path": "/api/voice/clone"},
           "404/405 → 能力缺失", source="capability_gap")
+    p.add("T1", "VOX", "voice_catalog", "音色目录可查询（GAP-05 底座 + 方言结构位）",
+          {"voice": "catalog"}, {"url": "gw:/api/voice-catalog"},
+          "10 个标签 + 性别默认回退 + capabilities.dialect=True + 三方言未就绪")
+    p.add("T1", "VOX", "dialect_catalog", "三方言目录结构与能力开关（GAP-05）",
+          {"voice": "dialect_catalog"}, {"url": "gw:/api/characters/options"},
+          "粤语/四川话/东北话：locale 正确、均标注暂不可用、默认普通话")
+    p.add("T1", "VOX", "dialect_character", "角色方言落库、未知值归一与 prompt 红线",
+          {"voice": "dialect_character"}, {"sid": None},
+          "dialect=sichuan 原样保存；未知值归一为 None；voice_prompt 与无方言一致")
+    p.add("T1", "VOX", "dialect_fallback", "方言未就绪回退默认音色并给出提示",
+          {"voice": "dialect_fallback"}, {"sid": None},
+          "TTS 成功时 X-Voice-Notice 含“暂不可用/回退”；TTS 不可用则 BLOCKED")
+    p.add("T1", "VOX", "voice_design_capability", "云声音定义能力接口（GAP-07）",
+          {"voice": "design_capability"}, {"url": "gw:/api/voice-design/capability"},
+          "target_model 绑定、复刻可用、设计不支持原因、配额 1000、限流 180/3")
+    p.add("T1", "VOX", "voice_design_unsupported", "目标模型不支持声音设计 → 501",
+          {"voice": "design_unsupported"}, {"mode": "design"},
+          "501 + code=voice_define_unsupported，不返回假成功")
+    p.add("T1", "VOX", "voice_define_error", "声音定义欠费/限流失败返回明确 code",
+          {"voice": "define_error"}, {"session": "upload"},
+          "非 200 且 code/hint 明确（欠费→402 voice_quota_unavailable）")
     p.add("T1", "VOX", "speed_observability", "语速参数是否影响 voice_prompt",
           {"voice": "speed"}, {"sid_a": None},
-          "speed 只落库、不进入 prompt/TTS 入参 → 无可观测效果", source="capability_gap")
+          "0.7 与 1.3 的 voice_prompt 不同（含节奏描述）")
+    # GAP-08：语速边界与越界（0.5/2.0 合法，0.49/2.01 → 422，缺省 1.0 逐字一致）
+    p.add("T1", "VOX", "speed_boundary", "语速下边界 0.5",
+          {"voice": "speed", "speed": 0.5}, {"speed": 0.5, "expect": "ok", "phrase": "speaking very slowly"},
+          "创建成功且 voice_prompt 含 speaking very slowly")
+    p.add("T1", "VOX", "speed_boundary", "语速上边界 2.0",
+          {"voice": "speed", "speed": 2.0}, {"speed": 2.0, "expect": "ok", "phrase": "speaking very quickly"},
+          "创建成功且 voice_prompt 含 speaking very quickly")
+    p.add("T1", "VOX", "speed_boundary", "语速低于下界 0.49",
+          {"voice": "speed", "speed": 0.49}, {"speed": 0.49, "expect": 422},
+          "HTTP 422（越界拒绝，不静默钳制）")
+    p.add("T1", "VOX", "speed_boundary", "语速高于上界 2.01",
+          {"voice": "speed", "speed": 2.01}, {"speed": 2.01, "expect": 422},
+          "HTTP 422（越界拒绝，不静默钳制）")
+    p.add("T1", "VOX", "speed_boundary", "语速缺省 1.0",
+          {"voice": "speed", "speed": 1.0},
+          {"speed": None, "expect": "ok", "phrase": "",
+           "expected_prompt": expected_prompt("female", "young_adult", ["gentle"])},
+          "缺省 1.0，voice_prompt 与既有标签映射逐字一致")
 
     # ---------------- EMO：情感类型 × 强度边界 ----------------
     for e in emotions:
@@ -239,12 +297,15 @@ def build_t1(p):
     p.add("T1", "EMO", "emotion_gap_unbind", "情感配置解绑（DELETE）",
           {"emotion": "unbind"}, {"sid": "mx_emo_unbind"},
           "204；删后 GET 200 且配置为空；重复删除幂等；他人 403")
-    p.add("T1", "EMO", "emotion_gap_enum", "情感类型无枚举/无预设",
-          {"emotion": "enum"}, {"url": "gw:/api/characters/options"},
-          "options 无 emotions 字段 → 能力缺失", source="capability_gap")
-    p.add("T1", "EMO", "emotion_long_name", "超长情感名称存储行为",
+    p.add("T1", "EMO", "emotion_presets", "情感类型预设枚举（6 类映射 6 轴）",
+          {"emotion": "enum"}, {"url": "gw:/api/emotion-presets"},
+          "6 个预设，每个含 6 轴参数且在 [0,1]")
+    p.add("T1", "EMO", "emotion_custom_name", "历史自定义情感名称仍可读写",
+          {"emotion": "custom"}, {"sid": "mx_emo_custom", "name": "小林专属情绪"},
+          "POST 200 + GET 读回同名，未被枚举拒绝")
+    p.add("T1", "EMO", "emotion_long_name", "超长情感名称被拒绝",
           {"emotion": "long_name"}, {"sid": "mx_emo_long", "name": "情" * 1000},
-          "无长度校验：原样落库（建议补 64 字上限）", defect="DEF-07")
+          "HTTP 400（名称长度上限 64 字，DEF-07 校验保持有效）")
 
     # ---------------- SES：会话与绑定 ----------------
     for r in presets:

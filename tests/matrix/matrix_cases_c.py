@@ -425,21 +425,25 @@ class CasesExtra(CasesMid):
                       classification=None if ok else "环境不可用")
 
     def probe_voice_define(self, case):
-        r = self.req("POST", "/api/voice/define", case,
+        r = self.req("POST", "/api/voice/define", case, timeout=120,
                      files={"audio": ("a.wav", tiny_wav(), "audio/wav")},
                      data={"session_id": "mx_t3_define", "description": "温柔女声",
                            "pitch": 1.0, "speed": 1.0, "volume": 1.0, "emotion_intensity": 0.5})
         body = safe_json(r) or {}
         err = body.get("error")
-        degraded = r.status_code == 501 and body.get("code") == "voice_define_unsupported"
+        code = body.get("code")
+        # 能力已接入（GAP-07）：真实失败必须是明确语义，不能假成功
+        degraded = r.status_code in (402, 429, 501, 502, 504) and code in (
+            "voice_quota_unavailable", "voice_quota_exhausted", "voice_define_unsupported",
+            "voice_define_timeout", "voice_upstream_error", "voice_define_invalid", "voice_audio_invalid")
         return result("BLOCKED", [
-            assertion("声音定义可用", False, err or body),
-            assertion("cloud 模式显式 501 + voice_define_unsupported（降级语义正确）", degraded,
-                      {"status": r.status_code, "code": body.get("code")}),
+            assertion("真实声音定义成功（需账号可用）", False, err or body),
+            assertion("失败分支返回明确 code（不假成功）", degraded,
+                      {"status": r.status_code, "code": code, "hint": body.get("hint")}),
         ],
-                      {"http_status": r.status_code, "body": snippet(r.text, 200)},
-                      notes="cloud 模式下声音定义不可用（GAP-07）；第 1 批已将假成功改为显式 501",
-                      classification="能力缺失")
+                      {"http_status": r.status_code, "body": snippet(r.text, 240)},
+                      notes="云定义路径已接入；当前 DashScope 账号欠费（Arrearage），真实创建/合成待充值后验证",
+                      classification="环境不可用")
 
     def probe_voice_clone(self, case):
         r = self.req("POST", "/api/voice/clone", case, json={})

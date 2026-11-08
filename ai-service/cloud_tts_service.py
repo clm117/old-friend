@@ -52,10 +52,11 @@ class CloudTTSService:
     def available(self):
         return bool(self.api_key)
 
-    async def synthesize(self, text: str, voice: str = None, quick_mode: bool = False):
+    async def synthesize(self, text: str, voice: str = None, quick_mode: bool = False, speed: float = 1.0):
         """
         合成单句文本，返回 (wav_bytes, sample_rate)。
-        quick_mode 参数仅为与 VoxCPM2 接口对齐，云侧暂不支持变速。
+        quick_mode 参数仅为与 VoxCPM2 接口对齐，云侧暂不支持变速；
+        speed 为 GAP-08 透传参数，当前 DashScope qwen3-tts-flash 不支持语速，仅接收并忽略。
         无 Key 返回 (None, None)；任务/网络失败抛异常（由调用方记录）。
         """
         if not self.api_key:

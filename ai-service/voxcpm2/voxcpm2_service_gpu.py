@@ -109,10 +109,32 @@ class VoxCPM2ServiceGPU:
         dominant = max(emotion_params, key=lambda k: emotion_params.get(k, 0) or 0)
         return EMOTION_DESCRIPTIONS.get(dominant)
 
-    def _synthesize_sync(self, text, style_description=None, emotion_params=None, quick_mode=False):
+    @staticmethod
+    def speed_to_phrase(speed):
+        """语速 → 英文节奏描述；1.0 返回空串（GAP-08：0.5–2.0）"""
+        try:
+            s = max(0.5, min(2.0, float(speed)))
+        except (TypeError, ValueError):
+            return ""
+        if abs(s - 1.0) < 1e-9:
+            return ""
+        if s <= 0.75:
+            return "speaking very slowly"
+        if s < 1.0:
+            return "speaking slowly"
+        if s >= 1.5:
+            return "speaking very quickly"
+        return "speaking quickly"
+
+    def _synthesize_sync(self, text, style_description=None, emotion_params=None, quick_mode=False, speed=1.0):
         """同步合成（内部方法，实际推理在此执行）"""
         if not self._ensure_model():
             return None, None
+
+        # 语速：style/emotion 描述未包含节奏时补一句（GAP-08）
+        pace = self.speed_to_phrase(speed)
+        if pace and style_description and "speaking " not in style_description:
+            style_description = f"{style_description}, {pace}"
 
         if quick_mode:
             cfg, steps = QUICK_CFG_VALUE, QUICK_TIMESTEPS
@@ -147,7 +169,7 @@ class VoxCPM2ServiceGPU:
             wf.writeframes(pcm.tobytes())
         return buf.getvalue(), sample_rate
 
-    async def synthesize(self, text, style_description=None, emotion_params=None, quick_mode=False):
+    async def synthesize(self, text, style_description=None, emotion_params=None, quick_mode=False, speed=1.0):
         """
         异步合成语音，返回 (wav_bytes, sample_rate)；模型不可用时返回 (None, None)
         推理在线程池执行，不阻塞 FastAPI 事件循环（关键：实时交互不卡顿）
@@ -155,7 +177,7 @@ class VoxCPM2ServiceGPU:
         return await asyncio.get_event_loop().run_in_executor(
             None,
             self._synthesize_sync,
-            text, style_description, emotion_params, quick_mode
+            text, style_description, emotion_params, quick_mode, speed
         )
 
     def generate_voice_embedding(self, voice_definition):

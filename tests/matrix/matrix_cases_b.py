@@ -4,7 +4,7 @@ from urllib.parse import quote
 
 import requests
 
-from matrix_common import GW_BASE, GW_WS, assertion, snippet, safe_json
+from matrix_common import ACCOUNTS, GW_BASE, GW_WS, assertion, snippet, safe_json
 from matrix_cases_a import CasesBase, result
 
 AXES = ["happiness", "sadness", "anger", "fear", "disgust", "surprise"]
@@ -93,8 +93,11 @@ class CasesMid(CasesBase):
         cleared = self.req("DELETE", f"/api/emotion-config/{quote(sid)}", case)
         after = self.req("GET", f"/api/emotion-config/{quote(sid)}", case)
         repeat = self.req("DELETE", f"/api/emotion-config/{quote(sid)}", case)
+        # 换一个与用例当前账号不同的账号发起解绑（用例账号由生成器轮换，固定写 matrix_b 会撞车）
+        base_acct = (case.get("params") or {}).get("account", "matrix_a")
+        other_acct = next((a for a in ACCOUNTS if a != base_acct), "matrix_a")
         other = dict(case)
-        other["params"] = dict(case["params"], account="matrix_b")
+        other["params"] = dict(case["params"], account=other_acct)
         denied = self.req("DELETE", f"/api/emotion-config/{quote(sid)}", other)
         cfg_before = (safe_json(before) or {}).get("emotion_config")
         cfg_after = (safe_json(after) or {}).get("emotion_config")
@@ -114,6 +117,41 @@ class CasesMid(CasesBase):
                       {"http_status": cleared.status_code, "after_status": after.status_code,
                        "repeat": repeat.status_code, "session_id": sid},
                       classification=None if ok else "产品缺陷")
+
+    def h_emotion_presets(self, case):
+        r = self.req("GET", "/api/emotion-presets", case)
+        body = safe_json(r) or {}
+        presets = body.get("presets") or []
+        axes = body.get("axes") or []
+        ok_axes = all(
+            all(0.0 <= float((p.get("params") or {}).get(a, -1)) <= 1.0 for a in AXES)
+            for p in presets
+        )
+        a = [assertion("预设接口 200", r.status_code == 200 and body.get("status") == "ok", r.status_code),
+             assertion("恰好 6 类预设", len(presets) == 6, len(presets)),
+             assertion("预设覆盖 6 轴", set(axes) == set(AXES), axes),
+             assertion("预设参数在 [0,1]", ok_axes, [p.get("params") for p in presets][:1]),
+             assertion("预设 id 唯一", len({p.get("id") for p in presets}) == len(presets),
+                       [p.get("id") for p in presets])]
+        return result("PASS" if all(x["ok"] for x in a) else "FAIL", a,
+                      {"preset_ids": [p.get("id") for p in presets], "axes": axes})
+
+    def h_emotion_custom_name(self, case):
+        p = case["params"]
+        sid = p["sid"]
+        base = self.dim_emotion("calm")["params"]
+        r = self.req("POST", "/api/emotion-config", case,
+                     data={"session_id": sid, "emotion_name": p["name"], "emotion_description": "自定义历史名称",
+                           **{k: base[k] for k in AXES}})
+        got = safe_json(self.req("GET", f"/api/emotion-config/{quote(sid)}", case)) or {}
+        cfg = got.get("emotion_config") or {}
+        a = [assertion("自定义名称可保存 200", r.status_code == 200, r.status_code),
+             assertion("读回同名（未被枚举拒绝）", cfg.get("name") == p["name"],
+                       f"stored={cfg.get('name')!r} input={p['name']!r}"),
+             assertion("6 轴参数完整", all(k in (cfg.get("params") or {}) for k in AXES),
+                       cfg.get("params"))]
+        return result("PASS" if all(x["ok"] for x in a) else "FAIL", a,
+                      {"http_status": r.status_code, "stored_name": cfg.get("name")})
 
     def h_emotion_gap_enum(self, case):
         r = self.req("GET", "/api/characters/options", case)
@@ -271,8 +309,10 @@ class CasesMid(CasesBase):
             return result("FAIL", [assertion("创建会话成功", False, created.status_code)],
                           {"body": snippet(created.text, 160)}, classification="测试缺陷")
         other = dict(case)
-        other["params"] = dict(case["params"], account="matrix_b")
-        other["params"]["sid"] = sid
+        owner = case["params"].get("account", "matrix_a")
+        other["params"] = dict(case["params"],
+                                account="matrix_a" if owner != "matrix_a" else "matrix_b",
+                                sid=sid)
         denied_delete = self.req("DELETE", f"/api/sessions/{quote(sid)}", other)
         denied_rename = self.req("PATCH", f"/api/sessions/{quote(sid)}", other, json={"title": "越权"})
         a = [

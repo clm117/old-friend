@@ -1,8 +1,8 @@
 # 语伴矩阵化功能测试报告
 
-> 结论：计划 **437** 条，实际执行 **383** 条；T1 通过 **368**、失败 **0**、能力缺失 **7**；T2 阻塞 **54** 条（LLM 不可用），T3 阻塞 **8** 条。能力缺失集中在：GAP-04、GAP-05、GAP-06、GAP-07、GAP-08、GAP-09、GAP-11。
+> 结论：计划 **452** 条，实际执行 **398** 条；T1 通过 **384**、失败 **0**、能力缺失 **5**；T2 阻塞 **54** 条（LLM 不可用），T3 阻塞 **8** 条。能力缺失集中在：GAP-04、GAP-05、GAP-06、GAP-07、GAP-11。
 
-- 时间：2026-11-06T14:57:11 → 2026-11-06T14:58:12，耗时 61.2s（预算 90 分钟内）
+- 时间：2026-11-06T19:22:39 → 2026-11-06T19:23:47，耗时 68.3s（预算 90 分钟内）
 - 环境：网关 :8005 / AI :8084 / TTS=cloud；限流保持产品默认 5/120/20，未放宽
 - 测试数据目录：`D:\ProgramFile\语伴\tests\matrix\runtime\data`（独立于产品数据）
 
@@ -10,10 +10,10 @@
 
 | 层 | 计划 | 执行 | 通过 | 失败 | 能力缺失 | 阻塞 | 跳过 | 耗时(s) |
 |---|---|---|---|---|---|---|---|---|
-| T1 | 375 | 375 | 368 | 0 | 7 | 0 | 0 | 37.07 |
+| T1 | 390 | 390 | 384 | 0 | 5 | 1 | 0 | 37.05 |
 | T2 | 54 | 0 | 0 | 0 | 0 | 54 | 0 | 0.0 |
-| T3 | 8 | 8 | 0 | 0 | 0 | 8 | 0 | 9.02 |
-| 合计 | 437 | 383 | 368 | 0 | 7 | 62 | 0 | 61.2 |
+| T3 | 8 | 8 | 0 | 0 | 0 | 8 | 0 | 5.8 |
+| 合计 | 452 | 398 | 384 | 0 | 5 | 63 | 0 | 68.3 |
 
 说明：BLOCKED / CAPABILITY_GAP 均不计入 PASS。T2 未真实执行时 executed=0。
 
@@ -23,9 +23,9 @@
 |---|---|---|
 | 角色 | 6 个官方预设 + 自定义（长名/特殊字符/空值/重名等边界） | product_preset + human_extension |
 | 人群 | 老年(product_preset)、中年(product_preset)、青少年(product_preset)、青年(product_preset)、儿童(能力缺失)、幼儿(能力缺失) | product_preset / capability_gap |
-| 音色 | 2 性别 × 10 标签 + 语速 0.7–1.3；方言/童声/情感音色/克隆 | product_preset / capability_gap |
-| 情感 | 6 类型（人为扩展）× 6 强度值(-1.0/0/0.5/1.0/2.0/非法) | human_extension + product_preset |
-| 会话 | 隐式新建/绑定/切换/多轮/重启；解绑与 CRUD 缺失 | product_preset / capability_gap |
+| 音色 | 2 性别 × 10 标签 + 语速 0.5–2.0（越界 422）；方言/童声/情感音色/克隆 | product_preset / capability_gap |
+| 情感 | 6 类预设（6 轴映射）+ 自定义名称兼容 × 6 强度值(-1.0/0/0.5/1.0/2.0/非法) | product_preset + human_extension |
+| 会话 | 隐式新建/绑定/切换/多轮/重启；列表/重命名/解绑 CRUD 已补齐 | product_preset |
 
 ## 三、交叉通过情况
 
@@ -92,13 +92,11 @@
 
 | 编号 | 能力 | 最小补齐建议 | 证据 |
 |---|---|---|---|
-| GAP-04 | age_group 无儿童/幼儿年龄段（产品决策不做，出列） | 不排期：合规与年龄段扩展取消 | T1-POP-141, T1-POP-142 |
-| GAP-05 | 音色谱无方言/童声/老年音/情感音色（仅批准 3 种方言） | 第 2 批目录重构；第 3 批仅粤语/四川话/东北话 | T1-VOX-163 |
-| GAP-06 | 无声音克隆端点（P3 仅需求验证，不排实施） | 不排实施；如需再做需 GPU + 声纹合规评审 | T1-VOX-164 |
-| GAP-07 | cloud 模式声音定义不可用（第 1 批降级为显式 501） | cloud 模式 501 + code=voice_define_unsupported；云能力属第 3 批 | T3-PRB-434 |
-| GAP-08 | speed 仅落库、不进入 voice_prompt/TTS 入参 | voice_profile_to_prompt 增加语速描述，或将 speed 传入 TTS | T1-VOX-165 |
-| GAP-09 | 情感类型无枚举/无预设 | 提供 emotion 预设枚举（平静/开心/悲伤…）映射到 6 轴向量 | T1-EMO-208 |
-| GAP-11 | 会话角色解绑（未排期，不属于第 1 批） | 新增 DELETE /api/sessions/{sid}/character 或在绑定接口支持 character_id 为空 | T1-SES-239 |
+| GAP-04 | age_group 无儿童/幼儿年龄段（产品决策不做，出列） | 不排期：合规与年龄段扩展取消 | T1-POP-143, T1-POP-144 |
+| GAP-05 | 音色谱无方言音色（第 3 批完成方言结构位；真实音色待配额） | voice_catalog 接入 dialect（粤语/四川话/东北话）；真实 voice_id 待充值后填入，未就绪回退普通话+提示 | T1-VOX-165 |
+| GAP-06 | 无声音克隆端点（P3 仅需求验证，不排实施） | 不排实施；如需再做需 GPU + 声纹合规评审 | T1-VOX-166 |
+| GAP-07 | cloud 声音定义路径已接入（第 3 批）；账号欠费致真实创建 BLOCKED | voice-enrollment 复刻/设计 + 轮询 + target_model 校验 + 配额/限流保护；充值后执行真实成功用例 | T3-PRB-449 |
+| GAP-11 | 会话角色解绑（未排期，不属于第 1 批） | 新增 DELETE /api/sessions/{sid}/character 或在绑定接口支持 character_id 为空 | T1-SES-254 |
 
 ## 七、T2 / T3 阻塞与解锁条件
 
@@ -112,14 +110,14 @@
 
 | 探测项 | 结论 | 证据摘要 |
 |---|---|---|
-| T3-PRB-430 本机 GPU 可用性 | BLOCKED | False 2.15.0+cpu 0 |
-| T3-PRB-431 本地 VoxCPM2 模型与 CUDA 依赖 | BLOCKED |  |
-| T3-PRB-432 云 TTS 合成（qwen3-tts-flash） | BLOCKED | 400 |
-| T3-PRB-433 ASR paraformer-realtime-v2 转写 | BLOCKED | Access denied, please make sure your account is in good standing. |
-| T3-PRB-434 声音定义 voice design（/api/voice/define） | BLOCKED | 501 |
-| T3-PRB-435 声音克隆端点 | BLOCKED | 404 |
-| T3-PRB-436 情感音色效果（情感参数驱动 TTS） | BLOCKED |  |
-| T3-PRB-437 语音回放/播放链路 | BLOCKED |  |
+| T3-PRB-445 本机 GPU 可用性 | BLOCKED | False 2.11.0+cpu 0 |
+| T3-PRB-446 本地 VoxCPM2 模型与 CUDA 依赖 | BLOCKED |  |
+| T3-PRB-447 云 TTS 合成（qwen3-tts-flash） | BLOCKED | 400 |
+| T3-PRB-448 ASR paraformer-realtime-v2 转写 | BLOCKED | Access denied, please make sure your account is in good standing. |
+| T3-PRB-449 声音定义 voice design（/api/voice/define） | BLOCKED | 402 |
+| T3-PRB-450 声音克隆端点 | BLOCKED | 404 |
+| T3-PRB-451 情感音色效果（情感参数驱动 TTS） | BLOCKED |  |
+| T3-PRB-452 语音回放/播放链路 | BLOCKED |  |
 
 - 解锁条件：具备 CUDA GPU 且安装 VoxCPM2 模型（`TTS_PROVIDER=local`），或云侧开通 voice design / TTS 配额
 - 明确未使用「HTTP 200 + 错误文案」作为通过依据
@@ -134,8 +132,8 @@
 
 - T1：穷举 + 边界值。T1 全部为本地 HTTP/WS 调用，单例耗时 <200ms，可以穷举；角色×人群×情感交叉 6×4×5=120 也全部真跑
 - T2：贪心 pairwise + 分层补充 3 轮用例。真实对话每轮含 LLM(+TTS) 网络耗时，全量笛卡尔积 9×4×5=180 无法在 90 分钟内跑完；pairwise 保证任意两维取值组合至少出现一次，规模约 45 条；另取约 1/8 用例扩展为 3 轮验证上下文保持（计划 54 条）
-- T3：只探测不硬跑。本地无 GPU；CPU TTS RTF 35-88，单句需数分钟；声音定义/克隆依赖 VoxCPM2（cloud 模式不可用），硬跑会耗尽时间预算
-- 各阶段耗时：`{"service_start": 4.12, "login": 0.5, "run_T1": 37.07, "ai_restart": 5.07, "run_restart": 0.12, "block_T2": 0.0, "run_T3": 9.02}`
+- T3：只探测不硬跑。本地无 GPU；CPU TTS RTF 35-88，单句需数分钟；云声音定义已接入但账号欠费（Arrearage），真实创建/合成 BLOCKED，硬跑会耗尽时间预算
+- 各阶段耗时：`{"service_start": 13.75, "login": 0.5, "run_T1": 37.05, "ai_restart": 4.59, "run_restart": 0.09, "block_T2": 0.0, "run_T3": 5.8}`
 - 裁剪说明：T2 若解锁，按 pairwise 抽样只跑约 45 条（全量 180 条约需 3-4 小时）；T3 不硬跑原因是 CPU TTS RTF 35-88，单句需数分钟，超出 90 分钟预算
 
 ## 九、复跑与约束

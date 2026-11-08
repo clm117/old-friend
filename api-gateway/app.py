@@ -42,6 +42,7 @@ _load_root_dotenv()
 import requests
 import uvicorn
 from fastapi import FastAPI, Request, UploadFile, File, Form, Response, WebSocket, WebSocketDisconnect
+from typing import Optional
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import jwt
@@ -431,11 +432,11 @@ async def tts(request: Request, session_id: str = Form(...), text: str = Form(""
             timeout=AI_SERVICE_TTS_TIMEOUT,
         )
         if response.headers.get("content-type") == "audio/wav":
-            return Response(
-                content=response.content,
-                media_type="audio/wav",
-                headers={"X-Sample-Rate": response.headers.get("X-Sample-Rate", "16000")},
-            )
+            headers = {"X-Sample-Rate": response.headers.get("X-Sample-Rate", "16000")}
+            notice = response.headers.get("X-Voice-Notice")
+            if notice:
+                headers["X-Voice-Notice"] = notice
+            return Response(content=response.content, media_type="audio/wav", headers=headers)
         return _relay_json(response)
     except Exception as e:
         return _upstream_error("voice/tts", e)
@@ -485,23 +486,34 @@ async def define_voice(
     request: Request,
     session_id: str = Form(...),
     description: str = Form(""),
-    audio: UploadFile = File(...),
+    audio: Optional[UploadFile] = File(None),
     pitch: float = Form(1.0),
     speed: float = Form(1.0),
     volume: float = Form(1.0),
     emotion_intensity: float = Form(0.5),
+    mode: str = Form("auto"),
+    voice_prompt: str = Form(""),
+    preview_text: str = Form(""),
+    language_hints: str = Form(""),
 ):
+    """语音定义：复刻（上传音频）/ 设计（voice_prompt + preview_text）"""
     if not _safe_id(session_id):
         return JSONResponse({"error": "session_id 非法"}, status_code=400)
-    if not description.strip():
+    is_design = mode == "design" or (audio is None and voice_prompt.strip())
+    if not is_design and not description.strip():
         return JSONResponse({"error": "description 不能为空"}, status_code=400)
     if len(description) > 200:
         return JSONResponse({"error": "description 过长（上限 200 字）"}, status_code=400)
+    if is_design and not (1 <= len(voice_prompt.strip()) <= 500 and 15 <= len(preview_text.strip()) <= 200):
+        return JSONResponse({"error": "voice_prompt 需 1-500 字，preview_text 需 15-200 字"}, status_code=400)
     try:
-        audio_data = await audio.read()
-        invalid = _validate_audio(audio_data)
-        if invalid:
-            return JSONResponse({"error": invalid}, status_code=400)
+        files = None
+        if audio is not None:
+            audio_data = await audio.read()
+            invalid = _validate_audio(audio_data)
+            if invalid:
+                return JSONResponse({"error": invalid}, status_code=400)
+            files = {"audio": (audio.filename, audio_data, audio.content_type or "application/octet-stream")}
 
         # 转发到核心AI服务（包进线程池，避免同步 requests 阻塞 asyncio 事件循环）
         response = await _async_request(
@@ -514,8 +526,12 @@ async def define_voice(
                 "speed": speed,
                 "volume": volume,
                 "emotion_intensity": emotion_intensity,
+                "mode": mode,
+                "voice_prompt": voice_prompt,
+                "preview_text": preview_text,
+                "language_hints": language_hints,
             },
-            files={"audio": (audio.filename, audio_data, audio.content_type or "application/octet-stream")},
+            files=files,
             headers=_internal_headers(_user_of(request)),
         )
         return _relay_json(response)
@@ -523,7 +539,27 @@ async def define_voice(
         return _upstream_error("voice/define", e)
 
 
+@app.get("/api/voice-design/capability")
+async def voice_design_capability():
+    """云声音定义能力（GAP-07）透传：支持范围/配额/限流/最近错误"""
+    try:
+        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/voice-design/capability")
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("voice-design/capability", e)
+
+
 # 情感配置接口
+@app.get("/api/emotion-presets")
+async def emotion_presets():
+    """情感预设（GAP-09）透传"""
+    try:
+        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/emotion-presets")
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("emotion-presets", e)
+
+
 @app.post("/api/emotion-config")
 async def emotion_config(
     request: Request,
@@ -610,6 +646,16 @@ async def character_options():
         return _relay_json(resp)
     except Exception as e:
         return _upstream_error("characters/options", e)
+
+
+@app.get("/api/voice-catalog")
+async def voice_catalog():
+    """音色目录（GAP-05 底座）透传"""
+    try:
+        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/voice-catalog")
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("voice/catalog", e)
 
 
 @app.get("/api/characters")

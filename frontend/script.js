@@ -161,14 +161,20 @@ function setupTabSwitching() {
             const main = document.querySelector('.app-main');
             if (main) main.scrollTop = 0;
             
-            // 如果切换到语音定义标签，更新基础语音下拉列表
+            // 如果切换到语音定义标签，更新基础语音下拉列表 + 云定义能力提示
             if (tabId === 'voice-define') {
                 updateBaseVoiceSelect();
+                if (typeof loadVoiceDesignCapability === 'function') loadVoiceDesignCapability();
             }
 
             // 如果切换到语音合成标签，更新语音选择列表
             if (tabId === 'tts') {
                 updateTtsVoiceSelect();
+            }
+
+            // 情感预设需登录后才能拉取：首次进入情感页时懒加载
+            if (tabId === 'emotion-config' && typeof window.loadEmotionPresets === 'function') {
+                window.loadEmotionPresets();
             }
         });
     });
@@ -670,6 +676,7 @@ function handleWsMessage(msg) {
     switch (msg.type) {
         case 'status':
             if (msg.status === 'generating') {
+                if (msg.voice_notice) console.info('语音提示：', msg.voice_notice);
                 const who = msg.character ? `「${msg.character}」` : '语伴';
                 // 思考占位：标记 streaming + thinking，首个文本到达时替换
                 addMessage('ai', `${who}正在思考…`, true, true);
@@ -1013,21 +1020,22 @@ function setupVoiceDefine() {
             });
             
             if (!response.ok) {
-                // 501：cloud 模式明确不支持自定义音色（GAP-07 降级），提示用户而非当成功
-                if (response.status === 501) {
-                    let errBody = {};
-                    try { errBody = await response.json(); } catch (_) {}
-                    document.getElementById('voiceDefineResponse').innerHTML =
-                        `<p style="color: red;">当前音色模式不支持自定义音色${errBody && errBody.error ? '（' + escapeHtml(errBody.error) + '）' : ''}</p>`;
-                    return;
-                }
-                // 透出服务端的具体错误（session_id/描述/音频格式等），避免只看到状态码无原因
-                let detail = `HTTP ${response.status}`;
-                try {
-                    const errBody = await response.json();
-                    if (errBody && errBody.error) detail = errBody.error;
-                } catch (_) { /* 响应非 JSON，保留状态码 */ }
-                throw new Error(detail);
+                // 云声音定义失败分支：透出服务端 code / hint（欠费 402、限流 429、超时 504、不可用 501）
+                let errBody = {};
+                try { errBody = await response.json(); } catch (_) {}
+                const bits = [`HTTP ${response.status}`];
+                if (errBody && errBody.code) bits.push(errBody.code);
+                if (errBody && errBody.error) bits.push(errBody.error);
+                if (errBody && errBody.hint) bits.push(errBody.hint);
+                const msg = bits.join(' · ');
+                document.getElementById('voiceDefineResponse').innerHTML =
+                    `<p style="color: red;">语音定义失败：${escapeHtml(msg)}</p>`;
+                showVoiceDesignCapability(errBody && errBody.code ? {
+                    supported: false, provider: 'cloud',
+                    last_error: { code: errBody.code, hint: errBody.hint || errBody.error || '' },
+                    design: { supported: false, reason: errBody.error || '' }
+                } : null);
+                return;
             }
             
             const result = await response.json();
@@ -1098,6 +1106,59 @@ function setupVoiceDefine() {
     });
 }
 
+// 云声音定义能力提示（GAP-07）：支持范围 / 欠费 / 限流 / 最近错误
+async function loadVoiceDesignCapability() {
+    try {
+        const resp = await fetch(`${apiUrl}/api/voice-design/capability`);
+        if (!resp.ok) return;
+        const result = await resp.json();
+        showVoiceDesignCapability(result.capability || null);
+    } catch (e) {
+        console.warn('加载声音定义能力失败:', e.message);
+    }
+}
+
+function showVoiceDesignCapability(cap) {
+    const box = document.getElementById('voiceDesignCapability');
+    if (!box) return;
+    if (!cap) { box.style.display = 'none'; return; }
+    const btn = document.getElementById('defineVoiceBtn');
+    const code = cap.last_error && cap.last_error.code;
+    const setBox = (color, bg, text, disable) => {
+        box.style.display = 'block';
+        box.style.color = color;
+        box.style.background = bg;
+        box.innerHTML = escapeHtml(text);
+        if (btn) btn.disabled = !!disable;
+    };
+    if (code === 'voice_quota_unavailable') {
+        // 欠费属可恢复状态：保留按钮以便充值后重试，仅提示
+        setBox('#a8071a', '#fff1f0', '云语音账户余额不足（欠费），声音定义暂不可用；请充值后重试。', false);
+        return;
+    }
+    if (code === 'voice_quota_exhausted') {
+        setBox('#ad6800', '#fffbe6', '音色配额或调用频率已达上限，请稍后重试。', false);
+        return;
+    }
+    if (code === 'voice_define_timeout') {
+        setBox('#ad6800', '#fffbe6', '音色部署超时，请稍后重试。', false);
+        return;
+    }
+    if (code === 'voice_define_unsupported' || !cap.supported) {
+        setBox('#a8071a', '#fff1f0',
+            (cap.last_error && cap.last_error.hint) || '当前音色模式不支持云声音定义。', true);
+        return;
+    }
+    if (cap.design && !cap.design.supported) {
+        setBox('#ad6800', '#fffbe6',
+            (cap.design.reason || '当前目标模型不支持声音设计') + '；仍可使用声音复刻（上传参考音频）。', false);
+        return;
+    }
+    const quota = cap.quota || {};
+    setBox('#237804', '#f6ffed',
+        `云声音定义可用（目标模型 ${cap.target_model}）；音色用量 ${quota.used ?? 0}/${quota.limit ?? 1000}。`, false);
+}
+
 // 情感配置
 function setupEmotionConfig() {
     // 初始化情感滑块值显示
@@ -1113,6 +1174,45 @@ function setupEmotionConfig() {
         }
     });
     
+    // GAP-09：预设情感下拉（只列 6 类预设；名称仍可自由输入，历史自定义名称继续可存）
+    const presetSelect = document.getElementById('emotionPresetSelect');
+    const presetMap = {};
+    async function loadEmotionPresets() {
+        if (!presetSelect || presetSelect.dataset.loaded === '1') return;
+        try {
+            const resp = await fetch(`${apiUrl}/api/emotion-presets`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            (data.presets || []).forEach(p => {
+                presetMap[p.id] = p;
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name;
+                presetSelect.appendChild(opt);
+            });
+            presetSelect.dataset.loaded = '1';
+        } catch (e) {
+            console.warn('加载情感预设失败:', e);
+        }
+    }
+    // 页面初始化时若尚未登录会 401；切到情感页时再懒加载一次（登录后补载）
+    window.loadEmotionPresets = loadEmotionPresets;
+    loadEmotionPresets();
+    if (presetSelect) {
+        presetSelect.addEventListener('change', function() {
+            const preset = presetMap[this.value];
+            if (!preset) return;
+            const params = preset.params || {};
+            emotionIds.forEach(id => {
+                if (params[id] == null) return;
+                document.getElementById(id).value = params[id];
+                document.getElementById(id + 'Value').textContent = params[id];
+            });
+            document.getElementById('emotionProfileName').value = preset.name;
+            document.getElementById('emotionDescription').value = preset.description || '';
+        });
+    }
+
     const saveEmotionBtn = document.getElementById('saveEmotionBtn');
     
     saveEmotionBtn.addEventListener('click', async function() {
@@ -1206,6 +1306,7 @@ function setupEmotionConfig() {
             // 重置表单
             document.getElementById('emotionProfileName').value = '';
             document.getElementById('emotionDescription').value = '';
+            if (presetSelect) presetSelect.value = '';
             document.getElementById('happiness').value = 0.5;
             document.getElementById('sadness').value = 0.1;
             document.getElementById('anger').value = 0.1;
@@ -1248,6 +1349,7 @@ function setupEmotionConfig() {
                 }
                 document.getElementById('emotionProfileName').value = '';
                 document.getElementById('emotionDescription').value = '';
+                if (presetSelect) presetSelect.value = '';
                 document.getElementById('emotionConfigResponse').innerHTML =
                     '<p style="color: green;">已恢复默认情感配置（服务端配置已清空）。</p>';
                 const saved = document.getElementById('savedEmotions');
@@ -1700,6 +1802,12 @@ function setupTts() {
 
                 const contentType = response.headers.get('content-type') || '';
                 if (contentType.includes('audio/wav')) {
+                    const note = response.headers.get('X-Voice-Notice');
+                    if (note && ttsResponse) {
+                        let txt = note;
+                        try { txt = decodeURIComponent(note); } catch (_) {}
+                        ttsResponse.innerHTML = `<p style="color: #b26a00;">语音提示：${escapeHtml(txt)}</p>`;
+                    }
                     const audioBlob = await response.blob();
                     const audioUrl = URL.createObjectURL(audioBlob);
                     audioUrls.push(audioUrl);
@@ -1789,6 +1897,7 @@ async function loadCharacterOptions() {
         fillSelect('charGender', characterOptions.genders);
         fillSelect('charAgeGroup', characterOptions.age_groups);
         fillSelect('charRelation', characterOptions.relations);
+        renderDialectSelect(characterOptions.dialects || [], characterOptions.default_dialect);
         renderTagGroup('charVoiceTags', characterOptions.voice_tags, 'voice');
         renderTagGroup('charPersonalityTags', characterOptions.personality_tags, 'personality');
 
@@ -1802,6 +1911,37 @@ async function loadCharacterOptions() {
 function fillSelect(selectId, dict) {
     const sel = document.getElementById(selectId);
     sel.innerHTML = Object.entries(dict).map(([k, v]) => `<option value="${escapeHtml(k)}">${escapeHtml(v)}</option>`).join('');
+}
+
+// 方言下拉（GAP-05 第 3 批）：未就绪项在文案上明确标注“暂不可用”，选中后给出回退提示
+function renderDialectSelect(dialects, defaultDialect) {
+    const sel = document.getElementById('charDialect');
+    if (!sel) return;
+    const defaultLabel = (defaultDialect && defaultDialect.label) || '普通话';
+    const defaultId = (defaultDialect && defaultDialect.id) || 'zh-CN';
+    const opts = [`<option value="">${escapeHtml(defaultLabel)}（默认）</option>`];
+    dialects.forEach((d) => {
+        const suffix = d.enabled ? '' : '（暂不可用）';
+        opts.push(`<option value="${escapeHtml(d.id)}" data-notice="${escapeHtml(d.notice || '')}" data-enabled="${d.enabled ? '1' : '0'}">${escapeHtml(d.label + suffix)}</option>`);
+    });
+    sel.innerHTML = opts.join('');
+    sel.dataset.defaultDialect = defaultId;
+    sel.onchange = updateDialectHint;
+}
+
+function updateDialectHint() {
+    const sel = document.getElementById('charDialect');
+    const hint = document.getElementById('charDialectHint');
+    if (!sel || !hint) return;
+    const opt = sel.options[sel.selectedIndex];
+    const notice = opt ? (opt.dataset.notice || '') : '';
+    if (sel.value && notice) {
+        hint.textContent = notice;
+        hint.style.display = 'block';
+    } else {
+        hint.textContent = '';
+        hint.style.display = 'none';
+    }
 }
 
 function renderTagGroup(containerId, dict, groupKey) {
@@ -1869,7 +2009,7 @@ function renderCharacterList(containerId, characters) {
                 </div>
             </div>
             <div style="font-size:0.85rem; color:#666; margin-top:6px;">
-                ${characterOptions?.genders?.[vp.gender] || escapeHtml(vp.gender || '')} · ${characterOptions?.age_groups?.[vp.age_group] || escapeHtml(vp.age_group || '')} · 音色：${escapeHtml(tags) || '默认'}
+                ${characterOptions?.genders?.[vp.gender] || escapeHtml(vp.gender || '')} · ${characterOptions?.age_groups?.[vp.age_group] || escapeHtml(vp.age_group || '')} · 音色：${escapeHtml(tags) || '默认'}${vp.dialect ? ' · 方言：' + escapeHtml((characterOptions?.dialects || []).find(d => d.id === vp.dialect)?.label || vp.dialect) : ''}
             </div>
             <div style="font-size:0.85rem; color:#666; margin-top:2px;">
                 ${pp.identity ? '身份：' + escapeHtml(pp.identity) + ' · ' : ''}关系：${characterOptions?.relations?.[pp.relation] || escapeHtml(pp.relation || '朋友')}${personality ? ' · ' + escapeHtml(personality) : ''}
@@ -1984,6 +2124,11 @@ async function editCharacter(characterId) {
         document.getElementById('charName').value = ch.name || '';
         document.getElementById('charGender').value = vp.gender || 'female';
         document.getElementById('charAgeGroup').value = vp.age_group || 'youth';
+        const dialectSel = document.getElementById('charDialect');
+        if (dialectSel) {
+            dialectSel.value = vp.dialect || '';
+            updateDialectHint();
+        }
         document.getElementById('charRelation').value = pp.relation || 'friend';
         document.getElementById('charIdentity').value = pp.identity || '';
         document.getElementById('charStyle').value = pp.speaking_style || '';
@@ -2016,6 +2161,9 @@ function resetCharacterEdit() {
         if (el) el.value = '';
     });
     document.querySelectorAll('#charVoiceTags input:checked, #charPersonalityTags input:checked').forEach(cb => cb.checked = false);
+    const dialectSel = document.getElementById('charDialect');
+    if (dialectSel) dialectSel.value = '';
+    updateDialectHint();
     const btn = document.getElementById('createCharacterBtn');
     if (btn) { btn.disabled = false; btn.textContent = '创建角色'; }
     const cancelBtn = document.getElementById('cancelCharacterEditBtn');
@@ -2038,7 +2186,8 @@ async function createCharacter() {
             gender: document.getElementById('charGender').value,
             age_group: document.getElementById('charAgeGroup').value,
             voice_tags: getSelectedTags('voice'),
-            speed: 1.0
+            speed: 1.0,
+            dialect: (document.getElementById('charDialect')?.value || null)
         },
         persona_profile: {
             identity: document.getElementById('charIdentity').value.trim(),

@@ -1,8 +1,8 @@
 {
   "summary": {
     "total": 165,
-    "passed": 165,
-    "failed": 0,
+    "passed": 164,
+    "failed": 1,
     "blocked": 0
   },
   "results": [
@@ -198,30 +198,30 @@
     {
       "id": "A29",
       "area": "API-定义",
-      "case": "合法 wav：cloud 模式 501 明确不支持，local 模式通过校验",
-      "status": "PASS",
-      "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\",\"mode\":\"cloud\"}"
+      "case": "合法 wav + 描述 → 通过校验",
+      "status": "FAIL",
+      "detail": "校验通过并进入模型处理（超时属预期）"
     },
     {
       "id": "A29b",
       "area": "API-定义",
       "case": "pitch 负数 → 服务不崩溃/明确不支持",
       "status": "PASS",
-      "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\","
+      "detail": "status=402 {\"error\":\"云语音账户欠费，无法创建音色\",\"code\":\"voice_quota_unavailable\",\""
     },
     {
       "id": "A29c",
       "area": "API-定义",
       "case": "speed=0 → 服务不崩溃/明确不支持",
       "status": "PASS",
-      "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\","
+      "detail": "status=402 {\"error\":\"云语音账户欠费，无法创建音色\",\"code\":\"voice_quota_unavailable\",\""
     },
     {
       "id": "A29d",
       "area": "API-定义",
       "case": "volume 非数字 → 服务不崩溃/明确不支持",
       "status": "PASS",
-      "detail": "status=501 {\"error\":\"当前音色模式不支持自定义音色\",\"code\":\"voice_define_unsupported\","
+      "detail": "status=429 {\"error\":\"云音色创建请求超过限流阈值\",\"code\":\"voice_quota_exhausted\",\"hin"
     },
     {
       "id": "A31",
@@ -296,9 +296,9 @@
     {
       "id": "A41",
       "area": "API-角色",
-      "case": "speed=5 → clamp 1.3",
+      "case": "speed=5 → 422 拒绝，不创建角色",
       "status": "PASS",
-      "detail": "speed=1.3"
+      "detail": "status=422 {\"detail\":[{\"type\":\"less_than_equal\",\"loc\":[\"body\",\"voice_pr"
     },
     {
       "id": "A42",
@@ -331,9 +331,9 @@
     {
       "id": "A46",
       "area": "API-角色",
-      "case": "speed=0 → clamp 0.7",
+      "case": "speed=0 → 422 拒绝（低于 0.5 下界）",
       "status": "PASS",
-      "detail": "speed=0.7"
+      "detail": "status=422 {\"detail\":[{\"type\":\"greater_than_equal\",\"loc\":[\"body\",\"voice"
     },
     {
       "id": "A47",
@@ -786,9 +786,9 @@
     {
       "id": "B35",
       "area": "UI-定义",
-      "case": "接口 500 → 红色错误提示",
+      "case": "接口 500 → 红色错误提示（含 HTTP 状态码）",
       "status": "PASS",
-      "detail": "resp=定义语音时出错: HTTP 500"
+      "detail": "resp=语音定义失败：HTTP 500"
     },
     {
       "id": "B36",
@@ -1005,7 +1005,7 @@
       "area": "UI-数据",
       "case": "名称 500 字（超长）不崩溃",
       "status": "PASS",
-      "detail": "resp_len=92"
+      "detail": "resp_len=37"
     },
     {
       "id": "B67",
@@ -1096,14 +1096,14 @@
       "area": "UI-性能",
       "case": "120 条历史消息渲染 < 1000ms",
       "status": "PASS",
-      "detail": "res={'ms': 39, 'nodes': 120}"
+      "detail": "res={'ms': 10, 'nodes': 120}"
     },
     {
       "id": "B84",
       "area": "UI-性能",
       "case": "150 个角色列表渲染 < 2000ms",
       "status": "PASS",
-      "detail": "res={'ms': 34, 'preset': 75, 'custom': 75}"
+      "detail": "res={'ms': 11, 'preset': 75, 'custom': 75}"
     },
     {
       "id": "B85",
@@ -1117,7 +1117,7 @@
       "area": "UI-性能",
       "case": "首屏 load 基线 < 3000ms（本地静态）",
       "status": "PASS",
-      "detail": "load=484ms"
+      "detail": "load=175ms"
     },
     {
       "id": "B80",
