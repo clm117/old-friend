@@ -47,6 +47,18 @@ debug*.wav
 # --- 归档目录（清理出的历史文件，含大体积 tar，不入库）---
 archive/
 
+# --- 测试运行时产物与报告（每次运行都会变；含测试账号派生值，不入库）---
+test_report.json
+ui_test_deep_report.json
+ui_test_report.json
+ui_test_deep.log
+tests/matrix/report.json
+tests/matrix/summary.md
+tests/matrix/runtime/
+tests/e2e_real/report.json
+tests/e2e_real/summary.md
+tests/e2e_real/runtime/
+
 # --- 基础设施中的二进制（Windows nginx / cloudflared / cpolar 等）---
 infrastructure/nginx/nginx-1.26.3/
 infrastructure/cloudflared/*.exe
