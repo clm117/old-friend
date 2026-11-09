@@ -11,7 +11,9 @@ import json
 import traceback
 from playwright.sync_api import sync_playwright, expect
 
-CHROME_PATH = r"C:\Users\clm117\AppData\Local\google\Chrome\Application\chrome.exe"
+CHROME_PATH = os.environ.get("YUBAN_CHROME") or r"C:\Users\clm117\AppData\Local\google\Chrome\Application\chrome.exe"
+# 系统 Chrome 不存在时（如 CI/Linux）回退到 Playwright 自带 Chromium
+CHROME_OPTS = {"executable_path": CHROME_PATH} if os.path.exists(CHROME_PATH) else {}
 # 前端地址可通过环境变量注入（默认 8899 静态服务；nginx 部署时传 8080）
 BASE_URL = os.environ.get("YUBAN_UI_BASE", "http://127.0.0.1:8899")
 TEST_USER = "testuser"
@@ -40,9 +42,9 @@ def safe(fn, name, *args, **kwargs):
 def run_tests():
     with sync_playwright() as p:
         browser = p.chromium.launch(
-            executable_path=CHROME_PATH,
             headless=True,
             args=["--no-sandbox", "--disable-gpu", "--window-size=1280,900"],
+            **CHROME_OPTS,
         )
         context = browser.new_context(
             viewport={"width": 1280, "height": 900},

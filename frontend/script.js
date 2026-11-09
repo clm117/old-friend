@@ -1876,11 +1876,16 @@ let currentCharacterId = null;
 
 function setupCharacters() {
     loadCharacterOptions();
+    loadVoicePresets();
     loadCharacters();
     loadSessionCharacter();
     document.getElementById('createCharacterBtn').addEventListener('click', createCharacter);
     const cancelBtn = document.getElementById('cancelCharacterEditBtn');
     if (cancelBtn) cancelBtn.addEventListener('click', resetCharacterEdit);
+    const presetSel = document.getElementById('charPresetVoice');
+    if (presetSel) presetSel.addEventListener('change', onPresetVoiceChange);
+    const applyBtn = document.getElementById('applyPresetVoiceBtn');
+    if (applyBtn) applyBtn.addEventListener('click', applyPresetVoice);
     setupSessionPanel();
 }
 
@@ -1941,6 +1946,78 @@ function updateDialectHint() {
     } else {
         hint.textContent = '';
         hint.style.display = 'none';
+    }
+}
+
+// ===== 预设音色（GAP-05：12 条目录 + 描述驱动）=====
+let voicePresets = [];
+
+async function loadVoicePresets() {
+    if (authRequired && !getToken()) return;
+    const sel = document.getElementById('charPresetVoice');
+    if (!sel) return;
+    try {
+        const resp = await fetch(`${apiUrl}/api/voice-presets`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const result = await resp.json();
+        voicePresets = result.presets || [];
+        const opts = ['<option value="">不使用预设音色</option>'];
+        voicePresets.forEach((p) => {
+            const suffix = p.ready ? '' : '（音色未就绪）';
+            opts.push(`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name + suffix)}</option>`);
+        });
+        sel.innerHTML = opts.join('');
+    } catch (e) {
+        console.warn('加载预设音色失败:', e.message);
+    }
+}
+
+async function onPresetVoiceChange() {
+    const sel = document.getElementById('charPresetVoice');
+    const hint = document.getElementById('charPresetVoiceHint');
+    const promptEl = document.getElementById('charPresetVoicePrompt');
+    if (!sel || !hint || !promptEl) return;
+    const presetId = sel.value;
+    if (!presetId) {
+        hint.style.display = 'none';
+        promptEl.style.display = 'none';
+        return;
+    }
+    try {
+        const resp = await fetch(`${apiUrl}/api/voice-presets/${encodeURIComponent(presetId)}/prompt`);
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+        const notice = data.notice || (data.ready ? '' : '音色未就绪，使用默认音色');
+        hint.textContent = notice;
+        hint.style.display = notice ? 'block' : 'none';
+        promptEl.textContent = data.voice_prompt ? `voice_prompt：${data.voice_prompt}` : '';
+        promptEl.style.display = data.voice_prompt ? 'block' : 'none';
+    } catch (e) {
+        hint.textContent = '查询预设音色失败：' + e.message;
+        hint.style.display = 'block';
+        promptEl.style.display = 'none';
+    }
+}
+
+async function applyPresetVoice() {
+    const sel = document.getElementById('charPresetVoice');
+    if (!sel || !sel.value) {
+        alert('请先选择预设音色');
+        return;
+    }
+    await ensureSession();
+    try {
+        const resp = await fetch(`${apiUrl}/api/sessions/${sessionId}/voice-preset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ preset_id: sel.value }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+        const extra = data.notice ? `（${data.notice}）` : '';
+        showCharacterStatus(`已为当前会话选择预设音色「${data.name}」${extra}。voice_prompt：${data.voice_prompt}`);
+    } catch (e) {
+        alert('应用预设音色失败：' + e.message);
     }
 }
 

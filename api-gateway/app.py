@@ -658,6 +658,30 @@ async def voice_catalog():
         return _upstream_error("voice/catalog", e)
 
 
+@app.get("/api/voice-presets")
+async def voice_presets():
+    """12 条预设音色目录透传"""
+    try:
+        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/voice-presets")
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("voice/presets", e)
+
+
+@app.get("/api/voice-presets/{preset_id}/prompt")
+async def voice_preset_prompt(preset_id: str):
+    """预设音色 voice_prompt 透传"""
+    if not _safe_id(preset_id):
+        return JSONResponse({"error": "preset_id 非法"}, status_code=400)
+    try:
+        resp = await _async_request(
+            "get", f"{AI_SERVICE_URL}/api/ai/voice-presets/{preset_id}/prompt"
+        )
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("voice/preset-prompt", e)
+
+
 @app.get("/api/characters")
 async def list_characters(request: Request):
     try:
@@ -867,6 +891,29 @@ async def bind_voice_style(session_id: str, request: Request):
         return _relay_json(resp)
     except Exception as e:
         return _upstream_error("sessions/bind-voice-style", e)
+
+
+@app.post("/api/sessions/{session_id}/voice-preset")
+async def bind_voice_preset(session_id: str, request: Request):
+    """为会话选择预设音色（未绑定真实 voice_id 时返回明确提示）"""
+    if not _safe_id(session_id):
+        return JSONResponse({"error": "session_id 非法"}, status_code=400)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "请求体必须是 JSON"}, status_code=400)
+    if not isinstance(body, dict) or not str(body.get("preset_id") or "").strip():
+        return JSONResponse({"error": "preset_id 不能为空"}, status_code=400)
+    try:
+        resp = await _async_request(
+            "post",
+            f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/voice-preset",
+            json={"preset_id": str(body["preset_id"]).strip()},
+            headers=_internal_headers(_user_of(request)),
+        )
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("sessions/bind-voice-preset", e)
 
 
 # ===== 鉴权接口（登录换取令牌）=====

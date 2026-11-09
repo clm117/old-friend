@@ -15,7 +15,7 @@
 """
 import copy
 
-CATALOG_VERSION = "1.1"
+CATALOG_VERSION = "1.2"
 
 GENDERS = {
     "female": "女",
@@ -84,7 +84,122 @@ _LOCALES = {
 _VOICE_TYPES = {
     "standard": {"label": "标准音色", "enabled": True},
     "dialect": {"label": "方言音色", "enabled": True},
+    "preset": {"label": "预设音色", "enabled": True},
 }
+
+# ===== 12 个常用预设音色 =====
+# 与 10 条标签并存：预设只新增可查询条目，不参与既有 20 条标签映射的拼装。
+# 当前无真实 voice_id：enabled=False、voice_id=None，选择后生成 voice_prompt 并明确提示回退默认音色。
+_PRESET_ENTRIES = [
+    {"id": "vp_guaiguai_xuedi", "name": "乖巧学弟", "gender": "male", "age_group": "teen",
+     "persona": "声音清亮偏软，带学生气与亲近感", "style_tags": ["sweet", "energetic"],
+     "style_words": [], "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_buji_shaonian", "name": "不羁少年", "gender": "male", "age_group": "teen",
+     "persona": "略带沙哑、随性不羁的少年感", "style_tags": ["husky", "lively"],
+     "style_words": [], "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_ligong_xueba", "name": "理工学霸", "gender": "male", "age_group": "young_adult",
+     "persona": "理性克制、吐字清晰，像讲题一样有条理", "style_tags": ["calm", "crisp"],
+     "style_words": [], "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_yangguang_xingnan", "name": "阳光型男", "gender": "male", "age_group": "young_adult",
+     "persona": "明亮有朝气，笑起来有感染力的青年男声", "style_tags": ["energetic", "magnetic"],
+     "style_words": [], "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_xiangsheng_pingshu", "name": "相声评书", "gender": "male", "age_group": "middle_aged",
+     "persona": "说书人的抑扬顿挫与节奏感，带舞台腔", "style_tags": ["lively", "husky"],
+     "style_words": ["theatrical", "storytelling", "rhythmic"],
+     "capabilities": {"emotion": False, "style": False, "dialect": False},
+     "capability_note": "相声评书的腔调依赖真实音色，默认音色无法完整表达"},
+    {"id": "vp_xinwen_nansheng", "name": "新闻男声", "gender": "male", "age_group": "middle_aged",
+     "persona": "播报腔、字正腔圆，稳重可信", "style_tags": ["crisp", "calm"],
+     "style_words": ["broadcast", "authoritative"],
+     "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_xinwen_nvsheng", "name": "新闻女声", "gender": "female", "age_group": "middle_aged",
+     "persona": "播报腔、清晰利落，专业稳重", "style_tags": ["crisp", "calm"],
+     "style_words": ["broadcast", "authoritative"],
+     "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_zhixing_shunv", "name": "知性熟女", "gender": "female", "age_group": "middle_aged",
+     "persona": "成熟知性、温和从容，带阅历感", "style_tags": ["mature", "gentle"],
+     "style_words": [], "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_wenwan_mishu", "name": "温婉秘书", "gender": "female", "age_group": "young_adult",
+     "persona": "轻柔克制、礼貌周到，像贴身助理", "style_tags": ["gentle", "sweet"],
+     "style_words": [], "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_zhixing_jingying", "name": "智性精英", "gender": "female", "age_group": "young_adult",
+     "persona": "冷静自信、逻辑感强，带一点距离感", "style_tags": ["calm", "magnetic"],
+     "style_words": [], "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_langxian_shaonv", "name": "浪险少女", "gender": "female", "age_group": "teen",
+     "persona": "俏皮张扬、语速轻快，带点小嚣张", "style_tags": ["lively", "crisp"],
+     "style_words": [], "capabilities": {"emotion": False, "style": True, "dialect": False}},
+    {"id": "vp_guiqi_qianjin", "name": "贵气千金", "gender": "female", "age_group": "young_adult",
+     "persona": "优雅从容、尾音柔和，带矜贵气质", "style_tags": ["mature", "magnetic"],
+     "style_words": ["elegant", "refined"],
+     "capabilities": {"emotion": False, "style": True, "dialect": False}},
+]
+
+# 真实 voice_id 绑定位：当前全部为空，配额到位后仅需填 enabled=True + voice_id
+for _p in _PRESET_ENTRIES:
+    _p.update({
+        "locale": "zh-CN",
+        "voice_type": "preset",
+        "fallback": DEFAULT_TAGS[_p["gender"]],
+        "voice_id": None,
+        "enabled": False,
+        "note": f"{_p['name']}音色未就绪，使用默认音色",
+    })
+
+VOICE_PRESETS = {p["id"]: p for p in _PRESET_ENTRIES}
+
+
+def preset_available(preset_id):
+    p = VOICE_PRESETS.get(preset_id)
+    return bool(p and p["enabled"] and p["voice_id"])
+
+
+def preset_options():
+    """id → 中文名（供选择器展示）"""
+    return {p["id"]: p["name"] for p in _PRESET_ENTRIES}
+
+
+def preset_list():
+    """12 条预设的对外视图列表（含就绪状态与提示）"""
+    return [preset_status(p["id"]) for p in _PRESET_ENTRIES]
+
+
+def preset_status(preset_id):
+    """单个预设的对外视图：含 fallback / capabilities / 就绪状态与提示"""
+    p = VOICE_PRESETS.get(preset_id)
+    if not p:
+        return None
+    ready = preset_available(preset_id)
+    status = {
+        "id": p["id"], "name": p["name"], "gender": p["gender"],
+        "age_group": p["age_group"], "persona": p["persona"],
+        "locale": p["locale"], "voice_type": p["voice_type"],
+        "fallback": p["fallback"], "voice_id": p["voice_id"],
+        "capabilities": dict(p["capabilities"]), "ready": ready,
+        "notice": None if ready else p["note"],
+    }
+    if p.get("capability_note"):
+        status["capability_note"] = p["capability_note"]
+    return status
+
+
+def preset_prompt(preset_id):
+    """预设 → 与既有 20 条标签同格式的英文 prompt（供 TTS 使用）"""
+    p = VOICE_PRESETS.get(preset_id)
+    if not p:
+        return None
+    is_female = p["gender"] == "female"
+    age_key = AGE_GROUPS.get(p["age_group"], ("", "young"))[1]
+    person = {
+        "teenage": ("teenage girl", "teenage boy"),
+        "young": ("young woman", "young man"),
+        "middle-aged": ("middle-aged woman", "middle-aged man"),
+        "elderly": ("elderly woman", "elderly man"),
+    }.get(age_key, ("young woman", "young man"))[0 if is_female else 1]
+    article = "An" if person.startswith(("elderly",)) else "A"
+    words = [VOICE_TAGS[t][1] for t in p["style_tags"] if t in VOICE_TAGS]
+    words.extend(p.get("style_words") or [])
+    tail = ", ".join(words) + " voice" if words else "natural voice"
+    return f"{article} {person}, {tail}"
 
 _DISPLAY_TAGS = [dict(t, locale="zh-CN", voice_type="standard", enabled=True) for t in _TAG_ENTRIES]
 
@@ -152,6 +267,8 @@ def get_catalog():
         "voice_types": _VOICE_TYPES,
         "tags": _DISPLAY_TAGS,
         "dialects": _DIALECT_ENTRIES,
+        "voice_presets": [preset_status(p["id"]) for p in _PRESET_ENTRIES],
+        "preset_count": len(_PRESET_ENTRIES),
         "default_dialect": DEFAULT_DIALECT,
         "dialect_notice": {d["id"]: dialect_notice(d["id"]) for d in _DIALECT_ENTRIES},
         "defaults": DEFAULT_TAGS,
@@ -159,6 +276,8 @@ def get_catalog():
         "capabilities": {
             "dialect": True,          # 方言类型/结构位已接入
             "dialect_ready": any(dialect_available(i) for i in DIALECTS),  # 真实音色是否就绪
+            "voice_presets": True,    # 12 条预设目录已接入
+            "preset_voice_ready": any(preset_available(i) for i in VOICE_PRESETS),
             "child_voice": False,
             "emotion_voice": False,
         },

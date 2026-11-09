@@ -1,8 +1,8 @@
 # 语伴矩阵化功能测试报告
 
-> 结论：计划 **452** 条，实际执行 **398** 条；T1 通过 **384**、失败 **0**、能力缺失 **5**；T2 阻塞 **54** 条（LLM 不可用），T3 阻塞 **8** 条。能力缺失集中在：GAP-04、GAP-05、GAP-06、GAP-07、GAP-11。
+> 结论：计划 **473** 条，实际执行 **411** 条；T1 通过 **405**、失败 **0**、能力缺失 **5**；T2 阻塞 **54** 条（LLM 不可用），T3 阻塞 **8** 条。能力缺失集中在：GAP-04、GAP-05、GAP-06、GAP-07、GAP-11。
 
-- 时间：2026-11-06T19:22:39 → 2026-11-06T19:23:47，耗时 68.3s（预算 90 分钟内）
+- 时间：2026-11-09T10:03:57 → 2026-11-09T10:05:03，耗时 66.4s（预算 90 分钟内）
 - 环境：网关 :8005 / AI :8084 / TTS=cloud；限流保持产品默认 5/120/20，未放宽
 - 测试数据目录：`D:\ProgramFile\语伴\tests\matrix\runtime\data`（独立于产品数据）
 
@@ -10,10 +10,10 @@
 
 | 层 | 计划 | 执行 | 通过 | 失败 | 能力缺失 | 阻塞 | 跳过 | 耗时(s) |
 |---|---|---|---|---|---|---|---|---|
-| T1 | 390 | 390 | 384 | 0 | 5 | 1 | 0 | 37.05 |
+| T1 | 411 | 411 | 405 | 0 | 5 | 1 | 0 | 47.31 |
 | T2 | 54 | 0 | 0 | 0 | 0 | 54 | 0 | 0.0 |
-| T3 | 8 | 8 | 0 | 0 | 0 | 8 | 0 | 5.8 |
-| 合计 | 452 | 398 | 384 | 0 | 5 | 63 | 0 | 68.3 |
+| T3 | 8 | 0 | 0 | 0 | 0 | 8 | 0 | 0.0 |
+| 合计 | 473 | 411 | 405 | 0 | 5 | 63 | 0 | 66.4 |
 
 说明：BLOCKED / CAPABILITY_GAP 均不计入 PASS。T2 未真实执行时 executed=0。
 
@@ -95,29 +95,28 @@
 | GAP-04 | age_group 无儿童/幼儿年龄段（产品决策不做，出列） | 不排期：合规与年龄段扩展取消 | T1-POP-143, T1-POP-144 |
 | GAP-05 | 音色谱无方言音色（第 3 批完成方言结构位；真实音色待配额） | voice_catalog 接入 dialect（粤语/四川话/东北话）；真实 voice_id 待充值后填入，未就绪回退普通话+提示 | T1-VOX-165 |
 | GAP-06 | 无声音克隆端点（P3 仅需求验证，不排实施） | 不排实施；如需再做需 GPU + 声纹合规评审 | T1-VOX-166 |
-| GAP-07 | cloud 声音定义路径已接入（第 3 批）；账号欠费致真实创建 BLOCKED | voice-enrollment 复刻/设计 + 轮询 + target_model 校验 + 配额/限流保护；充值后执行真实成功用例 | T3-PRB-449 |
-| GAP-11 | 会话角色解绑（未排期，不属于第 1 批） | 新增 DELETE /api/sessions/{sid}/character 或在绑定接口支持 character_id 为空 | T1-SES-254 |
+| GAP-07 | cloud 声音定义路径已接入（第 3 批）；账号欠费致真实创建 BLOCKED | voice-enrollment 复刻/设计 + 轮询 + target_model 校验 + 配额/限流保护；充值后执行真实成功用例 | T3-PRB-470 |
+| GAP-11 | 会话角色解绑（未排期，不属于第 1 批） | 新增 DELETE /api/sessions/{sid}/character 或在绑定接口支持 character_id 为空 | T1-SES-259 |
 
 ## 七、T2 / T3 阻塞与解锁条件
 
 ### T2 依赖 LLM：54 条全部 BLOCKED
 
-- DashScope 探测：HTTP 400，返回 `{"error":{"message":"Access denied, please make sure your account is in good standing. For details, see: https://help.aliyun.com/zh/model-studio/error-code#over`
-- 解锁：为 DashScope 账号充值（解除 Arrearage）或更换可用 LLM_API_KEY，然后重跑 run_matrix.py
+- 本轮未探测：本轮未启用外部资源门禁 T2（--layers 不含 T2）（未启用 T2 时不计为可用，也不计为失败）
 - 解锁后复跑：`.venv\Scripts\python.exe tests/matrix/run_matrix.py`（生成器无需重跑）
 
 ### T3 依赖 TTS/GPU：只探测不硬跑
 
 | 探测项 | 结论 | 证据摘要 |
 |---|---|---|
-| T3-PRB-445 本机 GPU 可用性 | BLOCKED | False 2.11.0+cpu 0 |
-| T3-PRB-446 本地 VoxCPM2 模型与 CUDA 依赖 | BLOCKED |  |
-| T3-PRB-447 云 TTS 合成（qwen3-tts-flash） | BLOCKED | 400 |
-| T3-PRB-448 ASR paraformer-realtime-v2 转写 | BLOCKED | Access denied, please make sure your account is in good standing. |
-| T3-PRB-449 声音定义 voice design（/api/voice/define） | BLOCKED | 402 |
-| T3-PRB-450 声音克隆端点 | BLOCKED | 404 |
-| T3-PRB-451 情感音色效果（情感参数驱动 TTS） | BLOCKED |  |
-| T3-PRB-452 语音回放/播放链路 | BLOCKED |  |
+| T3-PRB-466 本机 GPU 可用性 | BLOCKED |  |
+| T3-PRB-467 本地 VoxCPM2 模型与 CUDA 依赖 | BLOCKED |  |
+| T3-PRB-468 云 TTS 合成（qwen3-tts-flash） | BLOCKED |  |
+| T3-PRB-469 ASR paraformer-realtime-v2 转写 | BLOCKED |  |
+| T3-PRB-470 声音定义 voice design（/api/voice/define） | BLOCKED |  |
+| T3-PRB-471 声音克隆端点 | BLOCKED |  |
+| T3-PRB-472 情感音色效果（情感参数驱动 TTS） | BLOCKED |  |
+| T3-PRB-473 语音回放/播放链路 | BLOCKED |  |
 
 - 解锁条件：具备 CUDA GPU 且安装 VoxCPM2 模型（`TTS_PROVIDER=local`），或云侧开通 voice design / TTS 配额
 - 明确未使用「HTTP 200 + 错误文案」作为通过依据
@@ -133,7 +132,7 @@
 - T1：穷举 + 边界值。T1 全部为本地 HTTP/WS 调用，单例耗时 <200ms，可以穷举；角色×人群×情感交叉 6×4×5=120 也全部真跑
 - T2：贪心 pairwise + 分层补充 3 轮用例。真实对话每轮含 LLM(+TTS) 网络耗时，全量笛卡尔积 9×4×5=180 无法在 90 分钟内跑完；pairwise 保证任意两维取值组合至少出现一次，规模约 45 条；另取约 1/8 用例扩展为 3 轮验证上下文保持（计划 54 条）
 - T3：只探测不硬跑。本地无 GPU；CPU TTS RTF 35-88，单句需数分钟；云声音定义已接入但账号欠费（Arrearage），真实创建/合成 BLOCKED，硬跑会耗尽时间预算
-- 各阶段耗时：`{"service_start": 13.75, "login": 0.5, "run_T1": 37.05, "ai_restart": 4.59, "run_restart": 0.09, "block_T2": 0.0, "run_T3": 5.8}`
+- 各阶段耗时：`{"service_start": 7.14, "login": 0.5, "run_T1": 47.31, "ai_restart": 6.09, "run_restart": 0.52, "block_T2": 0.0, "block_T3": 0.0}`
 - 裁剪说明：T2 若解锁，按 pairwise 抽样只跑约 45 条（全量 180 条约需 3-4 小时）；T3 不硬跑原因是 CPU TTS RTF 35-88，单句需数分钟，超出 90 分钟预算
 
 ## 九、复跑与约束

@@ -44,6 +44,9 @@ ai-service/data/
 debug*.py
 debug*.wav
 
+# --- 归档目录（清理出的历史文件，含大体积 tar，不入库）---
+archive/
+
 # --- 基础设施中的二进制（Windows nginx / cloudflared / cpolar 等）---
 infrastructure/nginx/nginx-1.26.3/
 infrastructure/cloudflared/*.exe

@@ -279,8 +279,38 @@ async def get_character_options():
 
 @app.get("/api/ai/voice-catalog")
 async def get_voice_catalog():
-    """音色目录（GAP-05）：标签/方言结构位/默认回退，供前端与后续扩展使用"""
+    """音色目录（GAP-05）：标签/方言结构位/预设音色/默认回退，供前端与后续扩展使用"""
     return {"status": "ok", "catalog": voice_catalog.get_catalog()}
+
+
+@app.get("/api/ai/voice-presets")
+async def list_voice_presets():
+    """12 条预设音色目录（含就绪状态与未就绪提示）"""
+    presets = voice_catalog.preset_list()
+    return {
+        "status": "ok",
+        "presets": presets,
+        "count": len(presets),
+        "ready": any(voice_catalog.preset_available(p["id"]) for p in presets),
+    }
+
+
+@app.get("/api/ai/voice-presets/{preset_id}/prompt")
+async def get_voice_preset_prompt(preset_id: str):
+    """预设音色 → voice_prompt；未绑定真实 voice_id 时显式给出回退提示"""
+    status = voice_catalog.preset_status(preset_id)
+    if not status:
+        return JSONResponse({"error": "预设音色不存在"}, status_code=404)
+    return {
+        "status": "ok",
+        "preset_id": preset_id,
+        "name": status["name"],
+        "voice_prompt": voice_catalog.preset_prompt(preset_id),
+        "voice_id": status["voice_id"],
+        "ready": status["ready"],
+        "notice": status["notice"],
+        "capabilities": status["capabilities"],
+    }
 
 
 @app.get("/api/ai/voice-design/capability")
@@ -484,6 +514,8 @@ async def bind_character(session_id: str, request: Request, character_id: str = 
     # 历史会话无归属时由首次写入者接管，避免旧数据全部不可用
     memory_storage.claim_session(session_id, user)
     memory_storage.set_short_term_memory(session_id, "character_id", character_id)
+    # 绑定角色即接管音色，清除此前选择的预设音色
+    memory_storage.set_short_term_memory(session_id, "voice_preset_id", "")
     # 同步刷新会话语音描述（voice_profile → 英文 prompt），供 TTS 使用
     voice_prompt = character_engine.build_voice_prompt(character_id)
     memory_storage.set_short_term_memory(session_id, "voice_description", voice_prompt)
@@ -530,6 +562,8 @@ async def bind_voice_style(session_id: str, payload: VoiceStyleBind, request: Re
     memory_storage.claim_session(session_id, user)
     if payload.description:
         memory_storage.set_short_term_memory(session_id, "voice_description", payload.description)
+        # 显式语音风格优先于预设音色，清除预设选择
+        memory_storage.set_short_term_memory(session_id, "voice_preset_id", "")
     if payload.voice_definition:
         memory_storage.set_short_term_memory(session_id, "voice_definition", payload.voice_definition)
     if payload.voice_params:
@@ -537,15 +571,57 @@ async def bind_voice_style(session_id: str, payload: VoiceStyleBind, request: Re
     return {"status": "ok", "session_id": session_id, "voice_description": payload.description}
 
 
+class VoicePresetBind(BaseModel):
+    preset_id: str
+
+
+@app.post("/api/ai/sessions/{session_id}/voice-preset")
+async def bind_voice_preset(session_id: str, payload: VoicePresetBind, request: Request):
+    """为会话选择预设音色：写入 voice_prompt；真实 voice_id 未绑定时显式提示默认音色"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    status = voice_catalog.preset_status(payload.preset_id)
+    if not status:
+        return JSONResponse({"error": "预设音色不存在"}, status_code=404)
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
+    prompt = voice_catalog.preset_prompt(payload.preset_id)
+    memory_storage.claim_session(session_id, user)
+    memory_storage.set_short_term_memory(session_id, "voice_preset_id", payload.preset_id)
+    memory_storage.set_short_term_memory(session_id, "voice_description", prompt)
+    # 清除旧版直接绑定，避免与预设 prompt 冲突
+    memory_storage.set_short_term_memory(session_id, "voice_definition", "")
+    return {
+        "status": "ok",
+        "session_id": session_id,
+        "preset_id": payload.preset_id,
+        "name": status["name"],
+        "voice_prompt": prompt,
+        "voice_id": status["voice_id"],
+        "ready": status["ready"],
+        "notice": status["notice"],
+        "capabilities": status["capabilities"],
+        "capability_note": status.get("capability_note"),
+    }
+
+
 def _resolve_session_style(session_id: str, explicit_description: str = None):
     """
     解析 TTS 语音风格，优先级：
     1. 本次请求显式传入的 description
-    2. 会话绑定角色的 voice_profile（英文 prompt）
-    3. 会话中直接保存的 voice_description（旧版语音定义）
+    2. 会话选择的预设音色 voice_prompt（GAP-05）
+    3. 会话绑定角色的 voice_profile（英文 prompt）
+    4. 会话中直接保存的 voice_description（旧版语音定义）
     """
     if explicit_description:
         return explicit_description
+    preset_id = memory_storage.get_short_term_memory(session_id, "voice_preset_id")
+    if preset_id:
+        prompt = voice_catalog.preset_prompt(preset_id)
+        if prompt:
+            return prompt
     character_id = memory_storage.get_short_term_memory(session_id, "character_id")
     if character_id:
         voice_prompt = character_engine.build_voice_prompt(character_id)
@@ -570,11 +646,20 @@ def _resolve_session_speed(session_id: str, character_id: str = None) -> float:
 def _resolve_session_voice(session_id: str, character_id: str = None):
     """
     解析云 voice_id，返回 (voice_id, notice)：
+    0. 会话选择的预设音色（GAP-05：已绑定则用真实 voice_id；未绑定回退默认音色 + 提示）
     1. 会话已定义音色（cloud_voice 映射，target_model 匹配且部署就绪）
     2. 角色方言音色（voice_catalog voice_ids；未就绪则回退默认音色 + 提示）
     notice 为 None 表示无需提示；不静默失败
     """
     notice = None
+    preset_id = memory_storage.get_short_term_memory(session_id, "voice_preset_id")
+    if preset_id:
+        status = voice_catalog.preset_status(preset_id)
+        if status and status["ready"]:
+            return status["voice_id"], None
+        if status:
+            # 预设未绑定真实 voice_id：不沿用历史云音色，明确提示回退默认音色
+            return None, status["notice"]
     if cloud_voice is not None:
         voice_id, note = cloud_voice.get_voice(session_id)
         notice = note
@@ -626,6 +711,8 @@ async def _define_voice_cloud(request, session_id, description, audio, mode,
         memory_storage.set_short_term_memory(session_id, "voice_definition", definition)
         memory_storage.set_short_term_memory(session_id, "voice_description", description)
         memory_storage.set_short_term_memory(session_id, "cloud_voice_id", entry["voice_id"])
+        # 云声音定义优先，清除预设选择
+        memory_storage.set_short_term_memory(session_id, "voice_preset_id", "")
         return {
             "status": "ok",
             "mode": "cloud",

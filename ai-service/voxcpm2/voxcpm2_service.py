@@ -25,8 +25,17 @@ EMOTION_DESCRIPTIONS = {
     "surprise": "surprised and amazed",
 }
 
-# CPU 上必须关闭 torch.compile：预热阶段触发新版 torch SDPA 维度错误，且编译耗时过长
+# CPU 上必须关闭 torch.compile：编译耗时过长且收益有限
 _OPTIMIZE = False
+
+# 新版 torch 的 SDPA 要求 attn_mask 至少 4D：加载模型前做一次性形状兼容（见 voxcpm_compat.py）
+try:
+    import sys as _sys
+    _sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from voxcpm_compat import apply as _apply_voxcpm_compat
+    _apply_voxcpm_compat()
+except Exception as _compat_err:  # 兼容层不可用时不阻断服务启动
+    print(f"[启动] voxcpm 掩码兼容层未启用：{_compat_err}")
 
 
 class VoxCPM2Service:

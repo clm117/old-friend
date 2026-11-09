@@ -144,6 +144,14 @@ class Orchestrator:
                            "age_group": "middle_aged", "voice_tags": ["calm"], "speed": 1.0},
                            "persona_profile": {"identity": "重启测试", "relation": "mentor"}})
         ex.prepared["restart_char_id"] = ((safe_json(rst) or {}).get("character") or {}).get("id")
+        tomb = ex.req("POST", "/api/sessions", None, account="matrix_a", ip=ip,
+                      json={"title": "墓碑-重启前删除"})
+        tomb_sid = ((safe_json(tomb) or {}).get("session_id") or
+                    (safe_json(tomb) or {}).get("session"))
+        if not tomb_sid:
+            raise RuntimeError(f"墓碑会话创建失败: {snippet(tomb.text, 160)}")
+        ex.req("DELETE", f"/api/sessions/{tomb_sid}", None, account="matrix_a", ip=ip)
+        ex.prepared["tombstone_sid"] = tomb_sid
 
     def cleanup(self):
         ex = self.ex
@@ -203,30 +211,47 @@ class Orchestrator:
         t1 = [c for c in cases if c["layer"] == "T1"]
         t2 = [c for c in cases if c["layer"] == "T2"]
         t3 = [c for c in cases if c["layer"] == "T3"]
+        layers = set(getattr(self.args, "layers", ["T1", "T2", "T3"]))
 
         self.start_all()
         self.login_all()
-        self.probe = probe_llm()
-        self.prepare()
 
-        main_t1 = [c for c in t1 if c["kind"] not in ("restart_character", "restart_emotion",
-                                                     "restart_custom_character")]
-        self.run_layer(main_t1, "T1")
-
-        rst = [c for c in t1 if c["kind"] in ("restart_character", "restart_emotion",
-                                              "restart_custom_character")]
-        if self.args.no_restart:
-            for c in rst:
-                r = self.run_case(c, "T1")
-            self.phase_times["run_restart"] = 0.0
+        if "T2" in layers:
+            self.probe = probe_llm()
         else:
-            self.restart_ai()
-            t0 = time.time()
-            for c in rst:
-                self.run_case(c, "T1")
-            self.phase_times["run_restart"] = round(time.time() - t0, 2)
+            # CI 默认不访问外部网络：显式记录未启用，绝不当作可用
+            self.probe = {"name": "DashScope LLM(qwen)", "available": False,
+                          "skipped": True,
+                          "reason": "本轮未启用外部资源门禁 T2（--layers 不含 T2）"}
 
-        if self.probe.get("available"):
+        if "T1" in layers:
+            self.prepare()
+            main_t1 = [c for c in t1 if c["kind"] not in ("restart_character", "restart_emotion",
+                                                         "restart_custom_character",
+                                                         "restart_tombstone")]
+            self.run_layer(main_t1, "T1")
+
+            rst = [c for c in t1 if c["kind"] in ("restart_character", "restart_emotion",
+                                                  "restart_custom_character", "restart_tombstone")]
+            if self.args.no_restart:
+                for c in rst:
+                    self.run_case(c, "T1")
+                self.phase_times["run_restart"] = 0.0
+            else:
+                self.restart_ai()
+                t0 = time.time()
+                for c in rst:
+                    self.run_case(c, "T1")
+                self.phase_times["run_restart"] = round(time.time() - t0, 2)
+        else:
+            self.block_layer(t1, "T1", "本轮未启用 T1 层（--layers 指定）",
+                             "去掉 --layers 限制后复跑")
+
+        if "T2" not in layers:
+            self.block_layer(t2, "T2",
+                             "未启用外部资源门禁 T2（依赖 DashScope LLM）：--layers 不含 T2",
+                             "配置可用 LLM_API_KEY 并启用外部资源门禁后复跑")
+        elif self.probe.get("available"):
             self.run_layer(t2, "T2")
         else:
             reason = (f"DashScope LLM 探测失败：HTTP {self.probe.get('http_status')} "
@@ -234,7 +259,12 @@ class Orchestrator:
             self.block_layer(t2, "T2", reason,
                              self.probe.get("unlock", "提供可用 LLM_API_KEY 后重跑"))
 
-        self.run_layer(t3, "T3")
+        if "T3" not in layers:
+            self.block_layer(t3, "T3",
+                             "未启用外部资源门禁 T3（依赖 GPU/CUDA 与云 TTS 配额）：--layers 不含 T3",
+                             "具备 GPU/云配额并启用外部资源门禁后复跑")
+        else:
+            self.run_layer(t3, "T3")
         self.cleanup()
 
     # ---- 统计 ----
@@ -555,8 +585,11 @@ def render_summary(rep):
     lines.append("")
     lines.append(f"### T2 依赖 LLM：{t2['blocked']} 条全部 BLOCKED")
     lines.append("")
-    lines.append(f"- DashScope 探测：HTTP {llm.get('http_status')}，返回 `{snippet(llm.get('body') or llm.get('error') or '', 160)}`")
-    lines.append(f"- 解锁：{llm.get('unlock', '')}")
+    if llm.get("skipped"):
+        lines.append(f"- 本轮未探测：{llm.get('reason', '')}（未启用 T2 时不计为可用，也不计为失败）")
+    else:
+        lines.append(f"- DashScope 探测：HTTP {llm.get('http_status')}，返回 `{snippet(llm.get('body') or llm.get('error') or '', 160)}`")
+        lines.append(f"- 解锁：{llm.get('unlock', '')}")
     lines.append("- 解锁后复跑：`.venv\\Scripts\\python.exe tests/matrix/run_matrix.py`（生成器无需重跑）")
     lines.append("")
     lines.append("### T3 依赖 TTS/GPU：只探测不硬跑")
@@ -613,7 +646,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--skip-clean", action="store_true")
     ap.add_argument("--no-restart", action="store_true")
+    ap.add_argument("--layers", default="T1,T2,T3",
+                    help="要执行的层，逗号分隔（默认全跑）。未列出的层记为 BLOCKED 并写明原因，"
+                         "供 CI 区分无外部资源门禁与外部资源门禁")
+    ap.add_argument("--fail-on-fail", action="store_true",
+                    help="存在 FAIL 用例时以退出码 1 结束（CI 合并/发布门禁用）")
     args = ap.parse_args()
+    args.layers = [x.strip().upper() for x in args.layers.split(",") if x.strip()]
 
     if port_in_use(AI_PORT) or port_in_use(GW_PORT):
         print(f"端口已被占用（AI {AI_PORT} / GW {GW_PORT}），请先释放后再跑", file=sys.stderr)
@@ -637,6 +676,10 @@ def main():
                   f"失败 {s['failed']} 能力缺失 {s['capability_gap']} 阻塞 {s['blocked']}", flush=True)
         print(f"报告：{REPORT_FILE}")
         print(f"汇总：{SUMMARY_FILE}")
+        failed = rep["coverage"]["totals"]["failed"]
+        if args.fail_on_fail and failed:
+            print(f"门禁判定：失败 {failed} 条，退出码 1", file=sys.stderr)
+            return 1
         return 0
     finally:
         orch.services.stop_all()

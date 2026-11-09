@@ -1,8 +1,8 @@
 {
   "summary": {
-    "total": 165,
-    "passed": 164,
-    "failed": 1,
+    "total": 167,
+    "passed": 167,
+    "failed": 0,
     "blocked": 0
   },
   "results": [
@@ -198,9 +198,9 @@
     {
       "id": "A29",
       "area": "API-定义",
-      "case": "合法 wav + 描述 → 通过校验",
-      "status": "FAIL",
-      "detail": "校验通过并进入模型处理（超时属预期）"
+      "case": "合法 wav：云模式返回明确失败码（欠费 402 / 不支持 501 等），本地模式通过校验",
+      "status": "PASS",
+      "detail": "status=402 {\"error\":\"云语音账户欠费，无法创建音色\",\"code\":\"voice_quota_unavailable\",\"hint\":\"云语音账户余额不足（欠费）"
     },
     {
       "id": "A29b",
@@ -900,7 +900,7 @@
       "area": "UI-角色",
       "case": "绑定预设角色 → 状态条曾展示「已选择角色」（探针锁存）",
       "status": "PASS",
-      "detail": "seen=True status=当前使用角色：「温柔学姐」"
+      "detail": "seen=True status=已选择角色「温柔学姐」，对话和合成将使用该角色的声音与人设。声音风格：A you"
     },
     {
       "id": "B52",
@@ -1096,14 +1096,14 @@
       "area": "UI-性能",
       "case": "120 条历史消息渲染 < 1000ms",
       "status": "PASS",
-      "detail": "res={'ms': 10, 'nodes': 120}"
+      "detail": "res={'ms': 15, 'nodes': 120}"
     },
     {
       "id": "B84",
       "area": "UI-性能",
       "case": "150 个角色列表渲染 < 2000ms",
       "status": "PASS",
-      "detail": "res={'ms': 11, 'preset': 75, 'custom': 75}"
+      "detail": "res={'ms': 13, 'preset': 75, 'custom': 75}"
     },
     {
       "id": "B85",
@@ -1117,7 +1117,7 @@
       "area": "UI-性能",
       "case": "首屏 load 基线 < 3000ms（本地静态）",
       "status": "PASS",
-      "detail": "load=175ms"
+      "detail": "load=190ms"
     },
     {
       "id": "B80",
@@ -1132,6 +1132,20 @@
       "case": "登录门禁 Tab 链：起点用户名 → 密码 → 提交键可达",
       "status": "PASS",
       "detail": "first=authUsername seq=['authPassword', 'authSubmitBtn', 'newSessionBtn']"
+    },
+    {
+      "id": "B86",
+      "area": "UI-会话",
+      "case": "服务端删除会话：刷新收敛清空 + 页内删除后发送 1008 提示并自动重建",
+      "status": "PASS",
+      "detail": "cleared=None rebuilt=s_pvXt_IHJ_SsijieCFH-UIENoTwriIGqG server=True notice=True sid_c=s_3wWHSF0kbxCxuRqSDF1OMx-H7rXEk08c"
+    },
+    {
+      "id": "B87",
+      "area": "UI-音色",
+      "case": "预设音色 12 条可列出/可选，选择后展示 prompt 与未就绪提示",
+      "status": "PASS",
+      "detail": "names=['乖巧学弟', '不羁少年', '理工学霸', '阳光型男', '相声评书', '新闻男声', '新闻女声', '知性熟女', '温婉秘书', '智性精英', '浪险少女', '贵气千金'] hint='相声评书音色未就绪，使用默认音色' prompt='voice_prompt：A middle-aged man, lively, husky, theatrical, storytelling, rhythmic voice' status='已为当前会话选择预设音色「相声评书」（相声评书音色未就绪，使用默认音色）。voice_prompt：A middle-aged man,"
     },
     {
       "id": "Z04",
@@ -1157,9 +1171,9 @@
     {
       "id": "Z03",
       "area": "套件自检",
-      "case": "UI 用例数量 = 85",
+      "case": "UI 用例数量 = 87",
       "status": "PASS",
-      "detail": "实际 85"
+      "detail": "实际 87"
     }
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T19:01:00",
+  "generated_at": "2026-11-09T08:33:04",
   "source": "dimensions.json",
   "accounts": [
     "matrix_a",
@@ -9,7 +9,7 @@
     "matrix_e"
   ],
   "layers": {
-    "T1": 390,
+    "T1": 411,
     "T2": 54,
     "T3": 8
   },
@@ -4320,7 +4320,101 @@
       "defect": null
     },
     {
-      "id": "T1-EMO-180",
+      "id": "T1-VOX-180",
+      "layer": "T1",
+      "kind": "voice_presets_catalog",
+      "family": "VOX",
+      "title": "12 条预设音色目录（字段/就绪状态/基线不变）",
+      "dims": {
+        "voice": "presets_catalog"
+      },
+      "params": {
+        "url": "gw:/api/voice-presets",
+        "sid": "mx_t1_vox_180",
+        "account": "matrix_a",
+        "ip": "198.18.1.181"
+      },
+      "expect": "12 条名称与顺序一致；字段齐全；locale=zh-CN/voice_type=preset/ready=false/notice 明确；既有 10 标签与默认回退不变",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-VOX-181",
+      "layer": "T1",
+      "kind": "voice_preset_prompts",
+      "family": "VOX",
+      "title": "12 条预设均可按 id 生成含语感的 voice_prompt",
+      "dims": {
+        "voice": "preset_prompts"
+      },
+      "params": {
+        "url": "gw:/api/voice-presets/{id}/prompt",
+        "sid": "mx_t1_vox_181",
+        "account": "matrix_b",
+        "ip": "198.18.1.182"
+      },
+      "expect": "每条 prompt 非空且含风格词；相声评书 capabilities.style=false 且有 capability_note",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-VOX-182",
+      "layer": "T1",
+      "kind": "voice_preset_unknown",
+      "family": "VOX",
+      "title": "未知预设 id → 404",
+      "dims": {
+        "voice": "preset_unknown"
+      },
+      "params": {
+        "preset_id": "vp_not_exist",
+        "sid": "mx_t1_vox_182",
+        "account": "matrix_c",
+        "ip": "198.18.1.183"
+      },
+      "expect": "取 prompt 与绑定均返回 404，不静默回退",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-VOX-183",
+      "layer": "T1",
+      "kind": "voice_preset_bind",
+      "family": "VOX",
+      "title": "预设音色绑定会话：未绑定真实音色时明确提示",
+      "dims": {
+        "voice": "preset_bind"
+      },
+      "params": {
+        "sid": null,
+        "preset_id": "vp_xiangsheng_pingshu",
+        "account": "matrix_d",
+        "ip": "198.18.1.184"
+      },
+      "expect": "200 + voice_prompt 非空 + voice_id=null + ready=false + notice 含“未就绪”+ 落盘一致",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-VOX-184",
+      "layer": "T1",
+      "kind": "voice_preset_forbidden",
+      "family": "VOX",
+      "title": "他人会话绑定预设 → 403",
+      "dims": {
+        "voice": "preset_forbidden"
+      },
+      "params": {
+        "sid": null,
+        "account": "matrix_e",
+        "ip": "198.18.1.185"
+      },
+      "expect": "跨账号绑定预设被拒绝，不泄露/不写入他人会话",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-EMO-185",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4344,16 +4438,16 @@
         },
         "kind": "boundary",
         "emotion_name": "平静--1.0",
-        "sid": "mx_t1_emo_180",
+        "sid": "mx_t1_emo_185",
         "account": "matrix_a",
-        "ip": "198.18.1.181"
+        "ip": "198.18.1.186"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-181",
+      "id": "T1-EMO-186",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4377,16 +4471,16 @@
         },
         "kind": "boundary",
         "emotion_name": "平静-0.0",
-        "sid": "mx_t1_emo_181",
+        "sid": "mx_t1_emo_186",
         "account": "matrix_b",
-        "ip": "198.18.1.182"
+        "ip": "198.18.1.187"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-182",
+      "id": "T1-EMO-187",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4410,16 +4504,16 @@
         },
         "kind": "normal",
         "emotion_name": "平静-0.5",
-        "sid": "mx_t1_emo_182",
+        "sid": "mx_t1_emo_187",
         "account": "matrix_c",
-        "ip": "198.18.1.183"
+        "ip": "198.18.1.188"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-183",
+      "id": "T1-EMO-188",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4443,16 +4537,16 @@
         },
         "kind": "boundary",
         "emotion_name": "平静-1.0",
-        "sid": "mx_t1_emo_183",
+        "sid": "mx_t1_emo_188",
         "account": "matrix_d",
-        "ip": "198.18.1.184"
+        "ip": "198.18.1.189"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-184",
+      "id": "T1-EMO-189",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4476,16 +4570,16 @@
         },
         "kind": "boundary",
         "emotion_name": "平静-2.0",
-        "sid": "mx_t1_emo_184",
+        "sid": "mx_t1_emo_189",
         "account": "matrix_e",
-        "ip": "198.18.1.185"
+        "ip": "198.18.1.190"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-185",
+      "id": "T1-EMO-190",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4509,16 +4603,16 @@
         },
         "kind": "illegal",
         "emotion_name": "平静-abc",
-        "sid": "mx_t1_emo_185",
+        "sid": "mx_t1_emo_190",
         "account": "matrix_a",
-        "ip": "198.18.1.186"
+        "ip": "198.18.1.191"
       },
       "expect": "HTTP 422（非法数值）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-186",
+      "id": "T1-EMO-191",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4542,16 +4636,16 @@
         },
         "kind": "boundary",
         "emotion_name": "开心--1.0",
-        "sid": "mx_t1_emo_186",
+        "sid": "mx_t1_emo_191",
         "account": "matrix_b",
-        "ip": "198.18.1.187"
+        "ip": "198.18.1.192"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-187",
+      "id": "T1-EMO-192",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4575,16 +4669,16 @@
         },
         "kind": "boundary",
         "emotion_name": "开心-0.0",
-        "sid": "mx_t1_emo_187",
+        "sid": "mx_t1_emo_192",
         "account": "matrix_c",
-        "ip": "198.18.1.188"
+        "ip": "198.18.1.193"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-188",
+      "id": "T1-EMO-193",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4608,16 +4702,16 @@
         },
         "kind": "normal",
         "emotion_name": "开心-0.5",
-        "sid": "mx_t1_emo_188",
+        "sid": "mx_t1_emo_193",
         "account": "matrix_d",
-        "ip": "198.18.1.189"
+        "ip": "198.18.1.194"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-189",
+      "id": "T1-EMO-194",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4641,16 +4735,16 @@
         },
         "kind": "boundary",
         "emotion_name": "开心-1.0",
-        "sid": "mx_t1_emo_189",
+        "sid": "mx_t1_emo_194",
         "account": "matrix_e",
-        "ip": "198.18.1.190"
+        "ip": "198.18.1.195"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-190",
+      "id": "T1-EMO-195",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4674,16 +4768,16 @@
         },
         "kind": "boundary",
         "emotion_name": "开心-2.0",
-        "sid": "mx_t1_emo_190",
+        "sid": "mx_t1_emo_195",
         "account": "matrix_a",
-        "ip": "198.18.1.191"
+        "ip": "198.18.1.196"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-191",
+      "id": "T1-EMO-196",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4707,16 +4801,16 @@
         },
         "kind": "illegal",
         "emotion_name": "开心-abc",
-        "sid": "mx_t1_emo_191",
+        "sid": "mx_t1_emo_196",
         "account": "matrix_b",
-        "ip": "198.18.1.192"
+        "ip": "198.18.1.197"
       },
       "expect": "HTTP 422（非法数值）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-192",
+      "id": "T1-EMO-197",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4740,16 +4834,16 @@
         },
         "kind": "boundary",
         "emotion_name": "悲伤--1.0",
-        "sid": "mx_t1_emo_192",
+        "sid": "mx_t1_emo_197",
         "account": "matrix_c",
-        "ip": "198.18.1.193"
+        "ip": "198.18.1.198"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-193",
+      "id": "T1-EMO-198",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4773,16 +4867,16 @@
         },
         "kind": "boundary",
         "emotion_name": "悲伤-0.0",
-        "sid": "mx_t1_emo_193",
+        "sid": "mx_t1_emo_198",
         "account": "matrix_d",
-        "ip": "198.18.1.194"
+        "ip": "198.18.1.199"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-194",
+      "id": "T1-EMO-199",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4806,16 +4900,16 @@
         },
         "kind": "normal",
         "emotion_name": "悲伤-0.5",
-        "sid": "mx_t1_emo_194",
+        "sid": "mx_t1_emo_199",
         "account": "matrix_e",
-        "ip": "198.18.1.195"
+        "ip": "198.18.1.200"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-195",
+      "id": "T1-EMO-200",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4839,16 +4933,16 @@
         },
         "kind": "boundary",
         "emotion_name": "悲伤-1.0",
-        "sid": "mx_t1_emo_195",
+        "sid": "mx_t1_emo_200",
         "account": "matrix_a",
-        "ip": "198.18.1.196"
+        "ip": "198.18.1.201"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-196",
+      "id": "T1-EMO-201",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4872,16 +4966,16 @@
         },
         "kind": "boundary",
         "emotion_name": "悲伤-2.0",
-        "sid": "mx_t1_emo_196",
+        "sid": "mx_t1_emo_201",
         "account": "matrix_b",
-        "ip": "198.18.1.197"
+        "ip": "198.18.1.202"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-197",
+      "id": "T1-EMO-202",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4905,16 +4999,16 @@
         },
         "kind": "illegal",
         "emotion_name": "悲伤-abc",
-        "sid": "mx_t1_emo_197",
+        "sid": "mx_t1_emo_202",
         "account": "matrix_c",
-        "ip": "198.18.1.198"
+        "ip": "198.18.1.203"
       },
       "expect": "HTTP 422（非法数值）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-198",
+      "id": "T1-EMO-203",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4938,16 +5032,16 @@
         },
         "kind": "boundary",
         "emotion_name": "焦虑--1.0",
-        "sid": "mx_t1_emo_198",
+        "sid": "mx_t1_emo_203",
         "account": "matrix_d",
-        "ip": "198.18.1.199"
+        "ip": "198.18.1.204"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-199",
+      "id": "T1-EMO-204",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -4971,16 +5065,16 @@
         },
         "kind": "boundary",
         "emotion_name": "焦虑-0.0",
-        "sid": "mx_t1_emo_199",
+        "sid": "mx_t1_emo_204",
         "account": "matrix_e",
-        "ip": "198.18.1.200"
+        "ip": "198.18.1.205"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-200",
+      "id": "T1-EMO-205",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5004,16 +5098,16 @@
         },
         "kind": "normal",
         "emotion_name": "焦虑-0.5",
-        "sid": "mx_t1_emo_200",
+        "sid": "mx_t1_emo_205",
         "account": "matrix_a",
-        "ip": "198.18.1.201"
+        "ip": "198.18.1.206"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-201",
+      "id": "T1-EMO-206",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5037,16 +5131,16 @@
         },
         "kind": "boundary",
         "emotion_name": "焦虑-1.0",
-        "sid": "mx_t1_emo_201",
+        "sid": "mx_t1_emo_206",
         "account": "matrix_b",
-        "ip": "198.18.1.202"
+        "ip": "198.18.1.207"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-202",
+      "id": "T1-EMO-207",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5070,16 +5164,16 @@
         },
         "kind": "boundary",
         "emotion_name": "焦虑-2.0",
-        "sid": "mx_t1_emo_202",
+        "sid": "mx_t1_emo_207",
         "account": "matrix_c",
-        "ip": "198.18.1.203"
+        "ip": "198.18.1.208"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-203",
+      "id": "T1-EMO-208",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5103,16 +5197,16 @@
         },
         "kind": "illegal",
         "emotion_name": "焦虑-abc",
-        "sid": "mx_t1_emo_203",
+        "sid": "mx_t1_emo_208",
         "account": "matrix_d",
-        "ip": "198.18.1.204"
+        "ip": "198.18.1.209"
       },
       "expect": "HTTP 422（非法数值）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-204",
+      "id": "T1-EMO-209",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5136,16 +5230,16 @@
         },
         "kind": "boundary",
         "emotion_name": "生气--1.0",
-        "sid": "mx_t1_emo_204",
+        "sid": "mx_t1_emo_209",
         "account": "matrix_e",
-        "ip": "198.18.1.205"
+        "ip": "198.18.1.210"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-205",
+      "id": "T1-EMO-210",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5169,16 +5263,16 @@
         },
         "kind": "boundary",
         "emotion_name": "生气-0.0",
-        "sid": "mx_t1_emo_205",
+        "sid": "mx_t1_emo_210",
         "account": "matrix_a",
-        "ip": "198.18.1.206"
+        "ip": "198.18.1.211"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-206",
+      "id": "T1-EMO-211",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5202,16 +5296,16 @@
         },
         "kind": "normal",
         "emotion_name": "生气-0.5",
-        "sid": "mx_t1_emo_206",
+        "sid": "mx_t1_emo_211",
         "account": "matrix_b",
-        "ip": "198.18.1.207"
+        "ip": "198.18.1.212"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-207",
+      "id": "T1-EMO-212",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5235,16 +5329,16 @@
         },
         "kind": "boundary",
         "emotion_name": "生气-1.0",
-        "sid": "mx_t1_emo_207",
+        "sid": "mx_t1_emo_212",
         "account": "matrix_c",
-        "ip": "198.18.1.208"
+        "ip": "198.18.1.213"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-208",
+      "id": "T1-EMO-213",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5268,16 +5362,16 @@
         },
         "kind": "boundary",
         "emotion_name": "生气-2.0",
-        "sid": "mx_t1_emo_208",
+        "sid": "mx_t1_emo_213",
         "account": "matrix_d",
-        "ip": "198.18.1.209"
+        "ip": "198.18.1.214"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-209",
+      "id": "T1-EMO-214",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5301,16 +5395,16 @@
         },
         "kind": "illegal",
         "emotion_name": "生气-abc",
-        "sid": "mx_t1_emo_209",
+        "sid": "mx_t1_emo_214",
         "account": "matrix_e",
-        "ip": "198.18.1.210"
+        "ip": "198.18.1.215"
       },
       "expect": "HTTP 422（非法数值）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-210",
+      "id": "T1-EMO-215",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5334,16 +5428,16 @@
         },
         "kind": "boundary",
         "emotion_name": "惊讶--1.0",
-        "sid": "mx_t1_emo_210",
+        "sid": "mx_t1_emo_215",
         "account": "matrix_a",
-        "ip": "198.18.1.211"
+        "ip": "198.18.1.216"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-211",
+      "id": "T1-EMO-216",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5367,16 +5461,16 @@
         },
         "kind": "boundary",
         "emotion_name": "惊讶-0.0",
-        "sid": "mx_t1_emo_211",
+        "sid": "mx_t1_emo_216",
         "account": "matrix_b",
-        "ip": "198.18.1.212"
+        "ip": "198.18.1.217"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-212",
+      "id": "T1-EMO-217",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5400,16 +5494,16 @@
         },
         "kind": "normal",
         "emotion_name": "惊讶-0.5",
-        "sid": "mx_t1_emo_212",
+        "sid": "mx_t1_emo_217",
         "account": "matrix_c",
-        "ip": "198.18.1.213"
+        "ip": "198.18.1.218"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-213",
+      "id": "T1-EMO-218",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5433,16 +5527,16 @@
         },
         "kind": "boundary",
         "emotion_name": "惊讶-1.0",
-        "sid": "mx_t1_emo_213",
+        "sid": "mx_t1_emo_218",
         "account": "matrix_d",
-        "ip": "198.18.1.214"
+        "ip": "198.18.1.219"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-214",
+      "id": "T1-EMO-219",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5466,16 +5560,16 @@
         },
         "kind": "boundary",
         "emotion_name": "惊讶-2.0",
-        "sid": "mx_t1_emo_214",
+        "sid": "mx_t1_emo_219",
         "account": "matrix_e",
-        "ip": "198.18.1.215"
+        "ip": "198.18.1.220"
       },
       "expect": "落库值 clamp 到 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-215",
+      "id": "T1-EMO-220",
       "layer": "T1",
       "kind": "emotion_boundary",
       "family": "EMO",
@@ -5499,16 +5593,16 @@
         },
         "kind": "illegal",
         "emotion_name": "惊讶-abc",
-        "sid": "mx_t1_emo_215",
+        "sid": "mx_t1_emo_220",
         "account": "matrix_a",
-        "ip": "198.18.1.216"
+        "ip": "198.18.1.221"
       },
       "expect": "HTTP 422（非法数值）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-216",
+      "id": "T1-EMO-221",
       "layer": "T1",
       "kind": "emotion_switch",
       "family": "EMO",
@@ -5519,16 +5613,16 @@
       "params": {
         "first": "calm",
         "second": "happy",
-        "sid": "mx_t1_emo_216",
+        "sid": "mx_t1_emo_221",
         "account": "matrix_b",
-        "ip": "198.18.1.217"
+        "ip": "198.18.1.222"
       },
       "expect": "GET 返回后写入的配置（覆盖生效）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-217",
+      "id": "T1-EMO-222",
       "layer": "T1",
       "kind": "emotion_switch",
       "family": "EMO",
@@ -5539,16 +5633,16 @@
       "params": {
         "first": "sad",
         "second": "angry",
-        "sid": "mx_t1_emo_217",
+        "sid": "mx_t1_emo_222",
         "account": "matrix_c",
-        "ip": "198.18.1.218"
+        "ip": "198.18.1.223"
       },
       "expect": "GET 返回后写入的配置（覆盖生效）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-218",
+      "id": "T1-EMO-223",
       "layer": "T1",
       "kind": "emotion_switch",
       "family": "EMO",
@@ -5559,16 +5653,16 @@
       "params": {
         "first": "anxious",
         "second": "calm",
-        "sid": "mx_t1_emo_218",
+        "sid": "mx_t1_emo_223",
         "account": "matrix_d",
-        "ip": "198.18.1.219"
+        "ip": "198.18.1.224"
       },
       "expect": "GET 返回后写入的配置（覆盖生效）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-219",
+      "id": "T1-EMO-224",
       "layer": "T1",
       "kind": "emotion_isolate_sessions",
       "family": "EMO",
@@ -5581,14 +5675,14 @@
         "other": "mx_emo_iso_b",
         "emotion": "calm",
         "account": "matrix_e",
-        "ip": "198.18.1.220"
+        "ip": "198.18.1.225"
       },
       "expect": "另一 session 的 emotion_config 为 null",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-220",
+      "id": "T1-EMO-225",
       "layer": "T1",
       "kind": "emotion_unknown_session",
       "family": "EMO",
@@ -5599,14 +5693,14 @@
       "params": {
         "sid": "mx_emo_never",
         "account": "matrix_a",
-        "ip": "198.18.1.221"
+        "ip": "198.18.1.226"
       },
       "expect": "200 + emotion_config=null",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-221",
+      "id": "T1-EMO-226",
       "layer": "T1",
       "kind": "emotion_gap_unbind",
       "family": "EMO",
@@ -5617,14 +5711,14 @@
       "params": {
         "sid": "mx_emo_unbind",
         "account": "matrix_b",
-        "ip": "198.18.1.222"
+        "ip": "198.18.1.227"
       },
       "expect": "204；删后 GET 200 且配置为空；重复删除幂等；他人 403",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-222",
+      "id": "T1-EMO-227",
       "layer": "T1",
       "kind": "emotion_presets",
       "family": "EMO",
@@ -5634,16 +5728,16 @@
       },
       "params": {
         "url": "gw:/api/emotion-presets",
-        "sid": "mx_t1_emo_222",
+        "sid": "mx_t1_emo_227",
         "account": "matrix_c",
-        "ip": "198.18.1.223"
+        "ip": "198.18.1.228"
       },
       "expect": "6 个预设，每个含 6 轴参数且在 [0,1]",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-223",
+      "id": "T1-EMO-228",
       "layer": "T1",
       "kind": "emotion_custom_name",
       "family": "EMO",
@@ -5655,14 +5749,14 @@
         "sid": "mx_emo_custom",
         "name": "小林专属情绪",
         "account": "matrix_d",
-        "ip": "198.18.1.224"
+        "ip": "198.18.1.229"
       },
       "expect": "POST 200 + GET 读回同名，未被枚举拒绝",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-EMO-224",
+      "id": "T1-EMO-229",
       "layer": "T1",
       "kind": "emotion_long_name",
       "family": "EMO",
@@ -5674,14 +5768,14 @@
         "sid": "mx_emo_long",
         "name": "情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情情",
         "account": "matrix_e",
-        "ip": "198.18.1.225"
+        "ip": "198.18.1.230"
       },
       "expect": "HTTP 400（名称长度上限 64 字，DEF-07 校验保持有效）",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-225",
+      "id": "T1-SES-230",
       "layer": "T1",
       "kind": "session_bind",
       "family": "SES",
@@ -5693,111 +5787,6 @@
       "params": {
         "character_id": "preset_senior_sister",
         "expected_prompt": "A young woman, gentle, sweet voice",
-        "sid": "mx_t1_ses_225",
-        "account": "matrix_a",
-        "ip": "198.18.1.226"
-      },
-      "expect": "返回 ok + voice_prompt + system_prompt",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-226",
-      "layer": "T1",
-      "kind": "session_bind",
-      "family": "SES",
-      "title": "新会话绑定预设角色 沉稳大叔",
-      "dims": {
-        "role": "preset_calm_uncle",
-        "session": "implicit_create"
-      },
-      "params": {
-        "character_id": "preset_calm_uncle",
-        "expected_prompt": "A middle-aged man, magnetic, calm, deep voice, speaking slowly",
-        "sid": "mx_t1_ses_226",
-        "account": "matrix_b",
-        "ip": "198.18.1.227"
-      },
-      "expect": "返回 ok + voice_prompt + system_prompt",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-227",
-      "layer": "T1",
-      "kind": "session_bind",
-      "family": "SES",
-      "title": "新会话绑定预设角色 元气同桌",
-      "dims": {
-        "role": "preset_energetic_classmate",
-        "session": "implicit_create"
-      },
-      "params": {
-        "character_id": "preset_energetic_classmate",
-        "expected_prompt": "A teenage girl, energetic, lively, crisp voice, speaking quickly",
-        "sid": "mx_t1_ses_227",
-        "account": "matrix_c",
-        "ip": "198.18.1.228"
-      },
-      "expect": "返回 ok + voice_prompt + system_prompt",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-228",
-      "layer": "T1",
-      "kind": "session_bind",
-      "family": "SES",
-      "title": "新会话绑定预设角色 职场前辈",
-      "dims": {
-        "role": "preset_career_coach",
-        "session": "implicit_create"
-      },
-      "params": {
-        "character_id": "preset_career_coach",
-        "expected_prompt": "A young man, mature, calm, magnetic voice",
-        "sid": "mx_t1_ses_228",
-        "account": "matrix_d",
-        "ip": "198.18.1.229"
-      },
-      "expect": "返回 ok + voice_prompt + system_prompt",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-229",
-      "layer": "T1",
-      "kind": "session_bind",
-      "family": "SES",
-      "title": "新会话绑定预设角色 暖心陪伴",
-      "dims": {
-        "role": "preset_warm_companion",
-        "session": "implicit_create"
-      },
-      "params": {
-        "character_id": "preset_warm_companion",
-        "expected_prompt": "A young woman, gentle, calm, sweet voice, speaking slowly",
-        "sid": "mx_t1_ses_229",
-        "account": "matrix_e",
-        "ip": "198.18.1.230"
-      },
-      "expect": "返回 ok + voice_prompt + system_prompt",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-230",
-      "layer": "T1",
-      "kind": "session_bind",
-      "family": "SES",
-      "title": "新会话绑定预设角色 搞笑兄弟",
-      "dims": {
-        "role": "preset_funny_buddy",
-        "session": "implicit_create"
-      },
-      "params": {
-        "character_id": "preset_funny_buddy",
-        "expected_prompt": "A young man, energetic, lively voice, speaking quickly",
         "sid": "mx_t1_ses_230",
         "account": "matrix_a",
         "ip": "198.18.1.231"
@@ -5809,6 +5798,111 @@
     {
       "id": "T1-SES-231",
       "layer": "T1",
+      "kind": "session_bind",
+      "family": "SES",
+      "title": "新会话绑定预设角色 沉稳大叔",
+      "dims": {
+        "role": "preset_calm_uncle",
+        "session": "implicit_create"
+      },
+      "params": {
+        "character_id": "preset_calm_uncle",
+        "expected_prompt": "A middle-aged man, magnetic, calm, deep voice, speaking slowly",
+        "sid": "mx_t1_ses_231",
+        "account": "matrix_b",
+        "ip": "198.18.1.232"
+      },
+      "expect": "返回 ok + voice_prompt + system_prompt",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-232",
+      "layer": "T1",
+      "kind": "session_bind",
+      "family": "SES",
+      "title": "新会话绑定预设角色 元气同桌",
+      "dims": {
+        "role": "preset_energetic_classmate",
+        "session": "implicit_create"
+      },
+      "params": {
+        "character_id": "preset_energetic_classmate",
+        "expected_prompt": "A teenage girl, energetic, lively, crisp voice, speaking quickly",
+        "sid": "mx_t1_ses_232",
+        "account": "matrix_c",
+        "ip": "198.18.1.233"
+      },
+      "expect": "返回 ok + voice_prompt + system_prompt",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-233",
+      "layer": "T1",
+      "kind": "session_bind",
+      "family": "SES",
+      "title": "新会话绑定预设角色 职场前辈",
+      "dims": {
+        "role": "preset_career_coach",
+        "session": "implicit_create"
+      },
+      "params": {
+        "character_id": "preset_career_coach",
+        "expected_prompt": "A young man, mature, calm, magnetic voice",
+        "sid": "mx_t1_ses_233",
+        "account": "matrix_d",
+        "ip": "198.18.1.234"
+      },
+      "expect": "返回 ok + voice_prompt + system_prompt",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-234",
+      "layer": "T1",
+      "kind": "session_bind",
+      "family": "SES",
+      "title": "新会话绑定预设角色 暖心陪伴",
+      "dims": {
+        "role": "preset_warm_companion",
+        "session": "implicit_create"
+      },
+      "params": {
+        "character_id": "preset_warm_companion",
+        "expected_prompt": "A young woman, gentle, calm, sweet voice, speaking slowly",
+        "sid": "mx_t1_ses_234",
+        "account": "matrix_e",
+        "ip": "198.18.1.235"
+      },
+      "expect": "返回 ok + voice_prompt + system_prompt",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-235",
+      "layer": "T1",
+      "kind": "session_bind",
+      "family": "SES",
+      "title": "新会话绑定预设角色 搞笑兄弟",
+      "dims": {
+        "role": "preset_funny_buddy",
+        "session": "implicit_create"
+      },
+      "params": {
+        "character_id": "preset_funny_buddy",
+        "expected_prompt": "A young man, energetic, lively voice, speaking quickly",
+        "sid": "mx_t1_ses_235",
+        "account": "matrix_a",
+        "ip": "198.18.1.236"
+      },
+      "expect": "返回 ok + voice_prompt + system_prompt",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-236",
+      "layer": "T1",
       "kind": "session_switch",
       "family": "SES",
       "title": "会话切换角色 preset_senior_sister → preset_calm_uncle",
@@ -5819,16 +5913,16 @@
       "params": {
         "first": "preset_senior_sister",
         "second": "preset_calm_uncle",
-        "sid": "mx_t1_ses_231",
+        "sid": "mx_t1_ses_236",
         "account": "matrix_b",
-        "ip": "198.18.1.232"
+        "ip": "198.18.1.237"
       },
       "expect": "GET 返回第二个角色",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-232",
+      "id": "T1-SES-237",
       "layer": "T1",
       "kind": "session_switch",
       "family": "SES",
@@ -5840,16 +5934,16 @@
       "params": {
         "first": "preset_calm_uncle",
         "second": "preset_energetic_classmate",
-        "sid": "mx_t1_ses_232",
+        "sid": "mx_t1_ses_237",
         "account": "matrix_c",
-        "ip": "198.18.1.233"
+        "ip": "198.18.1.238"
       },
       "expect": "GET 返回第二个角色",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-233",
+      "id": "T1-SES-238",
       "layer": "T1",
       "kind": "session_switch",
       "family": "SES",
@@ -5861,16 +5955,16 @@
       "params": {
         "first": "preset_energetic_classmate",
         "second": "preset_career_coach",
-        "sid": "mx_t1_ses_233",
+        "sid": "mx_t1_ses_238",
         "account": "matrix_d",
-        "ip": "198.18.1.234"
+        "ip": "198.18.1.239"
       },
       "expect": "GET 返回第二个角色",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-234",
+      "id": "T1-SES-239",
       "layer": "T1",
       "kind": "session_switch",
       "family": "SES",
@@ -5882,16 +5976,16 @@
       "params": {
         "first": "preset_career_coach",
         "second": "preset_warm_companion",
-        "sid": "mx_t1_ses_234",
+        "sid": "mx_t1_ses_239",
         "account": "matrix_e",
-        "ip": "198.18.1.235"
+        "ip": "198.18.1.240"
       },
       "expect": "GET 返回第二个角色",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-235",
+      "id": "T1-SES-240",
       "layer": "T1",
       "kind": "session_switch",
       "family": "SES",
@@ -5903,16 +5997,16 @@
       "params": {
         "first": "preset_warm_companion",
         "second": "preset_funny_buddy",
-        "sid": "mx_t1_ses_235",
+        "sid": "mx_t1_ses_240",
         "account": "matrix_a",
-        "ip": "198.18.1.236"
+        "ip": "198.18.1.241"
       },
       "expect": "GET 返回第二个角色",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-236",
+      "id": "T1-SES-241",
       "layer": "T1",
       "kind": "session_voice_style",
       "family": "SES",
@@ -5922,16 +6016,16 @@
       },
       "params": {
         "description": "A young man, calm voice",
-        "sid": "mx_t1_ses_236",
+        "sid": "mx_t1_ses_241",
         "account": "matrix_b",
-        "ip": "198.18.1.237"
+        "ip": "198.18.1.242"
       },
       "expect": "state.json 中该 session 的 voice_description 等于该描述",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-237",
+      "id": "T1-SES-242",
       "layer": "T1",
       "kind": "session_voice_style",
       "family": "SES",
@@ -5941,16 +6035,16 @@
       },
       "params": {
         "description": "An elderly woman, gentle voice",
-        "sid": "mx_t1_ses_237",
+        "sid": "mx_t1_ses_242",
         "account": "matrix_c",
-        "ip": "198.18.1.238"
+        "ip": "198.18.1.243"
       },
       "expect": "state.json 中该 session 的 voice_description 等于该描述",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-238",
+      "id": "T1-SES-243",
       "layer": "T1",
       "kind": "session_voice_style",
       "family": "SES",
@@ -5960,16 +6054,16 @@
       },
       "params": {
         "description": "A teenage girl, energetic voice",
-        "sid": "mx_t1_ses_238",
+        "sid": "mx_t1_ses_243",
         "account": "matrix_d",
-        "ip": "198.18.1.239"
+        "ip": "198.18.1.244"
       },
       "expect": "state.json 中该 session 的 voice_description 等于该描述",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-239",
+      "id": "T1-SES-244",
       "layer": "T1",
       "kind": "session_gap_list",
       "family": "SES",
@@ -5979,16 +6073,16 @@
       },
       "params": {
         "limit": 5,
-        "sid": "mx_t1_ses_239",
+        "sid": "mx_t1_ses_244",
         "account": "matrix_e",
-        "ip": "198.18.1.240"
+        "ip": "198.18.1.245"
       },
       "expect": "200；仅返回本人会话；total/limit/offset 正确；他人不可见",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-240",
+      "id": "T1-SES-245",
       "layer": "T1",
       "kind": "session_gap_delete",
       "family": "SES",
@@ -5998,16 +6092,16 @@
       },
       "params": {
         "method": "DELETE",
-        "sid": "mx_t1_ses_240",
+        "sid": "mx_t1_ses_245",
         "account": "matrix_a",
-        "ip": "198.18.1.241"
+        "ip": "198.18.1.246"
       },
       "expect": "204；删后 GET 404；重复删除 404；列表已排除",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-241",
+      "id": "T1-SES-246",
       "layer": "T1",
       "kind": "session_rename",
       "family": "SES",
@@ -6017,16 +6111,16 @@
       },
       "params": {
         "title": "晨间问候",
-        "sid": "mx_t1_ses_241",
+        "sid": "mx_t1_ses_246",
         "account": "matrix_b",
-        "ip": "198.18.1.242"
+        "ip": "198.18.1.247"
       },
       "expect": "200；列表标题同步；空标题 400",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-242",
+      "id": "T1-SES-247",
       "layer": "T1",
       "kind": "session_delete_forbidden",
       "family": "SES",
@@ -6035,16 +6129,16 @@
         "session": "crud"
       },
       "params": {
-        "sid": "mx_t1_ses_242",
+        "sid": "mx_t1_ses_247",
         "account": "matrix_c",
-        "ip": "198.18.1.243"
+        "ip": "198.18.1.248"
       },
       "expect": "DELETE/PATCH 均 403",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-243",
+      "id": "T1-SES-248",
       "layer": "T1",
       "kind": "session_ws_deleted",
       "family": "SES",
@@ -6053,16 +6147,16 @@
         "session": "crud"
       },
       "params": {
-        "sid": "mx_t1_ses_243",
+        "sid": "mx_t1_ses_248",
         "account": "matrix_d",
-        "ip": "198.18.1.244"
+        "ip": "198.18.1.249"
       },
       "expect": "close code=1008，reason 含 session_deleted",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-244",
+      "id": "T1-SES-249",
       "layer": "T1",
       "kind": "session_invalid_id",
       "family": "SES",
@@ -6072,106 +6166,6 @@
       },
       "params": {
         "bad_id": "会话ID",
-        "expect": 400,
-        "sid": "mx_t1_ses_244",
-        "account": "matrix_e",
-        "ip": "198.18.1.245"
-      },
-      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-245",
-      "layer": "T1",
-      "kind": "session_invalid_id",
-      "family": "SES",
-      "title": "非法 session_id：bad id",
-      "dims": {
-        "session": "validation"
-      },
-      "params": {
-        "bad_id": "bad id",
-        "expect": 400,
-        "sid": "mx_t1_ses_245",
-        "account": "matrix_a",
-        "ip": "198.18.1.246"
-      },
-      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-246",
-      "layer": "T1",
-      "kind": "session_invalid_id",
-      "family": "SES",
-      "title": "非法 session_id：-abc",
-      "dims": {
-        "session": "validation"
-      },
-      "params": {
-        "bad_id": "-abc",
-        "expect": 400,
-        "sid": "mx_t1_ses_246",
-        "account": "matrix_b",
-        "ip": "198.18.1.247"
-      },
-      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-247",
-      "layer": "T1",
-      "kind": "session_invalid_id",
-      "family": "SES",
-      "title": "非法 session_id：_",
-      "dims": {
-        "session": "validation"
-      },
-      "params": {
-        "bad_id": "_",
-        "expect": 400,
-        "sid": "mx_t1_ses_247",
-        "account": "matrix_c",
-        "ip": "198.18.1.248"
-      },
-      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-248",
-      "layer": "T1",
-      "kind": "session_invalid_id",
-      "family": "SES",
-      "title": "非法 session_id：.abc",
-      "dims": {
-        "session": "validation"
-      },
-      "params": {
-        "bad_id": ".abc",
-        "expect": 400,
-        "sid": "mx_t1_ses_248",
-        "account": "matrix_d",
-        "ip": "198.18.1.249"
-      },
-      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-SES-249",
-      "layer": "T1",
-      "kind": "session_invalid_id",
-      "family": "SES",
-      "title": "非法 session_id：aaaaaaaaaaaa",
-      "dims": {
-        "session": "validation"
-      },
-      "params": {
-        "bad_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "expect": 400,
         "sid": "mx_t1_ses_249",
         "account": "matrix_e",
@@ -6186,12 +6180,12 @@
       "layer": "T1",
       "kind": "session_invalid_id",
       "family": "SES",
-      "title": "非法 session_id：a@b",
+      "title": "非法 session_id：bad id",
       "dims": {
         "session": "validation"
       },
       "params": {
-        "bad_id": "a@b",
+        "bad_id": "bad id",
         "expect": 400,
         "sid": "mx_t1_ses_250",
         "account": "matrix_a",
@@ -6206,12 +6200,12 @@
       "layer": "T1",
       "kind": "session_invalid_id",
       "family": "SES",
-      "title": "非法 session_id：a#b",
+      "title": "非法 session_id：-abc",
       "dims": {
         "session": "validation"
       },
       "params": {
-        "bad_id": "a#b",
+        "bad_id": "-abc",
         "expect": 400,
         "sid": "mx_t1_ses_251",
         "account": "matrix_b",
@@ -6224,6 +6218,106 @@
     {
       "id": "T1-SES-252",
       "layer": "T1",
+      "kind": "session_invalid_id",
+      "family": "SES",
+      "title": "非法 session_id：_",
+      "dims": {
+        "session": "validation"
+      },
+      "params": {
+        "bad_id": "_",
+        "expect": 400,
+        "sid": "mx_t1_ses_252",
+        "account": "matrix_c",
+        "ip": "198.18.2.3"
+      },
+      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-253",
+      "layer": "T1",
+      "kind": "session_invalid_id",
+      "family": "SES",
+      "title": "非法 session_id：.abc",
+      "dims": {
+        "session": "validation"
+      },
+      "params": {
+        "bad_id": ".abc",
+        "expect": 400,
+        "sid": "mx_t1_ses_253",
+        "account": "matrix_d",
+        "ip": "198.18.2.4"
+      },
+      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-254",
+      "layer": "T1",
+      "kind": "session_invalid_id",
+      "family": "SES",
+      "title": "非法 session_id：aaaaaaaaaaaa",
+      "dims": {
+        "session": "validation"
+      },
+      "params": {
+        "bad_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "expect": 400,
+        "sid": "mx_t1_ses_254",
+        "account": "matrix_e",
+        "ip": "198.18.2.5"
+      },
+      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-255",
+      "layer": "T1",
+      "kind": "session_invalid_id",
+      "family": "SES",
+      "title": "非法 session_id：a@b",
+      "dims": {
+        "session": "validation"
+      },
+      "params": {
+        "bad_id": "a@b",
+        "expect": 400,
+        "sid": "mx_t1_ses_255",
+        "account": "matrix_a",
+        "ip": "198.18.2.6"
+      },
+      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-256",
+      "layer": "T1",
+      "kind": "session_invalid_id",
+      "family": "SES",
+      "title": "非法 session_id：a#b",
+      "dims": {
+        "session": "validation"
+      },
+      "params": {
+        "bad_id": "a#b",
+        "expect": 400,
+        "sid": "mx_t1_ses_256",
+        "account": "matrix_b",
+        "ip": "198.18.2.7"
+      },
+      "expect": "网关 400（白名单 ^[A-Za-z0-9][A-Za-z0-9_\\-.]{0,63}$）",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-257",
+      "layer": "T1",
       "kind": "session_bind_missing",
       "family": "SES",
       "title": "绑定不存在角色应 404",
@@ -6232,16 +6326,16 @@
       },
       "params": {
         "character_id": "ghost_char_404",
-        "sid": "mx_t1_ses_252",
+        "sid": "mx_t1_ses_257",
         "account": "matrix_c",
-        "ip": "198.18.2.3"
+        "ip": "198.18.2.8"
       },
       "expect": "HTTP 404；实测 200+error（缺陷）",
       "source": "product_preset",
       "defect": "DEF-02"
     },
     {
-      "id": "T1-SES-253",
+      "id": "T1-SES-258",
       "layer": "T1",
       "kind": "session_bind_invalid",
       "family": "SES",
@@ -6251,16 +6345,16 @@
       },
       "params": {
         "character_id": "bad id",
-        "sid": "mx_t1_ses_253",
+        "sid": "mx_t1_ses_258",
         "account": "matrix_d",
-        "ip": "198.18.2.4"
+        "ip": "198.18.2.9"
       },
       "expect": "网关 400",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-SES-254",
+      "id": "T1-SES-259",
       "layer": "T1",
       "kind": "session_gap_unbind",
       "family": "SES",
@@ -6269,16 +6363,16 @@
         "session": "unbind"
       },
       "params": {
-        "sid": "mx_t1_ses_254",
+        "sid": "mx_t1_ses_259",
         "account": "matrix_e",
-        "ip": "198.18.2.5"
+        "ip": "198.18.2.10"
       },
       "expect": "405 → 能力缺失",
       "source": "capability_gap",
       "defect": null
     },
     {
-      "id": "T1-RL-255",
+      "id": "T1-RL-260",
       "layer": "T1",
       "kind": "rate_login",
       "family": "RL",
@@ -6289,7 +6383,7 @@
       "params": {
         "limit": 5,
         "ip": "198.18.77.1",
-        "sid": "mx_t1_rl_255",
+        "sid": "mx_t1_rl_260",
         "account": "matrix_a"
       },
       "expect": "前 5 次 401，第 6 次 429",
@@ -6297,7 +6391,7 @@
       "defect": null
     },
     {
-      "id": "T1-RL-256",
+      "id": "T1-RL-261",
       "layer": "T1",
       "kind": "rate_normal",
       "family": "RL",
@@ -6308,7 +6402,7 @@
       "params": {
         "limit": 120,
         "ip": "198.18.77.2",
-        "sid": "mx_t1_rl_256",
+        "sid": "mx_t1_rl_261",
         "account": "matrix_b"
       },
       "expect": "前 120 次 200，第 121 次 429",
@@ -6316,7 +6410,7 @@
       "defect": null
     },
     {
-      "id": "T1-RL-257",
+      "id": "T1-RL-262",
       "layer": "T1",
       "kind": "rate_expensive",
       "family": "RL",
@@ -6327,7 +6421,7 @@
       "params": {
         "limit": 20,
         "ip": "198.18.77.3",
-        "sid": "mx_t1_rl_257",
+        "sid": "mx_t1_rl_262",
         "account": "matrix_c"
       },
       "expect": "前 20 次 400（空文本），第 21 次 429",
@@ -6335,7 +6429,7 @@
       "defect": null
     },
     {
-      "id": "T1-ISO-258",
+      "id": "T1-ISO-263",
       "layer": "T1",
       "kind": "iso_read_character",
       "family": "ISO",
@@ -6354,7 +6448,7 @@
       "defect": "DEF-01"
     },
     {
-      "id": "T1-ISO-259",
+      "id": "T1-ISO-264",
       "layer": "T1",
       "kind": "iso_write_character",
       "family": "ISO",
@@ -6373,7 +6467,7 @@
       "defect": "DEF-01"
     },
     {
-      "id": "T1-ISO-260",
+      "id": "T1-ISO-265",
       "layer": "T1",
       "kind": "iso_read_emotion",
       "family": "ISO",
@@ -6392,7 +6486,7 @@
       "defect": "DEF-01"
     },
     {
-      "id": "T1-ISO-261",
+      "id": "T1-ISO-266",
       "layer": "T1",
       "kind": "iso_write_emotion",
       "family": "ISO",
@@ -6411,7 +6505,7 @@
       "defect": "DEF-01"
     },
     {
-      "id": "T1-ISO-262",
+      "id": "T1-ISO-267",
       "layer": "T1",
       "kind": "iso_read_response",
       "family": "ISO",
@@ -6430,7 +6524,7 @@
       "defect": "DEF-01"
     },
     {
-      "id": "T1-ISO-263",
+      "id": "T1-ISO-268",
       "layer": "T1",
       "kind": "iso_custom_character",
       "family": "ISO",
@@ -6441,7 +6535,7 @@
       "params": {
         "as": "matrix_b",
         "ip": "198.18.88.6",
-        "sid": "mx_t1_iso_263",
+        "sid": "mx_t1_iso_268",
         "account": "matrix_d"
       },
       "expect": "404/不可见；实测 200 → DEF-04",
@@ -6449,7 +6543,7 @@
       "defect": "DEF-04"
     },
     {
-      "id": "T1-UPL-264",
+      "id": "T1-UPL-269",
       "layer": "T1",
       "kind": "upload_empty",
       "family": "UPL",
@@ -6459,16 +6553,16 @@
       },
       "params": {
         "kind": "empty",
-        "sid": "mx_t1_upl_264",
+        "sid": "mx_t1_upl_269",
         "account": "matrix_e",
-        "ip": "198.18.2.15"
+        "ip": "198.18.2.20"
       },
       "expect": "HTTP 400",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-UPL-265",
+      "id": "T1-UPL-270",
       "layer": "T1",
       "kind": "upload_fake",
       "family": "UPL",
@@ -6478,16 +6572,16 @@
       },
       "params": {
         "kind": "fake",
-        "sid": "mx_t1_upl_265",
+        "sid": "mx_t1_upl_270",
         "account": "matrix_a",
-        "ip": "198.18.2.16"
+        "ip": "198.18.2.21"
       },
       "expect": "HTTP 400",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-UPL-266",
+      "id": "T1-UPL-271",
       "layer": "T1",
       "kind": "upload_over",
       "family": "UPL",
@@ -6497,16 +6591,16 @@
       },
       "params": {
         "kind": "oversize",
-        "sid": "mx_t1_upl_266",
+        "sid": "mx_t1_upl_271",
         "account": "matrix_b",
-        "ip": "198.18.2.17"
+        "ip": "198.18.2.22"
       },
       "expect": "HTTP 413",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-UPL-267",
+      "id": "T1-UPL-272",
       "layer": "T1",
       "kind": "define_no_desc",
       "family": "UPL",
@@ -6516,16 +6610,16 @@
       },
       "params": {
         "kind": "no_desc",
-        "sid": "mx_t1_upl_267",
+        "sid": "mx_t1_upl_272",
         "account": "matrix_c",
-        "ip": "198.18.2.18"
+        "ip": "198.18.2.23"
       },
       "expect": "HTTP 400",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-CRS-268",
+      "id": "T1-CRS-273",
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
@@ -6538,166 +6632,6 @@
       "params": {
         "role": "preset_senior_sister",
         "population": "elderly",
-        "emotion": "calm",
-        "emotion_params": {
-          "happiness": 0.3,
-          "sadness": 0.1,
-          "anger": 0.1,
-          "fear": 0.1,
-          "disgust": 0.1,
-          "surprise": 0.1
-        },
-        "emotion_label": "平静",
-        "sid": "mx_t1_crs_268",
-        "account": "matrix_a",
-        "ip": "198.18.2.19"
-      },
-      "expect": "绑定角色 + 写入情感 + 双读回均一致",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-CRS-269",
-      "layer": "T1",
-      "kind": "cross_matrix",
-      "family": "CRS",
-      "title": "温柔学姐 × 老年 × 开心",
-      "dims": {
-        "role": "preset_senior_sister",
-        "population": "elderly",
-        "emotion": "happy"
-      },
-      "params": {
-        "role": "preset_senior_sister",
-        "population": "elderly",
-        "emotion": "happy",
-        "emotion_params": {
-          "happiness": 0.9,
-          "sadness": 0.05,
-          "anger": 0.05,
-          "fear": 0.05,
-          "disgust": 0.05,
-          "surprise": 0.5
-        },
-        "emotion_label": "开心",
-        "sid": "mx_t1_crs_269",
-        "account": "matrix_a",
-        "ip": "198.18.2.20"
-      },
-      "expect": "绑定角色 + 写入情感 + 双读回均一致",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-CRS-270",
-      "layer": "T1",
-      "kind": "cross_matrix",
-      "family": "CRS",
-      "title": "温柔学姐 × 老年 × 悲伤",
-      "dims": {
-        "role": "preset_senior_sister",
-        "population": "elderly",
-        "emotion": "sad"
-      },
-      "params": {
-        "role": "preset_senior_sister",
-        "population": "elderly",
-        "emotion": "sad",
-        "emotion_params": {
-          "happiness": 0.1,
-          "sadness": 0.9,
-          "anger": 0.1,
-          "fear": 0.2,
-          "disgust": 0.1,
-          "surprise": 0.1
-        },
-        "emotion_label": "悲伤",
-        "sid": "mx_t1_crs_270",
-        "account": "matrix_a",
-        "ip": "198.18.2.21"
-      },
-      "expect": "绑定角色 + 写入情感 + 双读回均一致",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-CRS-271",
-      "layer": "T1",
-      "kind": "cross_matrix",
-      "family": "CRS",
-      "title": "温柔学姐 × 老年 × 焦虑",
-      "dims": {
-        "role": "preset_senior_sister",
-        "population": "elderly",
-        "emotion": "anxious"
-      },
-      "params": {
-        "role": "preset_senior_sister",
-        "population": "elderly",
-        "emotion": "anxious",
-        "emotion_params": {
-          "happiness": 0.1,
-          "sadness": 0.4,
-          "anger": 0.2,
-          "fear": 0.8,
-          "disgust": 0.1,
-          "surprise": 0.5
-        },
-        "emotion_label": "焦虑",
-        "sid": "mx_t1_crs_271",
-        "account": "matrix_a",
-        "ip": "198.18.2.22"
-      },
-      "expect": "绑定角色 + 写入情感 + 双读回均一致",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-CRS-272",
-      "layer": "T1",
-      "kind": "cross_matrix",
-      "family": "CRS",
-      "title": "温柔学姐 × 老年 × 生气",
-      "dims": {
-        "role": "preset_senior_sister",
-        "population": "elderly",
-        "emotion": "angry"
-      },
-      "params": {
-        "role": "preset_senior_sister",
-        "population": "elderly",
-        "emotion": "angry",
-        "emotion_params": {
-          "happiness": 0.05,
-          "sadness": 0.1,
-          "anger": 0.9,
-          "fear": 0.1,
-          "disgust": 0.3,
-          "surprise": 0.1
-        },
-        "emotion_label": "生气",
-        "sid": "mx_t1_crs_272",
-        "account": "matrix_a",
-        "ip": "198.18.2.23"
-      },
-      "expect": "绑定角色 + 写入情感 + 双读回均一致",
-      "source": "product_preset",
-      "defect": null
-    },
-    {
-      "id": "T1-CRS-273",
-      "layer": "T1",
-      "kind": "cross_matrix",
-      "family": "CRS",
-      "title": "温柔学姐 × 中年 × 平静",
-      "dims": {
-        "role": "preset_senior_sister",
-        "population": "middle_aged",
-        "emotion": "calm"
-      },
-      "params": {
-        "role": "preset_senior_sister",
-        "population": "middle_aged",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -6721,15 +6655,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 中年 × 开心",
+      "title": "温柔学姐 × 老年 × 开心",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -6753,15 +6687,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 中年 × 悲伤",
+      "title": "温柔学姐 × 老年 × 悲伤",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -6785,15 +6719,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 中年 × 焦虑",
+      "title": "温柔学姐 × 老年 × 焦虑",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -6817,15 +6751,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 中年 × 生气",
+      "title": "温柔学姐 × 老年 × 生气",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -6849,15 +6783,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青少年 × 平静",
+      "title": "温柔学姐 × 中年 × 平静",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -6881,15 +6815,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青少年 × 开心",
+      "title": "温柔学姐 × 中年 × 开心",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -6913,15 +6847,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青少年 × 悲伤",
+      "title": "温柔学姐 × 中年 × 悲伤",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -6945,15 +6879,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青少年 × 焦虑",
+      "title": "温柔学姐 × 中年 × 焦虑",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -6977,15 +6911,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青少年 × 生气",
+      "title": "温柔学姐 × 中年 × 生气",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -7009,15 +6943,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青年 × 平静",
+      "title": "温柔学姐 × 青少年 × 平静",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -7041,15 +6975,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青年 × 开心",
+      "title": "温柔学姐 × 青少年 × 开心",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -7073,15 +7007,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青年 × 悲伤",
+      "title": "温柔学姐 × 青少年 × 悲伤",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -7105,15 +7039,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青年 × 焦虑",
+      "title": "温柔学姐 × 青少年 × 焦虑",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -7137,15 +7071,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "温柔学姐 × 青年 × 生气",
+      "title": "温柔学姐 × 青少年 × 生气",
       "dims": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_senior_sister",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -7169,15 +7103,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 老年 × 平静",
+      "title": "温柔学姐 × 青年 × 平静",
       "dims": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "calm"
       },
       "params": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -7201,15 +7135,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 老年 × 开心",
+      "title": "温柔学姐 × 青年 × 开心",
       "dims": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "happy"
       },
       "params": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -7233,15 +7167,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 老年 × 悲伤",
+      "title": "温柔学姐 × 青年 × 悲伤",
       "dims": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "sad"
       },
       "params": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -7265,15 +7199,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 老年 × 焦虑",
+      "title": "温柔学姐 × 青年 × 焦虑",
       "dims": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "anxious"
       },
       "params": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -7297,15 +7231,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 老年 × 生气",
+      "title": "温柔学姐 × 青年 × 生气",
       "dims": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "angry"
       },
       "params": {
-        "role": "preset_calm_uncle",
-        "population": "elderly",
+        "role": "preset_senior_sister",
+        "population": "young_adult",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -7329,15 +7263,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 中年 × 平静",
+      "title": "沉稳大叔 × 老年 × 平静",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -7361,15 +7295,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 中年 × 开心",
+      "title": "沉稳大叔 × 老年 × 开心",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -7393,15 +7327,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 中年 × 悲伤",
+      "title": "沉稳大叔 × 老年 × 悲伤",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -7425,15 +7359,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 中年 × 焦虑",
+      "title": "沉稳大叔 × 老年 × 焦虑",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -7457,15 +7391,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 中年 × 生气",
+      "title": "沉稳大叔 × 老年 × 生气",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -7489,15 +7423,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青少年 × 平静",
+      "title": "沉稳大叔 × 中年 × 平静",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -7521,15 +7455,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青少年 × 开心",
+      "title": "沉稳大叔 × 中年 × 开心",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -7553,15 +7487,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青少年 × 悲伤",
+      "title": "沉稳大叔 × 中年 × 悲伤",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -7585,15 +7519,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青少年 × 焦虑",
+      "title": "沉稳大叔 × 中年 × 焦虑",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -7617,15 +7551,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青少年 × 生气",
+      "title": "沉稳大叔 × 中年 × 生气",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -7649,15 +7583,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青年 × 平静",
+      "title": "沉稳大叔 × 青少年 × 平静",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -7681,15 +7615,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青年 × 开心",
+      "title": "沉稳大叔 × 青少年 × 开心",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -7713,15 +7647,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青年 × 悲伤",
+      "title": "沉稳大叔 × 青少年 × 悲伤",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -7745,15 +7679,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青年 × 焦虑",
+      "title": "沉稳大叔 × 青少年 × 焦虑",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -7777,15 +7711,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "沉稳大叔 × 青年 × 生气",
+      "title": "沉稳大叔 × 青少年 × 生气",
       "dims": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_calm_uncle",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -7809,15 +7743,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 老年 × 平静",
+      "title": "沉稳大叔 × 青年 × 平静",
       "dims": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "calm"
       },
       "params": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -7841,15 +7775,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 老年 × 开心",
+      "title": "沉稳大叔 × 青年 × 开心",
       "dims": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "happy"
       },
       "params": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -7873,15 +7807,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 老年 × 悲伤",
+      "title": "沉稳大叔 × 青年 × 悲伤",
       "dims": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "sad"
       },
       "params": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -7905,15 +7839,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 老年 × 焦虑",
+      "title": "沉稳大叔 × 青年 × 焦虑",
       "dims": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "anxious"
       },
       "params": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -7937,15 +7871,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 老年 × 生气",
+      "title": "沉稳大叔 × 青年 × 生气",
       "dims": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "angry"
       },
       "params": {
-        "role": "preset_energetic_classmate",
-        "population": "elderly",
+        "role": "preset_calm_uncle",
+        "population": "young_adult",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -7969,15 +7903,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 中年 × 平静",
+      "title": "元气同桌 × 老年 × 平静",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -8001,15 +7935,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 中年 × 开心",
+      "title": "元气同桌 × 老年 × 开心",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -8033,15 +7967,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 中年 × 悲伤",
+      "title": "元气同桌 × 老年 × 悲伤",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -8065,15 +7999,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 中年 × 焦虑",
+      "title": "元气同桌 × 老年 × 焦虑",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -8097,15 +8031,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 中年 × 生气",
+      "title": "元气同桌 × 老年 × 生气",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -8129,15 +8063,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青少年 × 平静",
+      "title": "元气同桌 × 中年 × 平静",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -8161,15 +8095,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青少年 × 开心",
+      "title": "元气同桌 × 中年 × 开心",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -8193,15 +8127,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青少年 × 悲伤",
+      "title": "元气同桌 × 中年 × 悲伤",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -8225,15 +8159,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青少年 × 焦虑",
+      "title": "元气同桌 × 中年 × 焦虑",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -8257,15 +8191,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青少年 × 生气",
+      "title": "元气同桌 × 中年 × 生气",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -8289,15 +8223,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青年 × 平静",
+      "title": "元气同桌 × 青少年 × 平静",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -8321,15 +8255,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青年 × 开心",
+      "title": "元气同桌 × 青少年 × 开心",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -8353,15 +8287,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青年 × 悲伤",
+      "title": "元气同桌 × 青少年 × 悲伤",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -8385,15 +8319,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青年 × 焦虑",
+      "title": "元气同桌 × 青少年 × 焦虑",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -8417,15 +8351,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "元气同桌 × 青年 × 生气",
+      "title": "元气同桌 × 青少年 × 生气",
       "dims": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_energetic_classmate",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -8449,15 +8383,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 老年 × 平静",
+      "title": "元气同桌 × 青年 × 平静",
       "dims": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "calm"
       },
       "params": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -8481,15 +8415,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 老年 × 开心",
+      "title": "元气同桌 × 青年 × 开心",
       "dims": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "happy"
       },
       "params": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -8513,15 +8447,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 老年 × 悲伤",
+      "title": "元气同桌 × 青年 × 悲伤",
       "dims": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "sad"
       },
       "params": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -8545,15 +8479,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 老年 × 焦虑",
+      "title": "元气同桌 × 青年 × 焦虑",
       "dims": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "anxious"
       },
       "params": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -8577,15 +8511,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 老年 × 生气",
+      "title": "元气同桌 × 青年 × 生气",
       "dims": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "angry"
       },
       "params": {
-        "role": "preset_career_coach",
-        "population": "elderly",
+        "role": "preset_energetic_classmate",
+        "population": "young_adult",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -8609,15 +8543,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 中年 × 平静",
+      "title": "职场前辈 × 老年 × 平静",
       "dims": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -8641,15 +8575,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 中年 × 开心",
+      "title": "职场前辈 × 老年 × 开心",
       "dims": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -8673,15 +8607,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 中年 × 悲伤",
+      "title": "职场前辈 × 老年 × 悲伤",
       "dims": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -8705,15 +8639,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 中年 × 焦虑",
+      "title": "职场前辈 × 老年 × 焦虑",
       "dims": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -8737,15 +8671,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 中年 × 生气",
+      "title": "职场前辈 × 老年 × 生气",
       "dims": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -8769,15 +8703,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青少年 × 平静",
+      "title": "职场前辈 × 中年 × 平静",
       "dims": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -8801,15 +8735,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青少年 × 开心",
+      "title": "职场前辈 × 中年 × 开心",
       "dims": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -8833,15 +8767,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青少年 × 悲伤",
+      "title": "职场前辈 × 中年 × 悲伤",
       "dims": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -8865,15 +8799,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青少年 × 焦虑",
+      "title": "职场前辈 × 中年 × 焦虑",
       "dims": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -8897,15 +8831,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青少年 × 生气",
+      "title": "职场前辈 × 中年 × 生气",
       "dims": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -8929,15 +8863,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青年 × 平静",
+      "title": "职场前辈 × 青少年 × 平静",
       "dims": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -8961,15 +8895,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青年 × 开心",
+      "title": "职场前辈 × 青少年 × 开心",
       "dims": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -8993,15 +8927,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青年 × 悲伤",
+      "title": "职场前辈 × 青少年 × 悲伤",
       "dims": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -9025,15 +8959,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青年 × 焦虑",
+      "title": "职场前辈 × 青少年 × 焦虑",
       "dims": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -9057,15 +8991,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "职场前辈 × 青年 × 生气",
+      "title": "职场前辈 × 青少年 × 生气",
       "dims": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_career_coach",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -9089,15 +9023,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 老年 × 平静",
+      "title": "职场前辈 × 青年 × 平静",
       "dims": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "calm"
       },
       "params": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -9121,15 +9055,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 老年 × 开心",
+      "title": "职场前辈 × 青年 × 开心",
       "dims": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "happy"
       },
       "params": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -9153,15 +9087,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 老年 × 悲伤",
+      "title": "职场前辈 × 青年 × 悲伤",
       "dims": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "sad"
       },
       "params": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -9185,15 +9119,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 老年 × 焦虑",
+      "title": "职场前辈 × 青年 × 焦虑",
       "dims": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "anxious"
       },
       "params": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -9217,15 +9151,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 老年 × 生气",
+      "title": "职场前辈 × 青年 × 生气",
       "dims": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "angry"
       },
       "params": {
-        "role": "preset_warm_companion",
-        "population": "elderly",
+        "role": "preset_career_coach",
+        "population": "young_adult",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -9249,15 +9183,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 中年 × 平静",
+      "title": "暖心陪伴 × 老年 × 平静",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -9281,15 +9215,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 中年 × 开心",
+      "title": "暖心陪伴 × 老年 × 开心",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -9313,15 +9247,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 中年 × 悲伤",
+      "title": "暖心陪伴 × 老年 × 悲伤",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -9345,15 +9279,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 中年 × 焦虑",
+      "title": "暖心陪伴 × 老年 × 焦虑",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -9377,15 +9311,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 中年 × 生气",
+      "title": "暖心陪伴 × 老年 × 生气",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -9409,15 +9343,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青少年 × 平静",
+      "title": "暖心陪伴 × 中年 × 平静",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -9441,15 +9375,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青少年 × 开心",
+      "title": "暖心陪伴 × 中年 × 开心",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -9473,15 +9407,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青少年 × 悲伤",
+      "title": "暖心陪伴 × 中年 × 悲伤",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -9505,15 +9439,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青少年 × 焦虑",
+      "title": "暖心陪伴 × 中年 × 焦虑",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -9537,15 +9471,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青少年 × 生气",
+      "title": "暖心陪伴 × 中年 × 生气",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -9569,15 +9503,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青年 × 平静",
+      "title": "暖心陪伴 × 青少年 × 平静",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -9601,15 +9535,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青年 × 开心",
+      "title": "暖心陪伴 × 青少年 × 开心",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -9633,15 +9567,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青年 × 悲伤",
+      "title": "暖心陪伴 × 青少年 × 悲伤",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -9665,15 +9599,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青年 × 焦虑",
+      "title": "暖心陪伴 × 青少年 × 焦虑",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -9697,15 +9631,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "暖心陪伴 × 青年 × 生气",
+      "title": "暖心陪伴 × 青少年 × 生气",
       "dims": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_warm_companion",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -9729,15 +9663,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 老年 × 平静",
+      "title": "暖心陪伴 × 青年 × 平静",
       "dims": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "calm"
       },
       "params": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -9761,15 +9695,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 老年 × 开心",
+      "title": "暖心陪伴 × 青年 × 开心",
       "dims": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "happy"
       },
       "params": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -9793,15 +9727,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 老年 × 悲伤",
+      "title": "暖心陪伴 × 青年 × 悲伤",
       "dims": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "sad"
       },
       "params": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -9825,15 +9759,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 老年 × 焦虑",
+      "title": "暖心陪伴 × 青年 × 焦虑",
       "dims": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "anxious"
       },
       "params": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -9857,15 +9791,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 老年 × 生气",
+      "title": "暖心陪伴 × 青年 × 生气",
       "dims": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "angry"
       },
       "params": {
-        "role": "preset_funny_buddy",
-        "population": "elderly",
+        "role": "preset_warm_companion",
+        "population": "young_adult",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -9889,15 +9823,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 中年 × 平静",
+      "title": "搞笑兄弟 × 老年 × 平静",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -9921,15 +9855,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 中年 × 开心",
+      "title": "搞笑兄弟 × 老年 × 开心",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -9953,15 +9887,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 中年 × 悲伤",
+      "title": "搞笑兄弟 × 老年 × 悲伤",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -9985,15 +9919,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 中年 × 焦虑",
+      "title": "搞笑兄弟 × 老年 × 焦虑",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -10017,15 +9951,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 中年 × 生气",
+      "title": "搞笑兄弟 × 老年 × 生气",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "middle_aged",
+        "population": "elderly",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -10049,15 +9983,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青少年 × 平静",
+      "title": "搞笑兄弟 × 中年 × 平静",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -10081,15 +10015,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青少年 × 开心",
+      "title": "搞笑兄弟 × 中年 × 开心",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -10113,15 +10047,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青少年 × 悲伤",
+      "title": "搞笑兄弟 × 中年 × 悲伤",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -10145,15 +10079,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青少年 × 焦虑",
+      "title": "搞笑兄弟 × 中年 × 焦虑",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -10177,15 +10111,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青少年 × 生气",
+      "title": "搞笑兄弟 × 中年 × 生气",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "teen",
+        "population": "middle_aged",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -10209,15 +10143,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青年 × 平静",
+      "title": "搞笑兄弟 × 青少年 × 平静",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "calm",
         "emotion_params": {
           "happiness": 0.3,
@@ -10241,15 +10175,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青年 × 开心",
+      "title": "搞笑兄弟 × 青少年 × 开心",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "happy",
         "emotion_params": {
           "happiness": 0.9,
@@ -10273,15 +10207,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青年 × 悲伤",
+      "title": "搞笑兄弟 × 青少年 × 悲伤",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "sad",
         "emotion_params": {
           "happiness": 0.1,
@@ -10305,15 +10239,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青年 × 焦虑",
+      "title": "搞笑兄弟 × 青少年 × 焦虑",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "anxious",
         "emotion_params": {
           "happiness": 0.1,
@@ -10337,15 +10271,15 @@
       "layer": "T1",
       "kind": "cross_matrix",
       "family": "CRS",
-      "title": "搞笑兄弟 × 青年 × 生气",
+      "title": "搞笑兄弟 × 青少年 × 生气",
       "dims": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry"
       },
       "params": {
         "role": "preset_funny_buddy",
-        "population": "young_adult",
+        "population": "teen",
         "emotion": "angry",
         "emotion_params": {
           "happiness": 0.05,
@@ -10365,7 +10299,167 @@
       "defect": null
     },
     {
-      "id": "T1-RST-388",
+      "id": "T1-CRS-388",
+      "layer": "T1",
+      "kind": "cross_matrix",
+      "family": "CRS",
+      "title": "搞笑兄弟 × 青年 × 平静",
+      "dims": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "calm"
+      },
+      "params": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "calm",
+        "emotion_params": {
+          "happiness": 0.3,
+          "sadness": 0.1,
+          "anger": 0.1,
+          "fear": 0.1,
+          "disgust": 0.1,
+          "surprise": 0.1
+        },
+        "emotion_label": "平静",
+        "sid": "mx_t1_crs_388",
+        "account": "matrix_a",
+        "ip": "198.18.2.139"
+      },
+      "expect": "绑定角色 + 写入情感 + 双读回均一致",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-CRS-389",
+      "layer": "T1",
+      "kind": "cross_matrix",
+      "family": "CRS",
+      "title": "搞笑兄弟 × 青年 × 开心",
+      "dims": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "happy"
+      },
+      "params": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "happy",
+        "emotion_params": {
+          "happiness": 0.9,
+          "sadness": 0.05,
+          "anger": 0.05,
+          "fear": 0.05,
+          "disgust": 0.05,
+          "surprise": 0.5
+        },
+        "emotion_label": "开心",
+        "sid": "mx_t1_crs_389",
+        "account": "matrix_a",
+        "ip": "198.18.2.140"
+      },
+      "expect": "绑定角色 + 写入情感 + 双读回均一致",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-CRS-390",
+      "layer": "T1",
+      "kind": "cross_matrix",
+      "family": "CRS",
+      "title": "搞笑兄弟 × 青年 × 悲伤",
+      "dims": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "sad"
+      },
+      "params": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "sad",
+        "emotion_params": {
+          "happiness": 0.1,
+          "sadness": 0.9,
+          "anger": 0.1,
+          "fear": 0.2,
+          "disgust": 0.1,
+          "surprise": 0.1
+        },
+        "emotion_label": "悲伤",
+        "sid": "mx_t1_crs_390",
+        "account": "matrix_a",
+        "ip": "198.18.2.141"
+      },
+      "expect": "绑定角色 + 写入情感 + 双读回均一致",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-CRS-391",
+      "layer": "T1",
+      "kind": "cross_matrix",
+      "family": "CRS",
+      "title": "搞笑兄弟 × 青年 × 焦虑",
+      "dims": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "anxious"
+      },
+      "params": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "anxious",
+        "emotion_params": {
+          "happiness": 0.1,
+          "sadness": 0.4,
+          "anger": 0.2,
+          "fear": 0.8,
+          "disgust": 0.1,
+          "surprise": 0.5
+        },
+        "emotion_label": "焦虑",
+        "sid": "mx_t1_crs_391",
+        "account": "matrix_a",
+        "ip": "198.18.2.142"
+      },
+      "expect": "绑定角色 + 写入情感 + 双读回均一致",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-CRS-392",
+      "layer": "T1",
+      "kind": "cross_matrix",
+      "family": "CRS",
+      "title": "搞笑兄弟 × 青年 × 生气",
+      "dims": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "angry"
+      },
+      "params": {
+        "role": "preset_funny_buddy",
+        "population": "young_adult",
+        "emotion": "angry",
+        "emotion_params": {
+          "happiness": 0.05,
+          "sadness": 0.1,
+          "anger": 0.9,
+          "fear": 0.1,
+          "disgust": 0.3,
+          "surprise": 0.1
+        },
+        "emotion_label": "生气",
+        "sid": "mx_t1_crs_392",
+        "account": "matrix_a",
+        "ip": "198.18.2.143"
+      },
+      "expect": "绑定角色 + 写入情感 + 双读回均一致",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-RST-393",
       "layer": "T1",
       "kind": "restart_character",
       "family": "RST",
@@ -10377,14 +10471,14 @@
         "sid": "mx_restart_role",
         "character_id": "preset_senior_sister",
         "account": "matrix_a",
-        "ip": "198.18.2.139"
+        "ip": "198.18.2.144"
       },
       "expect": "重启后 GET 返回 preset_senior_sister",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-RST-389",
+      "id": "T1-RST-394",
       "layer": "T1",
       "kind": "restart_emotion",
       "family": "RST",
@@ -10396,14 +10490,14 @@
         "sid": "mx_restart_emo",
         "emotion": "calm",
         "account": "matrix_a",
-        "ip": "198.18.2.140"
+        "ip": "198.18.2.145"
       },
       "expect": "重启后 GET 返回 calm 参数",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T1-RST-390",
+      "id": "T1-RST-395",
       "layer": "T1",
       "kind": "restart_custom_character",
       "family": "RST",
@@ -10413,16 +10507,320 @@
       },
       "params": {
         "name": "重启保留角色",
-        "sid": "mx_t1_rst_390",
+        "sid": "mx_t1_rst_395",
         "account": "matrix_a",
-        "ip": "198.18.2.141"
+        "ip": "198.18.2.146"
       },
       "expect": "重启后列表中仍存在该角色",
       "source": "product_preset",
       "defect": null
     },
     {
-      "id": "T2-DIA-391",
+      "id": "T1-SES-396",
+      "layer": "T1",
+      "kind": "page_limit_zero",
+      "family": "SES",
+      "title": "分页 limit=0 → 422",
+      "dims": {
+        "session": "pagination"
+      },
+      "params": {
+        "limit": 0,
+        "offset": 0,
+        "sid": "mx_t1_ses_396",
+        "account": "matrix_a",
+        "ip": "198.18.2.147"
+      },
+      "expect": "网关透传 AI 422（Query ge=1）",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-397",
+      "layer": "T1",
+      "kind": "page_limit_over",
+      "family": "SES",
+      "title": "分页 limit=101 → 422",
+      "dims": {
+        "session": "pagination"
+      },
+      "params": {
+        "limit": 101,
+        "offset": 0,
+        "sid": "mx_t1_ses_397",
+        "account": "matrix_a",
+        "ip": "198.18.2.148"
+      },
+      "expect": "网关透传 AI 422（Query le=100）",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-398",
+      "layer": "T1",
+      "kind": "page_offset_negative",
+      "family": "SES",
+      "title": "分页 offset=-1 → 422",
+      "dims": {
+        "session": "pagination"
+      },
+      "params": {
+        "limit": 20,
+        "offset": -1,
+        "sid": "mx_t1_ses_398",
+        "account": "matrix_a",
+        "ip": "198.18.2.149"
+      },
+      "expect": "网关透传 AI 422（Query ge=0）",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-399",
+      "layer": "T1",
+      "kind": "page_offset_beyond",
+      "family": "SES",
+      "title": "offset 超范围 → 200 空页且 total 不变",
+      "dims": {
+        "session": "pagination"
+      },
+      "params": {
+        "limit": 20,
+        "offset": 999999,
+        "sid": "mx_t1_ses_399",
+        "account": "matrix_a",
+        "ip": "198.18.2.150"
+      },
+      "expect": "200；sessions=[]；total 与首页一致",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-400",
+      "layer": "T1",
+      "kind": "session_order",
+      "family": "SES",
+      "title": "会话列表按 updated_at 倒序、重命名上浮",
+      "dims": {
+        "session": "crud"
+      },
+      "params": {
+        "titles": [
+          "排序-A",
+          "排序-B",
+          "排序-C"
+        ],
+        "sid": "mx_t1_ses_400",
+        "account": "matrix_a",
+        "ip": "198.18.2.151"
+      },
+      "expect": "最近重命名的会话排在三个测试会话最前",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-401",
+      "layer": "T1",
+      "kind": "session_rename_concurrent",
+      "family": "SES",
+      "title": "同一会话 10 并发重命名一致性",
+      "dims": {
+        "session": "crud"
+      },
+      "params": {
+        "workers": 10,
+        "sid": "mx_t1_ses_401",
+        "account": "matrix_a",
+        "ip": "198.18.2.152"
+      },
+      "expect": "全部 200；最终标题为其中之一；无 500/数据损坏",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SES-402",
+      "layer": "T1",
+      "kind": "session_delete_then_bind",
+      "family": "SES",
+      "title": "删除后绑定角色 → 404 且不复活",
+      "dims": {
+        "session": "crud"
+      },
+      "params": {
+        "sid": "mx_t1_ses_402",
+        "account": "matrix_a",
+        "ip": "198.18.2.153"
+      },
+      "expect": "绑定 404；再读 404；列表仍排除",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-ISO-403",
+      "layer": "T1",
+      "kind": "iso_ws_forbidden",
+      "family": "ISO",
+      "title": "B 账号 WS 连接 A 的会话 → 1008 forbidden",
+      "dims": {
+        "session": "ownership"
+      },
+      "params": {
+        "sid": "mx_iso_session",
+        "as": "matrix_b",
+        "ip": "198.18.88.7",
+        "account": "matrix_a"
+      },
+      "expect": "close code=1008，reason 含 forbidden",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-ISO-404",
+      "layer": "T1",
+      "kind": "iso_delete_emotion",
+      "family": "ISO",
+      "title": "B 账号 DELETE A 的情感配置（应拒绝）",
+      "dims": {
+        "emotion": "ownership"
+      },
+      "params": {
+        "sid": "mx_iso_session",
+        "as": "matrix_b",
+        "ip": "198.18.88.8",
+        "account": "matrix_a"
+      },
+      "expect": "403/404；A 的情感配置仍存在",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SYS-405",
+      "layer": "T1",
+      "kind": "cors_preflight_methods",
+      "family": "SYS",
+      "title": "CORS 预检覆盖 PUT/PATCH/DELETE",
+      "dims": {
+        "session": "contract"
+      },
+      "params": {
+        "sid": "mx_t1_sys_405",
+        "account": "matrix_a",
+        "ip": "198.18.2.156"
+      },
+      "expect": "5 组预检 200 且 Allow-Methods 含对应方法；实际 PATCH 带 ACAO",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SYS-406",
+      "layer": "T1",
+      "kind": "internal_sig_invalid",
+      "family": "SYS",
+      "title": "内部签名缺失/篡改/过期/未来 → 401",
+      "dims": {
+        "session": "contract"
+      },
+      "params": {
+        "sid": "mx_t1_sys_406",
+        "account": "matrix_a",
+        "ip": "198.18.2.157"
+      },
+      "expect": "直连 AI 8084 四种伪造均 401 且不泄露数据",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SYS-407",
+      "layer": "T1",
+      "kind": "internal_sig_valid",
+      "family": "SYS",
+      "title": "内部签名合法 + TTL 内重放 → 200",
+      "dims": {
+        "session": "contract"
+      },
+      "params": {
+        "sid": "mx_t1_sys_407",
+        "account": "matrix_a",
+        "ip": "198.18.2.158"
+      },
+      "expect": "合法签名 200；同一签名重放两次均 200（设计允许 300s 内）",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SYS-408",
+      "layer": "T1",
+      "kind": "upstream_down",
+      "family": "SYS",
+      "title": "上游连接中断 → 502 且探针 503 降级",
+      "dims": {
+        "session": "contract"
+      },
+      "params": {
+        "sid": "mx_t1_sys_408",
+        "account": "matrix_a",
+        "ip": "198.18.2.159"
+      },
+      "expect": "代理端点 502；/health 503 degraded；/ready 503",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-SYS-409",
+      "layer": "T1",
+      "kind": "upstream_timeout",
+      "family": "SYS",
+      "title": "上游不应答 → 超时 502",
+      "dims": {
+        "session": "contract"
+      },
+      "params": {
+        "sid": "mx_t1_sys_409",
+        "account": "matrix_a",
+        "ip": "198.18.2.160"
+      },
+      "expect": "真实黑洞上游 + 1s 超时 → 代理端点 502 且 10s 内返回",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-EMO-410",
+      "layer": "T1",
+      "kind": "emotion_delete_resave",
+      "family": "EMO",
+      "title": "情感解绑后可重新保存（幂等）",
+      "dims": {
+        "emotion": "crud"
+      },
+      "params": {
+        "sid": "mx_t1_emo_410",
+        "account": "matrix_a",
+        "ip": "198.18.2.161"
+      },
+      "expect": "DELETE 204×2；GET null；重存 200 且读回一致",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T1-RST-411",
+      "layer": "T1",
+      "kind": "restart_tombstone",
+      "family": "RST",
+      "title": "重启后墓碑仍生效（404 + 列表排除 + WS 1008）",
+      "dims": {
+        "session": "restart"
+      },
+      "params": {
+        "sid": "mx_t1_rst_411",
+        "account": "matrix_a",
+        "ip": "198.18.2.162"
+      },
+      "expect": "重启后读/删 404、列表排除、WS 1008 session_deleted",
+      "source": "product_preset",
+      "defect": null
+    },
+    {
+      "id": "T2-DIA-412",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -10473,16 +10871,16 @@
           "我最喜欢的颜色是蓝色，请记住。",
           "我最喜欢什么颜色？"
         ],
-        "sid": "mx_t2_dia_391",
-        "account": "matrix_b",
-        "ip": "198.18.2.142"
+        "sid": "mx_t2_dia_412",
+        "account": "matrix_c",
+        "ip": "198.18.2.163"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-392",
+      "id": "T2-DIA-413",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -10532,16 +10930,16 @@
           "最近工作有点忙，想找个人说说话。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_392",
-        "account": "matrix_c",
-        "ip": "198.18.2.143"
+        "sid": "mx_t2_dia_413",
+        "account": "matrix_d",
+        "ip": "198.18.2.164"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-393",
+      "id": "T2-DIA-414",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -10591,16 +10989,16 @@
           "明天要考试了，我有点紧张。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_393",
-        "account": "matrix_d",
-        "ip": "198.18.2.144"
+        "sid": "mx_t2_dia_414",
+        "account": "matrix_e",
+        "ip": "198.18.2.165"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-394",
+      "id": "T2-DIA-415",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -10650,16 +11048,16 @@
           "今天下班路上看到了很好看的晚霞。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_394",
-        "account": "matrix_e",
-        "ip": "198.18.2.145"
+        "sid": "mx_t2_dia_415",
+        "account": "matrix_a",
+        "ip": "198.18.2.166"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-395",
+      "id": "T2-DIA-416",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -10709,16 +11107,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_395",
-        "account": "matrix_a",
-        "ip": "198.18.2.146"
+        "sid": "mx_t2_dia_416",
+        "account": "matrix_b",
+        "ip": "198.18.2.167"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-396",
+      "id": "T2-DIA-417",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -10768,16 +11166,16 @@
           "最近工作有点忙，想找个人说说话。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_396",
-        "account": "matrix_b",
-        "ip": "198.18.2.147"
+        "sid": "mx_t2_dia_417",
+        "account": "matrix_c",
+        "ip": "198.18.2.168"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-397",
+      "id": "T2-DIA-418",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -10827,16 +11225,16 @@
           "明天要考试了，我有点紧张。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_397",
-        "account": "matrix_c",
-        "ip": "198.18.2.148"
+        "sid": "mx_t2_dia_418",
+        "account": "matrix_d",
+        "ip": "198.18.2.169"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-398",
+      "id": "T2-DIA-419",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -10886,16 +11284,16 @@
           "今天下班路上看到了很好看的晚霞。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_398",
-        "account": "matrix_d",
-        "ip": "198.18.2.149"
+        "sid": "mx_t2_dia_419",
+        "account": "matrix_e",
+        "ip": "198.18.2.170"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-399",
+      "id": "T2-DIA-420",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -10946,16 +11344,16 @@
           "我最喜欢的颜色是蓝色，请记住。",
           "我最喜欢什么颜色？"
         ],
-        "sid": "mx_t2_dia_399",
-        "account": "matrix_e",
-        "ip": "198.18.2.150"
+        "sid": "mx_t2_dia_420",
+        "account": "matrix_a",
+        "ip": "198.18.2.171"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-400",
+      "id": "T2-DIA-421",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11005,16 +11403,16 @@
           "最近工作有点忙，想找个人说说话。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_400",
-        "account": "matrix_a",
-        "ip": "198.18.2.151"
+        "sid": "mx_t2_dia_421",
+        "account": "matrix_b",
+        "ip": "198.18.2.172"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-401",
+      "id": "T2-DIA-422",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11064,16 +11462,16 @@
           "明天要考试了，我有点紧张。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_401",
-        "account": "matrix_b",
-        "ip": "198.18.2.152"
+        "sid": "mx_t2_dia_422",
+        "account": "matrix_c",
+        "ip": "198.18.2.173"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-402",
+      "id": "T2-DIA-423",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11123,16 +11521,16 @@
           "今天下班路上看到了很好看的晚霞。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_402",
-        "account": "matrix_c",
-        "ip": "198.18.2.153"
+        "sid": "mx_t2_dia_423",
+        "account": "matrix_d",
+        "ip": "198.18.2.174"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-403",
+      "id": "T2-DIA-424",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11182,16 +11580,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_403",
-        "account": "matrix_d",
-        "ip": "198.18.2.154"
+        "sid": "mx_t2_dia_424",
+        "account": "matrix_e",
+        "ip": "198.18.2.175"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-404",
+      "id": "T2-DIA-425",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11241,16 +11639,16 @@
           "最近工作有点忙，想找个人说说话。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_404",
-        "account": "matrix_e",
-        "ip": "198.18.2.155"
+        "sid": "mx_t2_dia_425",
+        "account": "matrix_a",
+        "ip": "198.18.2.176"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-405",
+      "id": "T2-DIA-426",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11300,16 +11698,16 @@
           "明天要考试了，我有点紧张。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_405",
-        "account": "matrix_a",
-        "ip": "198.18.2.156"
+        "sid": "mx_t2_dia_426",
+        "account": "matrix_b",
+        "ip": "198.18.2.177"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-406",
+      "id": "T2-DIA-427",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11359,16 +11757,16 @@
           "今天下班路上看到了很好看的晚霞。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_406",
-        "account": "matrix_b",
-        "ip": "198.18.2.157"
+        "sid": "mx_t2_dia_427",
+        "account": "matrix_c",
+        "ip": "198.18.2.178"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-407",
+      "id": "T2-DIA-428",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11419,16 +11817,16 @@
           "我最喜欢的颜色是蓝色，请记住。",
           "我最喜欢什么颜色？"
         ],
-        "sid": "mx_t2_dia_407",
-        "account": "matrix_c",
-        "ip": "198.18.2.158"
+        "sid": "mx_t2_dia_428",
+        "account": "matrix_d",
+        "ip": "198.18.2.179"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-408",
+      "id": "T2-DIA-429",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11478,16 +11876,16 @@
           "最近工作有点忙，想找个人说说话。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_408",
-        "account": "matrix_d",
-        "ip": "198.18.2.159"
+        "sid": "mx_t2_dia_429",
+        "account": "matrix_e",
+        "ip": "198.18.2.180"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-409",
+      "id": "T2-DIA-430",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11537,16 +11935,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_409",
-        "account": "matrix_e",
-        "ip": "198.18.2.160"
+        "sid": "mx_t2_dia_430",
+        "account": "matrix_a",
+        "ip": "198.18.2.181"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-410",
+      "id": "T2-DIA-431",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11596,16 +11994,16 @@
           "最近工作有点忙，想找个人说说话。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_410",
-        "account": "matrix_a",
-        "ip": "198.18.2.161"
+        "sid": "mx_t2_dia_431",
+        "account": "matrix_b",
+        "ip": "198.18.2.182"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-411",
+      "id": "T2-DIA-432",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11654,16 +12052,16 @@
           "明天要考试了，我有点紧张。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_411",
-        "account": "matrix_b",
-        "ip": "198.18.2.162"
+        "sid": "mx_t2_dia_432",
+        "account": "matrix_c",
+        "ip": "198.18.2.183"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-412",
+      "id": "T2-DIA-433",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11712,16 +12110,16 @@
           "今天下班路上看到了很好看的晚霞。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_412",
-        "account": "matrix_c",
-        "ip": "198.18.2.163"
+        "sid": "mx_t2_dia_433",
+        "account": "matrix_d",
+        "ip": "198.18.2.184"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-413",
+      "id": "T2-DIA-434",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11770,16 +12168,16 @@
           "明天要考试了，我有点紧张。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_413",
-        "account": "matrix_d",
-        "ip": "198.18.2.164"
+        "sid": "mx_t2_dia_434",
+        "account": "matrix_e",
+        "ip": "198.18.2.185"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-414",
+      "id": "T2-DIA-435",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11828,16 +12226,16 @@
           "今天下班路上看到了很好看的晚霞。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_414",
-        "account": "matrix_e",
-        "ip": "198.18.2.165"
+        "sid": "mx_t2_dia_435",
+        "account": "matrix_a",
+        "ip": "198.18.2.186"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-415",
+      "id": "T2-DIA-436",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11888,16 +12286,16 @@
           "我最喜欢的颜色是蓝色，请记住。",
           "我最喜欢什么颜色？"
         ],
-        "sid": "mx_t2_dia_415",
-        "account": "matrix_a",
-        "ip": "198.18.2.166"
+        "sid": "mx_t2_dia_436",
+        "account": "matrix_b",
+        "ip": "198.18.2.187"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-416",
+      "id": "T2-DIA-437",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -11947,16 +12345,16 @@
           "今天下班路上看到了很好看的晚霞。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_416",
-        "account": "matrix_b",
-        "ip": "198.18.2.167"
+        "sid": "mx_t2_dia_437",
+        "account": "matrix_c",
+        "ip": "198.18.2.188"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-417",
+      "id": "T2-DIA-438",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12006,16 +12404,16 @@
           "明天要考试了，我有点紧张。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_417",
-        "account": "matrix_c",
-        "ip": "198.18.2.168"
+        "sid": "mx_t2_dia_438",
+        "account": "matrix_d",
+        "ip": "198.18.2.189"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-418",
+      "id": "T2-DIA-439",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12065,16 +12463,16 @@
           "今天下班路上看到了很好看的晚霞。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_418",
-        "account": "matrix_d",
-        "ip": "198.18.2.169"
+        "sid": "mx_t2_dia_439",
+        "account": "matrix_e",
+        "ip": "198.18.2.190"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-419",
+      "id": "T2-DIA-440",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12123,16 +12521,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_419",
-        "account": "matrix_e",
-        "ip": "198.18.2.170"
+        "sid": "mx_t2_dia_440",
+        "account": "matrix_a",
+        "ip": "198.18.2.191"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-420",
+      "id": "T2-DIA-441",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12181,16 +12579,16 @@
           "最近工作有点忙，想找个人说说话。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_420",
-        "account": "matrix_a",
-        "ip": "198.18.2.171"
+        "sid": "mx_t2_dia_441",
+        "account": "matrix_b",
+        "ip": "198.18.2.192"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-421",
+      "id": "T2-DIA-442",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12239,16 +12637,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_421",
-        "account": "matrix_b",
-        "ip": "198.18.2.172"
+        "sid": "mx_t2_dia_442",
+        "account": "matrix_c",
+        "ip": "198.18.2.193"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-422",
+      "id": "T2-DIA-443",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12297,16 +12695,16 @@
           "最近工作有点忙，想找个人说说话。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_422",
-        "account": "matrix_c",
-        "ip": "198.18.2.173"
+        "sid": "mx_t2_dia_443",
+        "account": "matrix_d",
+        "ip": "198.18.2.194"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-423",
+      "id": "T2-DIA-444",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12356,16 +12754,16 @@
           "我最喜欢的颜色是蓝色，请记住。",
           "我最喜欢什么颜色？"
         ],
-        "sid": "mx_t2_dia_423",
-        "account": "matrix_d",
-        "ip": "198.18.2.174"
+        "sid": "mx_t2_dia_444",
+        "account": "matrix_e",
+        "ip": "198.18.2.195"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-424",
+      "id": "T2-DIA-445",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12414,16 +12812,16 @@
           "最近工作有点忙，想找个人说说话。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_424",
-        "account": "matrix_e",
-        "ip": "198.18.2.175"
+        "sid": "mx_t2_dia_445",
+        "account": "matrix_a",
+        "ip": "198.18.2.196"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-425",
+      "id": "T2-DIA-446",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12472,16 +12870,16 @@
           "明天要考试了，我有点紧张。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_425",
-        "account": "matrix_a",
-        "ip": "198.18.2.176"
+        "sid": "mx_t2_dia_446",
+        "account": "matrix_b",
+        "ip": "198.18.2.197"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-426",
+      "id": "T2-DIA-447",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12530,16 +12928,16 @@
           "今天下班路上看到了很好看的晚霞。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_426",
-        "account": "matrix_b",
-        "ip": "198.18.2.177"
+        "sid": "mx_t2_dia_447",
+        "account": "matrix_c",
+        "ip": "198.18.2.198"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-427",
+      "id": "T2-DIA-448",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12589,16 +12987,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_427",
-        "account": "matrix_c",
-        "ip": "198.18.2.178"
+        "sid": "mx_t2_dia_448",
+        "account": "matrix_d",
+        "ip": "198.18.2.199"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-428",
+      "id": "T2-DIA-449",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12648,16 +13046,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_428",
-        "account": "matrix_d",
-        "ip": "198.18.2.179"
+        "sid": "mx_t2_dia_449",
+        "account": "matrix_e",
+        "ip": "198.18.2.200"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-429",
+      "id": "T2-DIA-450",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12707,16 +13105,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_429",
-        "account": "matrix_e",
-        "ip": "198.18.2.180"
+        "sid": "mx_t2_dia_450",
+        "account": "matrix_a",
+        "ip": "198.18.2.201"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-430",
+      "id": "T2-DIA-451",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12766,16 +13164,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_430",
-        "account": "matrix_a",
-        "ip": "198.18.2.181"
+        "sid": "mx_t2_dia_451",
+        "account": "matrix_b",
+        "ip": "198.18.2.202"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-431",
+      "id": "T2-DIA-452",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12826,16 +13224,16 @@
           "我最喜欢的颜色是蓝色，请记住。",
           "我最喜欢什么颜色？"
         ],
-        "sid": "mx_t2_dia_431",
-        "account": "matrix_b",
-        "ip": "198.18.2.182"
+        "sid": "mx_t2_dia_452",
+        "account": "matrix_c",
+        "ip": "198.18.2.203"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-432",
+      "id": "T2-DIA-453",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12885,16 +13283,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_432",
-        "account": "matrix_c",
-        "ip": "198.18.2.183"
+        "sid": "mx_t2_dia_453",
+        "account": "matrix_d",
+        "ip": "198.18.2.204"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-433",
+      "id": "T2-DIA-454",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -12944,16 +13342,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_433",
-        "account": "matrix_d",
-        "ip": "198.18.2.184"
+        "sid": "mx_t2_dia_454",
+        "account": "matrix_e",
+        "ip": "198.18.2.205"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-434",
+      "id": "T2-DIA-455",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13003,16 +13401,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_434",
-        "account": "matrix_e",
-        "ip": "198.18.2.185"
+        "sid": "mx_t2_dia_455",
+        "account": "matrix_a",
+        "ip": "198.18.2.206"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-435",
+      "id": "T2-DIA-456",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13062,16 +13460,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_435",
-        "account": "matrix_a",
-        "ip": "198.18.2.186"
+        "sid": "mx_t2_dia_456",
+        "account": "matrix_b",
+        "ip": "198.18.2.207"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-436",
+      "id": "T2-DIA-457",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13121,16 +13519,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_436",
-        "account": "matrix_b",
-        "ip": "198.18.2.187"
+        "sid": "mx_t2_dia_457",
+        "account": "matrix_c",
+        "ip": "198.18.2.208"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-437",
+      "id": "T2-DIA-458",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13180,16 +13578,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_437",
-        "account": "matrix_c",
-        "ip": "198.18.2.188"
+        "sid": "mx_t2_dia_458",
+        "account": "matrix_d",
+        "ip": "198.18.2.209"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-438",
+      "id": "T2-DIA-459",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13239,16 +13637,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_438",
-        "account": "matrix_d",
-        "ip": "198.18.2.189"
+        "sid": "mx_t2_dia_459",
+        "account": "matrix_e",
+        "ip": "198.18.2.210"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-439",
+      "id": "T2-DIA-460",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13298,16 +13696,16 @@
           "我最喜欢的颜色是蓝色，请记住。",
           "我最喜欢什么颜色？"
         ],
-        "sid": "mx_t2_dia_439",
-        "account": "matrix_e",
-        "ip": "198.18.2.190"
+        "sid": "mx_t2_dia_460",
+        "account": "matrix_a",
+        "ip": "198.18.2.211"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-440",
+      "id": "T2-DIA-461",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13356,16 +13754,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_440",
-        "account": "matrix_a",
-        "ip": "198.18.2.191"
+        "sid": "mx_t2_dia_461",
+        "account": "matrix_b",
+        "ip": "198.18.2.212"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-441",
+      "id": "T2-DIA-462",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13414,16 +13812,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_441",
-        "account": "matrix_b",
-        "ip": "198.18.2.192"
+        "sid": "mx_t2_dia_462",
+        "account": "matrix_c",
+        "ip": "198.18.2.213"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-442",
+      "id": "T2-DIA-463",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13472,16 +13870,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_442",
-        "account": "matrix_c",
-        "ip": "198.18.2.193"
+        "sid": "mx_t2_dia_463",
+        "account": "matrix_d",
+        "ip": "198.18.2.214"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-443",
+      "id": "T2-DIA-464",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13530,16 +13928,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_443",
-        "account": "matrix_d",
-        "ip": "198.18.2.194"
+        "sid": "mx_t2_dia_464",
+        "account": "matrix_e",
+        "ip": "198.18.2.215"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T2-DIA-444",
+      "id": "T2-DIA-465",
       "layer": "T2",
       "kind": "ws_dialog",
       "family": "DIA",
@@ -13588,16 +13986,16 @@
           "我今天去公园走了走，你陪我聊聊吧。",
           "我最喜欢的颜色是蓝色，请记住。"
         ],
-        "sid": "mx_t2_dia_444",
-        "account": "matrix_e",
-        "ip": "198.18.2.195"
+        "sid": "mx_t2_dia_465",
+        "account": "matrix_a",
+        "ip": "198.18.2.216"
       },
       "expect": "WS 无 error；文本非空；第 2 轮能引用第 1 轮记忆；角色名出现在 generating 状态",
       "source": "human_extension",
       "defect": null
     },
     {
-      "id": "T3-PRB-445",
+      "id": "T3-PRB-466",
       "layer": "T3",
       "kind": "probe",
       "family": "PRB",
@@ -13607,16 +14005,16 @@
       },
       "params": {
         "probe": "gpu",
-        "sid": "mx_t3_prb_445",
-        "account": "matrix_a",
-        "ip": "198.18.2.196"
+        "sid": "mx_t3_prb_466",
+        "account": "matrix_b",
+        "ip": "198.18.2.217"
       },
       "expect": "只探测并记录，不硬跑",
       "source": "capability_gap",
       "defect": null
     },
     {
-      "id": "T3-PRB-446",
+      "id": "T3-PRB-467",
       "layer": "T3",
       "kind": "probe",
       "family": "PRB",
@@ -13626,16 +14024,16 @@
       },
       "params": {
         "probe": "local_model",
-        "sid": "mx_t3_prb_446",
-        "account": "matrix_b",
-        "ip": "198.18.2.197"
+        "sid": "mx_t3_prb_467",
+        "account": "matrix_c",
+        "ip": "198.18.2.218"
       },
       "expect": "只探测并记录，不硬跑",
       "source": "capability_gap",
       "defect": null
     },
     {
-      "id": "T3-PRB-447",
+      "id": "T3-PRB-468",
       "layer": "T3",
       "kind": "probe",
       "family": "PRB",
@@ -13645,16 +14043,16 @@
       },
       "params": {
         "probe": "cloud_tts",
-        "sid": "mx_t3_prb_447",
-        "account": "matrix_c",
-        "ip": "198.18.2.198"
+        "sid": "mx_t3_prb_468",
+        "account": "matrix_d",
+        "ip": "198.18.2.219"
       },
       "expect": "只探测并记录，不硬跑",
       "source": "capability_gap",
       "defect": null
     },
     {
-      "id": "T3-PRB-448",
+      "id": "T3-PRB-469",
       "layer": "T3",
       "kind": "probe",
       "family": "PRB",
@@ -13664,16 +14062,16 @@
       },
       "params": {
         "probe": "asr",
-        "sid": "mx_t3_prb_448",
-        "account": "matrix_d",
-        "ip": "198.18.2.199"
+        "sid": "mx_t3_prb_469",
+        "account": "matrix_e",
+        "ip": "198.18.2.220"
       },
       "expect": "只探测并记录，不硬跑",
       "source": "capability_gap",
       "defect": null
     },
     {
-      "id": "T3-PRB-449",
+      "id": "T3-PRB-470",
       "layer": "T3",
       "kind": "probe",
       "family": "PRB",
@@ -13683,16 +14081,16 @@
       },
       "params": {
         "probe": "voice_define",
-        "sid": "mx_t3_prb_449",
-        "account": "matrix_e",
-        "ip": "198.18.2.200"
+        "sid": "mx_t3_prb_470",
+        "account": "matrix_a",
+        "ip": "198.18.2.221"
       },
       "expect": "只探测并记录，不硬跑",
       "source": "capability_gap",
       "defect": null
     },
     {
-      "id": "T3-PRB-450",
+      "id": "T3-PRB-471",
       "layer": "T3",
       "kind": "probe",
       "family": "PRB",
@@ -13702,16 +14100,16 @@
       },
       "params": {
         "probe": "voice_clone",
-        "sid": "mx_t3_prb_450",
-        "account": "matrix_a",
-        "ip": "198.18.2.201"
+        "sid": "mx_t3_prb_471",
+        "account": "matrix_b",
+        "ip": "198.18.2.222"
       },
       "expect": "只探测并记录，不硬跑",
       "source": "capability_gap",
       "defect": null
     },
     {
-      "id": "T3-PRB-451",
+      "id": "T3-PRB-472",
       "layer": "T3",
       "kind": "probe",
       "family": "PRB",
@@ -13721,16 +14119,16 @@
       },
       "params": {
         "probe": "emotion_tts",
-        "sid": "mx_t3_prb_451",
-        "account": "matrix_b",
-        "ip": "198.18.2.202"
+        "sid": "mx_t3_prb_472",
+        "account": "matrix_c",
+        "ip": "198.18.2.223"
       },
       "expect": "只探测并记录，不硬跑",
       "source": "capability_gap",
       "defect": null
     },
     {
-      "id": "T3-PRB-452",
+      "id": "T3-PRB-473",
       "layer": "T3",
       "kind": "probe",
       "family": "PRB",
@@ -13740,9 +14138,9 @@
       },
       "params": {
         "probe": "playback",
-        "sid": "mx_t3_prb_452",
-        "account": "matrix_c",
-        "ip": "198.18.2.203"
+        "sid": "mx_t3_prb_473",
+        "account": "matrix_d",
+        "ip": "198.18.2.224"
       },
       "expect": "只探测并记录，不硬跑",
       "source": "capability_gap",

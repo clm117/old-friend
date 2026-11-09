@@ -164,7 +164,7 @@
     {
       "name": "控制台-无未捕获错误",
       "status": "PASS",
-      "detail": "实际错误数=0（已过滤预期错误 7 条）"
+      "detail": "实际错误数=0（已过滤预期错误 8 条）"
     },
     {
       "name": "页面-无JS异常",
@@ -176,6 +176,10 @@
     {
       "type": "error",
       "text": "Failed to load resource: the server responded with a status of 404 (File not found)"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
     },
     {
       "type": "error",
@@ -211,6 +215,11 @@
     },
     {
       "url": "http://localhost:8005/api/characters/options",
+      "status": 401,
+      "body": "{\"error\":\"缺少访问凭证\"}"
+    },
+    {
+      "url": "http://localhost:8005/api/voice-presets",
       "status": 401,
       "body": "{\"error\":\"缺少访问凭证\"}"
     },

@@ -17,12 +17,15 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 import wave
 import traceback
 from playwright.sync_api import sync_playwright
 
-CHROME = r"C:\Users\clm117\AppData\Local\google\Chrome\Application\chrome.exe"
+CHROME = os.environ.get("YUBAN_CHROME") or r"C:\Users\clm117\AppData\Local\google\Chrome\Application\chrome.exe"
+# 系统 Chrome 不存在时（如 CI/Linux）回退到 Playwright 自带 Chromium
+LAUNCH_OPTS = {"executable_path": CHROME} if os.path.exists(CHROME) else {}
 # 地址可通过环境变量注入，便于统一执行入口/CI 切换环境
 BASE = os.environ.get("YUBAN_API_BASE", "http://127.0.0.1:8005")        # API 直连网关
 UI_BASE = os.environ.get("YUBAN_UI_BASE", "http://localhost:8899")      # 前端静态服务（port=8899 → 前端自动指向 8005）
@@ -250,19 +253,21 @@ def run_api(p):
                  headers=AUTH, timeout=10000)
     rec("A28", "API-定义", "非音频格式 → 400 不支持格式", r.status == 400 and "不支持" in body(r), f"status={r.status} {body(r)[:60]}")
 
-    # 合法 wav（可能调用模型，超时视为校验通过）
+    # 合法 wav（云模式应给出明确失败码；本地模式进入模型处理，超时视为校验通过）
     try:
         r = api.post("/api/voice/define",
                      multipart={"session_id": "d1", "description": "低沉男声",
                                 "audio": {"name": "a.wav", "mimeType": "audio/wav", "buffer": WAV}},
-                     headers=AUTH, timeout=8000)
+                     headers=AUTH, timeout=20000)
         rec("A29", "API-定义", "合法 wav：云模式返回明确失败码（欠费 402 / 不支持 501 等），本地模式通过校验",
-            r.status_code in (200, 422) or (
-                r.status_code in (402, 429, 501, 502, 504) and (jbody(r) or {}).get("code")),
-            f"status={r.status_code} {body(r)[:80]}")
+            r.status in (200, 422) or (
+                r.status in (402, 429, 501, 502, 504) and (jbody(r) or {}).get("code")),
+            f"status={r.status} {body(r)[:80]}")
     except Exception as e:
-        rec("A29", "API-定义", "合法 wav + 描述 → 通过校验", "timed out" in str(e).lower() or "Timeout" in str(e),
-            "校验通过并进入模型处理（超时属预期）")
+        msg = f"{type(e).__name__}: {e}"
+        rec("A29", "API-定义", "合法 wav：云模式返回明确失败码（欠费 402 / 不支持 501 等），本地模式通过校验",
+            "timeout" in msg.lower() or "timed out" in msg.lower(),
+            f"请求未返回（{msg[:120]}）→ 已越过格式校验进入模型处理")
 
     # pitch/speed/volume 数值类型：负数 / 0 / NaN
     for cid, kv, label in [("A29b", ("pitch", "-1"), "pitch 负数"),
@@ -525,7 +530,7 @@ def run_rate_limit(p):
     就绪探测用 TCP 而非 HTTP：/health 会计入普通限流桶，HTTP 探测会耗光配额（曾致误判未就绪）。"""
     service_py = os.environ.get("YUBAN_SERVICE_PY") or sys.executable
     try:
-        probe = subprocess.run([service_py, "-c", "import fastapi, uvicorn, jose, requests"],
+        probe = subprocess.run([service_py, "-c", "import fastapi, uvicorn, jwt, requests"],
                                capture_output=True, timeout=60)
         usable = probe.returncode == 0
     except Exception:
@@ -689,7 +694,7 @@ def wait_create_done(page, timeout=12000):
 
 def run_ui(p):
     # ---------- B1 登录分支（独立上下文，避免状态串扰） ----------
-    ctx = p.chromium.launch(executable_path=CHROME, headless=True, args=["--no-sandbox", "--disable-gpu"]).new_context(viewport={"width": 1280, "height": 900})
+    ctx = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-gpu"], **LAUNCH_OPTS).new_context(viewport={"width": 1280, "height": 900})
     page = ctx.new_page()
     u = UI(page)
 
@@ -1546,6 +1551,86 @@ def run_ui(p):
         f"first={first} seq={seq}")
     ctx4.close()
 
+    # ---------- B86: 会话被服务端删除 → 刷新收敛 + 页内删除后发送 1008 自动重建 ----------
+    api = os.environ.get("YUBAN_API_BASE", "http://127.0.0.1:8005")
+    tok = page.evaluate("() => localStorage.getItem('yuban_token')")
+    hdr = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"}
+
+    def _api(method, path, payload=None):
+        req = urllib.request.Request(
+            api + path, method=method,
+            data=json.dumps(payload).encode() if payload is not None else None,
+            headers=hdr)
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return resp.status, json.loads(resp.read().decode() or "{}")
+        except urllib.error.HTTPError as e:
+            return e.code, {}
+
+    def _mk(title):
+        _, body = _api("POST", "/api/sessions", {"title": title})
+        return body.get("session_id", "")
+
+    sid_a = _mk("深度-删除后刷新")
+    _api("DELETE", f"/api/sessions/{sid_a}")
+    page.evaluate("(s) => localStorage.setItem('sessionId', s)", sid_a)
+    page.reload()
+    page.wait_for_timeout(2500)
+    cleared = page.evaluate("() => localStorage.getItem('sessionId')")
+    page.fill("#chatInput", "刷新后重建")
+    page.click("#chatSendBtn")
+    page.wait_for_timeout(3000)
+    rebuilt = page.evaluate("() => localStorage.getItem('sessionId')")
+    _, after_rebuild = _api("GET", "/api/sessions?limit=100&offset=0")
+    rebuilt_server = any(x.get("session_id") == rebuilt
+                         for x in (after_rebuild.get("sessions") or []))
+
+    sid_b = _mk("深度-页内删除")
+    page.evaluate("(s) => localStorage.setItem('sessionId', s)", sid_b)
+    page.reload()
+    page.wait_for_timeout(2500)
+    _api("DELETE", f"/api/sessions/{sid_b}")
+    page.fill("#chatInput", "页内删除后发送")
+    page.click("#chatSendBtn")
+    page.wait_for_timeout(3000)
+    msgs = page.evaluate("() => Array.from(document.querySelectorAll('#chatHistory .chat-message.ai .message-content')).map(e => e.innerText)")
+    notice = any("已被删除" in (m or "") and "新建会话" in (m or "") for m in msgs)
+    sid_c = page.evaluate("() => localStorage.getItem('sessionId')")
+    for sid in {rebuilt, sid_c} - {"", None}:
+        _api("DELETE", f"/api/sessions/{sid}")
+    rec("B86", "UI-会话", "服务端删除会话：刷新收敛清空 + 页内删除后发送 1008 提示并自动重建",
+        bool(sid_a) and not cleared and bool(rebuilt) and rebuilt != sid_a and rebuilt_server
+        and notice and bool(sid_c) and sid_c != sid_b,
+        f"cleared={cleared!r} rebuilt={rebuilt} server={rebuilt_server} notice={notice} sid_c={sid_c}")
+
+    # ---------- B87: 预设音色 12 条可列出/可选，未就绪提示明确（GAP-05 新增） ----------
+    # 与 B86 解耦：清掉上一条用例遗留的已删除会话，确保本次从干净会话状态验证
+    page.evaluate("() => localStorage.removeItem('sessionId')")
+    page.reload()
+    page.wait_for_timeout(2000)
+    page.click(".nav-btn[data-tab='character']")
+    page.wait_for_timeout(1200)
+    preset_opts = page.evaluate(
+        "() => Array.from(document.querySelectorAll('#charPresetVoice option')).map(o => ({v: o.value, t: o.textContent}))")
+    preset_names = [o["t"].replace("（音色未就绪）", "") for o in preset_opts if o["v"]]
+    expect_names = ["乖巧学弟", "不羁少年", "理工学霸", "阳光型男", "相声评书", "新闻男声",
+                    "新闻女声", "知性熟女", "温婉秘书", "智性精英", "浪险少女", "贵气千金"]
+    page.select_option("#charPresetVoice", "vp_xiangsheng_pingshu")
+    page.wait_for_timeout(1500)
+    hint_text = page.inner_text("#charPresetVoiceHint")
+    prompt_text = page.inner_text("#charPresetVoicePrompt")
+    page.click("#applyPresetVoiceBtn")
+    page.wait_for_timeout(1500)
+    status_text = page.inner_text("#characterStatus")
+    preset_sid = page.evaluate("() => localStorage.getItem('sessionId')")
+    if preset_sid:
+        _api("DELETE", f"/api/sessions/{preset_sid}")
+    page.select_option("#charPresetVoice", "")
+    rec("B87", "UI-音色", "预设音色 12 条可列出/可选，选择后展示 prompt 与未就绪提示",
+        preset_names == expect_names and "未就绪" in hint_text and "voice_prompt" in prompt_text
+        and "已为当前会话选择预设音色" in status_text and "未就绪" in status_text,
+        f"names={preset_names} hint={hint_text!r} prompt={prompt_text!r} status={status_text!r}")
+
     # ---------- 套件自检 Z04：测试数据清理纪律 ----------
     page.evaluate("() => { localStorage.removeItem('voices'); localStorage.removeItem('emotions'); localStorage.removeItem('characters'); }")
     leftover = page.evaluate("() => ['voices', 'emotions', 'characters'].filter(k => localStorage.getItem(k) !== null)")
@@ -1578,7 +1663,7 @@ def run_ui(p):
 def main():
     # 用例完整性基线：API 段与 UI 段各应产出固定数量用例，缺失即视为套件缺陷
     EXPECT_API = 77
-    EXPECT_UI = 85
+    EXPECT_UI = 87
 
     with sync_playwright() as p:
         try:

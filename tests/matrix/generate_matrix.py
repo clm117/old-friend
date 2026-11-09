@@ -273,6 +273,23 @@ def build_t1(p):
           {"speed": None, "expect": "ok", "phrase": "",
            "expected_prompt": expected_prompt("female", "young_adult", ["gentle"])},
           "缺省 1.0，voice_prompt 与既有标签映射逐字一致")
+    # GAP-05 新增：12 条预设音色（目录 + 描述驱动，真实 voice_id 暂空）
+    p.add("T1", "VOX", "voice_presets_catalog", "12 条预设音色目录（字段/就绪状态/基线不变）",
+          {"voice": "presets_catalog"}, {"url": "gw:/api/voice-presets"},
+          "12 条名称与顺序一致；字段齐全；locale=zh-CN/voice_type=preset/ready=false/notice 明确；"
+          "既有 10 标签与默认回退不变")
+    p.add("T1", "VOX", "voice_preset_prompts", "12 条预设均可按 id 生成含语感的 voice_prompt",
+          {"voice": "preset_prompts"}, {"url": "gw:/api/voice-presets/{id}/prompt"},
+          "每条 prompt 非空且含风格词；相声评书 capabilities.style=false 且有 capability_note")
+    p.add("T1", "VOX", "voice_preset_unknown", "未知预设 id → 404",
+          {"voice": "preset_unknown"}, {"preset_id": "vp_not_exist"},
+          "取 prompt 与绑定均返回 404，不静默回退")
+    p.add("T1", "VOX", "voice_preset_bind", "预设音色绑定会话：未绑定真实音色时明确提示",
+          {"voice": "preset_bind"}, {"sid": None, "preset_id": "vp_xiangsheng_pingshu"},
+          "200 + voice_prompt 非空 + voice_id=null + ready=false + notice 含“未就绪”+ 落盘一致")
+    p.add("T1", "VOX", "voice_preset_forbidden", "他人会话绑定预设 → 403",
+          {"voice": "preset_forbidden"}, {"sid": None},
+          "跨账号绑定预设被拒绝，不泄露/不写入他人会话")
 
     # ---------------- EMO：情感类型 × 强度边界 ----------------
     for e in emotions:
@@ -412,6 +429,55 @@ def build_t1(p):
           "重启后 GET 返回 calm 参数", account="matrix_a")
     p.add("T1", "RST", "restart_custom_character", "重启后自定义角色仍在",
           {"role": "restart"}, {"name": "重启保留角色"}, "重启后列表中仍存在该角色",
+          account="matrix_a")
+
+    # ---------------- COV：覆盖重检补测（分页/并发/墓碑/越权/网关/签名） ----------------
+    p.add("T1", "SES", "page_limit_zero", "分页 limit=0 → 422",
+          {"session": "pagination"}, {"limit": 0, "offset": 0},
+          "网关透传 AI 422（Query ge=1）", account="matrix_a")
+    p.add("T1", "SES", "page_limit_over", "分页 limit=101 → 422",
+          {"session": "pagination"}, {"limit": 101, "offset": 0},
+          "网关透传 AI 422（Query le=100）", account="matrix_a")
+    p.add("T1", "SES", "page_offset_negative", "分页 offset=-1 → 422",
+          {"session": "pagination"}, {"limit": 20, "offset": -1},
+          "网关透传 AI 422（Query ge=0）", account="matrix_a")
+    p.add("T1", "SES", "page_offset_beyond", "offset 超范围 → 200 空页且 total 不变",
+          {"session": "pagination"}, {"limit": 20, "offset": 999999},
+          "200；sessions=[]；total 与首页一致", account="matrix_a")
+    p.add("T1", "SES", "session_order", "会话列表按 updated_at 倒序、重命名上浮",
+          {"session": "crud"}, {"titles": ["排序-A", "排序-B", "排序-C"]},
+          "最近重命名的会话排在三个测试会话最前", account="matrix_a")
+    p.add("T1", "SES", "session_rename_concurrent", "同一会话 10 并发重命名一致性",
+          {"session": "crud"}, {"workers": 10},
+          "全部 200；最终标题为其中之一；无 500/数据损坏", account="matrix_a")
+    p.add("T1", "SES", "session_delete_then_bind", "删除后绑定角色 → 404 且不复活",
+          {"session": "crud"}, {}, "绑定 404；再读 404；列表仍排除", account="matrix_a")
+    p.add("T1", "ISO", "iso_ws_forbidden", "B 账号 WS 连接 A 的会话 → 1008 forbidden",
+          {"session": "ownership"}, {"sid": "mx_iso_session", "as": "matrix_b", "ip": "198.18.88.7"},
+          "close code=1008，reason 含 forbidden", account="matrix_a")
+    p.add("T1", "ISO", "iso_delete_emotion", "B 账号 DELETE A 的情感配置（应拒绝）",
+          {"emotion": "ownership"}, {"sid": "mx_iso_session", "as": "matrix_b", "ip": "198.18.88.8"},
+          "403/404；A 的情感配置仍存在", account="matrix_a")
+    p.add("T1", "SYS", "cors_preflight_methods", "CORS 预检覆盖 PUT/PATCH/DELETE",
+          {"session": "contract"}, {}, "5 组预检 200 且 Allow-Methods 含对应方法；实际 PATCH 带 ACAO",
+          account="matrix_a")
+    p.add("T1", "SYS", "internal_sig_invalid", "内部签名缺失/篡改/过期/未来 → 401",
+          {"session": "contract"}, {}, "直连 AI 8084 四种伪造均 401 且不泄露数据",
+          account="matrix_a")
+    p.add("T1", "SYS", "internal_sig_valid", "内部签名合法 + TTL 内重放 → 200",
+          {"session": "contract"}, {}, "合法签名 200；同一签名重放两次均 200（设计允许 300s 内）",
+          account="matrix_a")
+    p.add("T1", "SYS", "upstream_down", "上游连接中断 → 502 且探针 503 降级",
+          {"session": "contract"}, {}, "代理端点 502；/health 503 degraded；/ready 503",
+          account="matrix_a")
+    p.add("T1", "SYS", "upstream_timeout", "上游不应答 → 超时 502",
+          {"session": "contract"}, {}, "真实黑洞上游 + 1s 超时 → 代理端点 502 且 10s 内返回",
+          account="matrix_a")
+    p.add("T1", "EMO", "emotion_delete_resave", "情感解绑后可重新保存（幂等）",
+          {"emotion": "crud"}, {}, "DELETE 204×2；GET null；重存 200 且读回一致",
+          account="matrix_a")
+    p.add("T1", "RST", "restart_tombstone", "重启后墓碑仍生效（404 + 列表排除 + WS 1008）",
+          {"session": "restart"}, {}, "重启后读/删 404、列表排除、WS 1008 session_deleted",
           account="matrix_a")
 
 

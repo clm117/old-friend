@@ -1,30 +1,31 @@
 {
-  "generated_at": "2026-11-06 19:33:54",
+  "generated_at": "2026-11-09 10:12:26",
   "environment": {
     "api_base": "http://127.0.0.1:8005",
     "ui_base": "http://localhost:8899",
     "ai_base": "http://127.0.0.1:8084",
-    "test_python": "D:\\ProgramFile\\语伴\\.venv\\Scripts\\python.exe",
-    "service_python": "python",
+    "test_python": "D:\\Program Files (x86)\\Python 3.11\\python.exe",
+    "service_python": "D:\\Program Files (x86)\\Python 3.11\\python.exe",
     "services_started": [
       "ai-service",
-      "api-gateway"
+      "api-gateway",
+      "frontend-static"
     ]
   },
   "summary": {
-    "total": 198,
-    "passed": 196,
-    "failed": 1,
-    "blocked": 1
+    "total": 167,
+    "passed": 167,
+    "failed": 0,
+    "blocked": 0
   },
   "suites": {
     "deep": {
       "desc": "深度套件：API 分支/数据类型/状态/临界值/安全攻击面 + UI 全界面",
-      "elapsed_s": 319.1,
+      "elapsed_s": 345.2,
       "summary": {
-        "total": 165,
-        "passed": 164,
-        "failed": 1,
+        "total": 167,
+        "passed": 167,
+        "failed": 0,
         "blocked": 0
       },
       "results": [
@@ -220,9 +221,9 @@
         {
           "id": "A29",
           "area": "API-定义",
-          "case": "合法 wav + 描述 → 通过校验",
-          "status": "FAIL",
-          "detail": "校验通过并进入模型处理（超时属预期）"
+          "case": "合法 wav：云模式返回明确失败码（欠费 402 / 不支持 501 等），本地模式通过校验",
+          "status": "PASS",
+          "detail": "status=402 {\"error\":\"云语音账户欠费，无法创建音色\",\"code\":\"voice_quota_unavailable\",\"hint\":\"云语音账户余额不足（欠费）"
         },
         {
           "id": "A29b",
@@ -922,7 +923,7 @@
           "area": "UI-角色",
           "case": "绑定预设角色 → 状态条曾展示「已选择角色」（探针锁存）",
           "status": "PASS",
-          "detail": "seen=True status=当前使用角色：「温柔学姐」"
+          "detail": "seen=True status=已选择角色「温柔学姐」，对话和合成将使用该角色的声音与人设。声音风格：A you"
         },
         {
           "id": "B52",
@@ -1118,14 +1119,14 @@
           "area": "UI-性能",
           "case": "120 条历史消息渲染 < 1000ms",
           "status": "PASS",
-          "detail": "res={'ms': 10, 'nodes': 120}"
+          "detail": "res={'ms': 15, 'nodes': 120}"
         },
         {
           "id": "B84",
           "area": "UI-性能",
           "case": "150 个角色列表渲染 < 2000ms",
           "status": "PASS",
-          "detail": "res={'ms': 11, 'preset': 75, 'custom': 75}"
+          "detail": "res={'ms': 13, 'preset': 75, 'custom': 75}"
         },
         {
           "id": "B85",
@@ -1139,7 +1140,7 @@
           "area": "UI-性能",
           "case": "首屏 load 基线 < 3000ms（本地静态）",
           "status": "PASS",
-          "detail": "load=175ms"
+          "detail": "load=190ms"
         },
         {
           "id": "B80",
@@ -1154,6 +1155,20 @@
           "case": "登录门禁 Tab 链：起点用户名 → 密码 → 提交键可达",
           "status": "PASS",
           "detail": "first=authUsername seq=['authPassword', 'authSubmitBtn', 'newSessionBtn']"
+        },
+        {
+          "id": "B86",
+          "area": "UI-会话",
+          "case": "服务端删除会话：刷新收敛清空 + 页内删除后发送 1008 提示并自动重建",
+          "status": "PASS",
+          "detail": "cleared=None rebuilt=s_pvXt_IHJ_SsijieCFH-UIENoTwriIGqG server=True notice=True sid_c=s_3wWHSF0kbxCxuRqSDF1OMx-H7rXEk08c"
+        },
+        {
+          "id": "B87",
+          "area": "UI-音色",
+          "case": "预设音色 12 条可列出/可选，选择后展示 prompt 与未就绪提示",
+          "status": "PASS",
+          "detail": "names=['乖巧学弟', '不羁少年', '理工学霸', '阳光型男', '相声评书', '新闻男声', '新闻女声', '知性熟女', '温婉秘书', '智性精英', '浪险少女', '贵气千金'] hint='相声评书音色未就绪，使用默认音色' prompt='voice_prompt：A middle-aged man, lively, husky, theatrical, storytelling, rhythmic voice' status='已为当前会话选择预设音色「相声评书」（相声评书音色未就绪，使用默认音色）。voice_prompt：A middle-aged man,"
         },
         {
           "id": "Z04",
@@ -1179,266 +1194,13 @@
         {
           "id": "Z03",
           "area": "套件自检",
-          "case": "UI 用例数量 = 85",
+          "case": "UI 用例数量 = 87",
           "status": "PASS",
-          "detail": "实际 85"
+          "detail": "实际 87"
         }
       ],
       "log": "D:\\ProgramFile\\语伴\\test_outputs\\deep_run.log"
-    },
-    "base": {
-      "desc": "基础回归：登录 + 7 个标签页按钮/表单/边界值",
-      "elapsed_s": 15.3,
-      "summary": {
-        "total": 33,
-        "passed": 32,
-        "failed": 0,
-        "blocked": 1
-      },
-      "results": [
-        {
-          "id": "登录-页面加载",
-          "area": "",
-          "case": "登录-页面加载",
-          "status": "PASS",
-          "detail": "打开首页"
-        },
-        {
-          "id": "登录-遮罩可见",
-          "area": "",
-          "case": "登录-遮罩可见",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "登录-提交成功",
-          "area": "",
-          "case": "登录-提交成功",
-          "status": "PASS",
-          "detail": "遮罩隐藏=True"
-        },
-        {
-          "id": "登录-token存储",
-          "area": "",
-          "case": "登录-token存储",
-          "status": "PASS",
-          "detail": "token=有"
-        },
-        {
-          "id": "对话-发送按钮存在",
-          "area": "",
-          "case": "对话-发送按钮存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "对话-麦克风按钮存在",
-          "area": "",
-          "case": "对话-麦克风按钮存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "对话-空输入拦截",
-          "area": "",
-          "case": "对话-空输入拦截",
-          "status": "PASS",
-          "detail": "空文本不应发送"
-        },
-        {
-          "id": "对话-文字发送",
-          "area": "",
-          "case": "对话-文字发送",
-          "status": "PASS",
-          "detail": "用户消息应出现在历史中"
-        },
-        {
-          "id": "录入-录制按钮存在",
-          "area": "",
-          "case": "录入-录制按钮存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "录入-停止按钮隐藏",
-          "area": "",
-          "case": "录入-停止按钮隐藏",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "录入-点击录制不崩溃",
-          "area": "",
-          "case": "录入-点击录制不崩溃",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "录入-停止按钮显示",
-          "area": "",
-          "case": "录入-停止按钮显示",
-          "status": "BLOCKED",
-          "detail": "无麦克风环境：录制未启动，停止按钮分支不可达"
-        },
-        {
-          "id": "定义-表单存在",
-          "area": "",
-          "case": "定义-表单存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "定义-滑块默认值",
-          "area": "",
-          "case": "定义-滑块默认值",
-          "status": "PASS",
-          "detail": "pitch=1 speed=1 volume=1"
-        },
-        {
-          "id": "定义-空名称拦截",
-          "area": "",
-          "case": "定义-空名称拦截",
-          "status": "PASS",
-          "detail": "alert=请输入语音名称"
-        },
-        {
-          "id": "情感-6维滑块齐全",
-          "area": "",
-          "case": "情感-6维滑块齐全",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "情感-滑块联动显示",
-          "area": "",
-          "case": "情感-滑块联动显示",
-          "status": "PASS",
-          "detail": "happinessValue=0.9"
-        },
-        {
-          "id": "情感-保存响应",
-          "area": "",
-          "case": "情感-保存响应",
-          "status": "PASS",
-          "detail": "响应: 情感配置结果\n\n情感配置保存成功！\n\n名称: 测试情感\n\n描述:\n\n愉悦: 0.9\n\n悲伤: 0.1\n\n愤怒: 0.1\n\n恐惧: 0.1\n\n厌恶: 0.1\n\n惊"
-        },
-        {
-          "id": "角色-创建按钮存在",
-          "area": "",
-          "case": "角色-创建按钮存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "角色-预设列表加载",
-          "area": "",
-          "case": "角色-预设列表加载",
-          "status": "PASS",
-          "detail": "内容长度=351"
-        },
-        {
-          "id": "角色-空名称拦截",
-          "area": "",
-          "case": "角色-空名称拦截",
-          "status": "PASS",
-          "detail": "alert=请填写角色名称"
-        },
-        {
-          "id": "角色-创建角色",
-          "area": "",
-          "case": "角色-创建角色",
-          "status": "PASS",
-          "detail": "name_val=测试角色UI 响应: 角色「测试角色UI」创建成功！可在上方列表点\"选择\"绑定到当前会话。"
-        },
-        {
-          "id": "角色-超长名称边界",
-          "area": "",
-          "case": "角色-超长名称边界",
-          "status": "PASS",
-          "detail": "响应长度=92"
-        },
-        {
-          "id": "合成-文本框存在",
-          "area": "",
-          "case": "合成-文本框存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "合成-合成按钮存在",
-          "area": "",
-          "case": "合成-合成按钮存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "合成-空文本拦截",
-          "area": "",
-          "case": "合成-空文本拦截",
-          "status": "PASS",
-          "detail": "响应: 请输入合成文本"
-        },
-        {
-          "id": "合成-超长文本边界",
-          "area": "",
-          "case": "合成-超长文本边界",
-          "status": "PASS",
-          "detail": "响应长度=29"
-        },
-        {
-          "id": "设置-API地址输入存在",
-          "area": "",
-          "case": "设置-API地址输入存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "设置-会话ID输入存在",
-          "area": "",
-          "case": "设置-会话ID输入存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "设置-保存按钮存在",
-          "area": "",
-          "case": "设置-保存按钮存在",
-          "status": "PASS",
-          "detail": ""
-        },
-        {
-          "id": "设置-保存设置",
-          "area": "",
-          "case": "设置-保存设置",
-          "status": "PASS",
-          "detail": "点击保存无异常"
-        },
-        {
-          "id": "控制台-无未捕获错误",
-          "area": "",
-          "case": "控制台-无未捕获错误",
-          "status": "PASS",
-          "detail": "实际错误数=0（已过滤预期错误 7 条）"
-        },
-        {
-          "id": "页面-无JS异常",
-          "area": "",
-          "case": "页面-无JS异常",
-          "status": "PASS",
-          "detail": "异常数=0"
-        }
-      ],
-      "log": "D:\\ProgramFile\\语伴\\test_outputs\\base_run.log"
     }
   },
-  "failures": [
-    {
-      "suite": "deep",
-      "id": "A29",
-      "area": "API-定义",
-      "case": "合法 wav + 描述 → 通过校验",
-      "status": "FAIL",
-      "detail": "校验通过并进入模型处理（超时属预期）"
-    }
-  ]
+  "failures": []
 }

@@ -300,6 +300,13 @@
                         <div id="charVoiceTags" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
                     </div>
                     <div class="form-group">
+                        <label for="charPresetVoice">预设音色（12 选 1，应用当前会话）</label>
+                        <select id="charPresetVoice"></select>
+                        <p id="charPresetVoiceHint" style="margin:6px 0 0; font-size:0.82rem; color:#b26a00; display:none;"></p>
+                        <p id="charPresetVoicePrompt" style="margin:4px 0 0; font-size:0.82rem; color:#555; display:none;"></p>
+                        <button type="button" id="applyPresetVoiceBtn" style="margin-top:8px; padding:6px 14px; border:none; border-radius:6px; background:#4CAF50; color:#fff; cursor:pointer;">应用到当前会话</button>
+                    </div>
+                    <div class="form-group">
                         <label for="charIdentity">身份/职业（可选）</label>
                         <input type="text" id="charIdentity" placeholder="例如：幼儿园老师">
                     </div>

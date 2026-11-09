@@ -10,11 +10,19 @@ env:
   PYTHONUNBUFFERED: "1"
   JWT_SECRET: "ci-only-secret-0123456789abcdef0123456789abcdef"
   AUTH_SEED_PASSWORD: "CiSeed@123456"
+  # cloud 模式：不加载 VoxCPM2 权重，CI 无需 GPU 与模型文件
+  TTS_PROVIDER: "cloud"
+
+# 同一分支只保留最新一次运行，避免并发抢占 8084/8005 端口
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   gateway-smoke:
     name: 网关冒烟 + 配置校验
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,6 +41,7 @@ jobs:
   state-store:
     name: 状态持久化单测
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -42,3 +51,238 @@ jobs:
         run: python -m unittest tests/test_state_store.py -v
       - name: 备份/恢复脚本语法检查
         run: python -m py_compile infrastructure/backup/backup_data.py infrastructure/backup/restore_data.py
+
+  matrix-t1:
+    name: 矩阵 T1（配置链路，无外部资源）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 安装依赖（CPU torch + 云端模式服务依赖）
+        run: |
+          # ai-service 顶层 import torch；T1 为 cloud 模式，不安装 voxcpm/transformers 也不会加载模型
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r api-gateway/requirements.txt -c constraints.txt
+          pip install httpx==0.28.1 pydantic==2.13.3
+      - name: 运行矩阵 T1（FAIL 即门禁不通过）
+        run: python tests/matrix/run_matrix.py --layers T1 --fail-on-fail
+      - name: 汇总门禁结果
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("tests/matrix/report.json")
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          if not path.exists():
+              summary.write_text("### 矩阵 T1：未生成报告（见上一步日志）\n", encoding="utf-8")
+              print("::notice title=矩阵 T1 门禁::未生成报告，请查看运行日志")
+              raise SystemExit(0)
+          rep = json.loads(path.read_text(encoding="utf-8"))
+          layers = rep["coverage"]["layers"]
+          totals = rep["coverage"]["totals"]
+          lines = ["### 矩阵 T1 门禁", "",
+                   "| 层 | 计划 | 执行 | 通过 | 失败 | 能力缺失 | 阻塞 |",
+                   "|---|---|---|---|---|---|---|"]
+          for key in ("T1", "T2", "T3"):
+              s = layers[key]
+              lines.append(f"| {key} | {s['planned']} | {s['executed']} | {s['passed']} | "
+                           f"{s['failed']} | {s['capability_gap']} | {s['blocked']} |")
+          lines += ["",
+                    f"- FAIL 判定：{totals['failed']} 条（仅 FAIL 判门禁不通过）",
+                    "- T2：SKIPPED，原因=依赖 DashScope LLM（未启用外部资源门禁）",
+                    "- T3：SKIPPED，原因=依赖 GPU/CUDA 与云 TTS 配额（未启用外部资源门禁）",
+                    "- BLOCKED 与 CAPABILITY_GAP 均不计为 PASS，也不计为失败"]
+          summary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print(f"::notice title=矩阵 T1 门禁::通过 {layers['T1']['passed']} / 失败 {layers['T1']['failed']}")
+          print("::notice title=T2/T3 已跳过::依赖外部资源（DashScope LLM / GPU-CUDA 与云 TTS 配额），"
+                "CI 默认不启用，显式记为 SKIPPED 且不计入失败")
+          PY
+      - name: 清理测试进程（不留残留）
+        if: always()
+        run: |
+          pkill -f "main.py" || true
+          pkill -f "app.py" || true
+          pkill -f "http.server 8899" || true
+          sleep 1
+          if (ss -lnt 2>/dev/null || true) | grep -Eq ':(8084|8005|8899)\b'; then
+            echo "::warning::测试端口仍有监听，请检查进程清理"
+          else
+            echo "测试端口 8084/8005/8899 已释放"
+          fi
+
+  ui-gates:
+    name: 前端交互 + 深度 167 + 基础 33
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # run_tests.py 的默认解释器是 Windows 绝对路径，CI 用环境变量覆盖
+      YUBAN_PY: "python"
+      YUBAN_SERVICE_PY: "python"
+      AUTH_USERS_FILE: ${{ github.workspace }}/tests/runtime/users_ci.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 安装依赖（CPU torch + 服务依赖 + Playwright）
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r api-gateway/requirements.txt -c constraints.txt
+          pip install httpx==0.28.1 pydantic==2.13.3 playwright
+      - name: 安装 Chromium（无系统 Chrome 时使用 Playwright 内置浏览器）
+        run: python -m playwright install --with-deps chromium
+      - name: 播种测试账号（深度/基础套件使用 testuser）
+        run: |
+          mkdir -p tests/runtime
+          python api-gateway/auth_seed.py add testuser -p 'Test@123456' --force
+      - name: 运行深度 + 基础套件（自动拉起 AI/网关/前端）
+        run: python run_tests.py --suite all --restart
+      - name: 汇总门禁结果
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("test_report.json")
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          if not path.exists():
+              summary.write_text("### 前端/深度/基础：未生成报告（见上一步日志）\n", encoding="utf-8")
+              print("::notice title=前端交互门禁::未生成报告，请查看运行日志")
+              raise SystemExit(0)
+          rep = json.loads(path.read_text(encoding="utf-8"))
+          s = rep["summary"]
+          lines = ["### 前端交互 + 深度 + 基础", "",
+                   f"总计 {s['total']} ｜ 通过 {s['passed']} ｜ 失败 {s['failed']} ｜ 阻塞 {s['blocked']}", "",
+                   "| 套件 | 通过 | 失败 | 阻塞 | 耗时(s) |", "|---|---|---|---|---|"]
+          for key, info in rep["suites"].items():
+              sub = info.get("summary") or {}
+              lines.append(f"| {key} | {sub.get('passed', 0)} | {sub.get('failed', 0)} | "
+                           f"{sub.get('blocked', 0)} | {info.get('elapsed_s')} |")
+          summary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print(f"::notice title=前端交互/深度/基础::通过 {s['passed']} / 失败 {s['failed']} / 阻塞 {s['blocked']}")
+          for suite, info in rep["suites"].items():
+              for item in info.get("results", []):
+                  if item.get("status") == "BLOCKED":
+                      print(f"::notice title=用例 BLOCKED（不计 PASS、不计失败）::"
+                            f"[{suite}] {item.get('id')} {item.get('case')} | {item.get('detail')}")
+          PY
+      - name: 清理测试进程（不留残留）
+        if: always()
+        run: |
+          pkill -f "main.py" || true
+          pkill -f "app.py" || true
+          pkill -f "uvicorn" || true
+          pkill -f "http.server 8899" || true
+          sleep 1
+          if (ss -lnt 2>/dev/null || true) | grep -Eq ':(8084|8005|8899|18005)\b'; then
+            echo "::warning::测试端口仍有监听，请检查进程清理"
+          else
+            echo "测试端口 8084/8005/8899/18005 已释放"
+          fi
+
+  # ---------- 外部资源门禁：默认关闭；开启后不可用即 SKIP，不判失败 ----------
+  external-gates:
+    name: 外部资源门禁（T2 DashScope / T3 GPU）
+    if: ${{ vars.ENABLE_EXTERNAL_GATES == 'true' }}
+    runs-on: ${{ vars.EXTERNAL_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    env:
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+      DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: 探测外部资源（决定启用哪些层）
+        id: probe
+        run: |
+          layers=""
+          if [ -n "${LLM_API_KEY}${DASHSCOPE_API_KEY}" ]; then
+            layers="T2"
+          else
+            echo "::notice title=T2 已跳过::未提供 LLM_API_KEY / DASHSCOPE_API_KEY，T2 记为 SKIPPED（不判失败）"
+          fi
+          if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+            layers="${layers:+$layers,}T3"
+          else
+            echo "::notice title=T3 已跳过::运行器无可用 CUDA GPU，T3 记为 SKIPPED（不判失败）"
+          fi
+          echo "layers=$layers" >> "$GITHUB_OUTPUT"
+          echo "外部资源可用层：${layers:-无}"
+      - name: 安装依赖
+        if: steps.probe.outputs.layers != ''
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r api-gateway/requirements.txt -c constraints.txt
+          pip install httpx==0.28.1 pydantic==2.13.3
+      - name: 运行外部资源矩阵
+        if: steps.probe.outputs.layers != ''
+        run: python tests/matrix/run_matrix.py --layers "${{ steps.probe.outputs.layers }}" --fail-on-fail
+      - name: 汇总门禁结果
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          layers_wanted = os.environ.get("LAYERS", "")
+          path = Path("tests/matrix/report.json")
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
+          lines = ["### 外部资源门禁（T2/T3）", ""]
+          if not path.exists():
+              lines += ["- 未生成报告：本轮没有可用的外部资源，T2/T3 全部 SKIPPED（未计入失败）"]
+          else:
+              rep = json.loads(path.read_text(encoding="utf-8"))
+              for key in ("T2", "T3"):
+                  s = rep["coverage"]["layers"][key]
+                  lines.append(f"- {key}: 执行 {s['executed']} / 通过 {s['passed']} / "
+                               f"失败 {s['failed']} / 阻塞 {s['blocked']}")
+              for item in rep.get("blocked", []):
+                  lines.append(f"- SKIPPED {item['id']} {item['title']}：{item['reason']}")
+                  print(f"::notice title=外部资源门禁 SKIPPED::"
+                        f"{item['id']} {item['title']} | {item['reason']}")
+          summary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          PY
+        env:
+          LAYERS: ${{ steps.probe.outputs.layers }}
+      - name: 清理测试进程（不留残留）
+        if: always()
+        run: |
+          pkill -f "main.py" || true
+          pkill -f "app.py" || true
+          sleep 1
+          if (ss -lnt 2>/dev/null || true) | grep -Eq ':(8084|8005)\b'; then
+            echo "::warning::测试端口仍有监听，请检查进程清理"
+          fi
+
+  external-gates-skipped:
+    name: 外部资源门禁（SKIPPED，非通过）
+    if: ${{ vars.ENABLE_EXTERNAL_GATES != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 标注跳过原因
+        run: |
+          {
+            echo "### 外部资源门禁：SKIPPED"
+            echo ""
+            echo "- T2（深度对话/LLM 链路）：需 DashScope LLM_API_KEY，本次未启用"
+            echo "- T3（TTS/GPU 链路）：需 CUDA GPU 或云 TTS 配额，本次未启用"
+            echo "- 启用方式：仓库变量 ENABLE_EXTERNAL_GATES=true，并按需配置 secrets.LLM_API_KEY"
+            echo "- 跳过不计入通过，也不计入失败；本地复跑：python tests/matrix/run_matrix.py --layers T2,T3"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=T2/T3 外部资源门禁已跳过::未设置仓库变量 ENABLE_EXTERNAL_GATES=true；"\
+          "T2 依赖 DashScope LLM、T3 依赖 GPU/CUDA，显式记为 SKIPPED 且不判失败"
