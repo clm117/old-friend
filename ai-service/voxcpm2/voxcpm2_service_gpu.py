@@ -30,8 +30,10 @@ EMOTION_TIMESTEPS = 24  # CPU 版=12，GPU 版=24
 QUICK_CFG_VALUE = 2.0
 QUICK_TIMESTEPS = 12  # GPU 快速模式 = CPU 标准模式步数，但速度快 200 倍
 
-# GPU 专属：torch.compile 加速
-_OPTIMIZE = True
+# GPU 专属：torch.compile 加速——通过环境变量控制，默认 True
+# V100 16GB 装不下编译期显存 spike，用 VOXCPM2_OPTIMIZE=0 关掉
+# A10/4090 24GB 可以开启 compile
+_OPTIMIZE = os.environ.get("VOXCPM2_OPTIMIZE", "True").lower() in ("1", "true", "yes", "on")
 
 # 新版 torch 的 SDPA 要求 attn_mask 至少 4D：加载模型前做一次性形状兼容（见 voxcpm_compat.py）
 try:
@@ -68,17 +70,20 @@ class VoxCPM2ServiceGPU:
         # GPU 部署：启动时即加载模型并预热（约 2-3 分钟），后续推理零延迟
         self.model = None
         self._warming = False
+        self._load_failed = False  # 熔断：加载失败后不再重试，避免每次请求都 20-47s 超时
 
     def _ensure_model(self):
         """加载模型（同步，用于非异步上下文）"""
         if self.model is not None:
             return True
+        if self._load_failed:
+            return False
         if self._warming:
             return False
         self._warming = True
         try:
             from voxcpm import VoxCPM
-            print(f"[GPU] Loading VoxCPM2 from: {self.model_path}")
+            print(f"[GPU] Loading VoxCPM2 from: {self.model_path} (optimize={_OPTIMIZE})")
             self.model = VoxCPM.from_pretrained(
                 self.model_path,
                 load_denoiser=True,   # GPU 版启用降噪器，提升音质
@@ -89,6 +94,7 @@ class VoxCPM2ServiceGPU:
             return True
         except Exception as e:
             print(f"[GPU] Error loading VoxCPM2 model: {e}")
+            self._load_failed = True  # 熔断：不再重试，等服务重启
             self._warming = False
             return False
 

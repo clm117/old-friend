@@ -25,8 +25,9 @@ EMOTION_DESCRIPTIONS = {
     "surprise": "surprised and amazed",
 }
 
-# CPU 上必须关闭 torch.compile：编译耗时过长且收益有限
-_OPTIMIZE = False
+# CPU 上默认关闭 torch.compile：编译耗时过长且收益有限
+# 仍保留环境变量覆盖能力（调试用）
+_OPTIMIZE = os.environ.get("VOXCPM2_OPTIMIZE", "False").lower() in ("1", "true", "yes", "on")
 
 # 新版 torch 的 SDPA 要求 attn_mask 至少 4D：加载模型前做一次性形状兼容（见 voxcpm_compat.py）
 try:

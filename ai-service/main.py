@@ -974,7 +974,7 @@ async def tts(
     if wav_bytes is None:
         AI_REQUESTS.labels(endpoint="tts", status="503").inc()
         AI_LATENCY.labels(endpoint="tts").observe(time.time() - _start)
-        return {"error": "TTS 服务不可用"}
+        return JSONResponse({"error": "TTS 服务不可用（模型加载失败）"}, status_code=503)
 
     AI_REQUESTS.labels(endpoint="tts", status="200").inc()
     AI_LATENCY.labels(endpoint="tts").observe(time.time() - _start)

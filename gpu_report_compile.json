@@ -1,0 +1,231 @@
+{
+  "generated_at": "2026-11-10T12:32:27+0800",
+  "base": "http://127.0.0.1:8084",
+  "preflight": {
+    "nvidia_smi": {
+      "ok": true,
+      "gpus": [
+        {
+          "name": "Tesla V100-SXM2-16GB",
+          "mem_total_mb": 16384,
+          "mem_used_mb": 3,
+          "driver": "550.163.01"
+        }
+      ]
+    },
+    "torch": {
+      "ok": true,
+      "version": "2.5.1+cu124",
+      "cuda_available": true,
+      "cuda_version": "12.4",
+      "device_count": 1,
+      "device_name": "Tesla V100-SXM2-16GB",
+      "mem_total_gb": 15.77
+    }
+  },
+  "service": {
+    "/health": {
+      "status": 200,
+      "body": {
+        "status": "healthy",
+        "device": "cuda",
+        "tts_service": "gpu",
+        "llm_service": "unconfigured"
+      }
+    },
+    "/ready": {
+      "status": 200,
+      "body": {
+        "status": "ready",
+        "problems": [],
+        "device": "cuda",
+        "tts_service": "voxcpm2",
+        "cloud_dependency": {
+          "ok": true,
+          "detail": ""
+        },
+        "state_store": {
+          "backend": "file",
+          "state_file": "/mnt/workspace/yuban/ai-service/data/state.json",
+          "sessions": 0,
+          "deleted_sessions": 0,
+          "dialogue_messages": 0
+        }
+      }
+    },
+    "nvidia_smi_ok": true
+  },
+  "voice": {
+    "voice_design": {
+      "ok": false,
+      "status": 401,
+      "body": {
+        "error": "缺少可信用户身份"
+      }
+    },
+    "voice_clone": {
+      "ok": false,
+      "status": 401,
+      "body": {
+        "error": "缺少可信用户身份"
+      }
+    }
+  },
+  "tts_single": {
+    "cold": {
+      "ok": true,
+      "status": 200,
+      "ttfb": 47.161805868148804,
+      "total": 47.16181206703186,
+      "bytes": 31,
+      "audio_seconds": null,
+      "rtf": null,
+      "peak_mem_mb": 6073,
+      "base_mem_mb": 3,
+      "cold_start": true
+    },
+    "steady": [
+      {
+        "ok": true,
+        "status": 200,
+        "ttfb": 28.3875732421875,
+        "total": 28.387576580047607,
+        "bytes": 31,
+        "audio_seconds": null,
+        "rtf": null,
+        "cold_start": false
+      },
+      {
+        "ok": true,
+        "status": 200,
+        "ttfb": 25.51577377319336,
+        "total": 25.51577615737915,
+        "bytes": 31,
+        "audio_seconds": null,
+        "rtf": null,
+        "cold_start": false
+      },
+      {
+        "ok": true,
+        "status": 200,
+        "ttfb": 24.826541662216187,
+        "total": 24.826544523239136,
+        "bytes": 31,
+        "audio_seconds": null,
+        "rtf": null,
+        "cold_start": false
+      }
+    ],
+    "steady_median_total": 25.51577615737915,
+    "steady_median_rtf": null,
+    "peak_mem_mb": 9905
+  },
+  "long_text": {
+    "sentences": [
+      {
+        "text": "春天来了，风从山谷里吹过来。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 23.30997610092163,
+        "total": 23.309978723526,
+        "bytes": 31,
+        "audio_seconds": null,
+        "rtf": null
+      },
+      {
+        "text": "河边的柳树抽出了新芽，孩子们在草地上奔跑。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 21.040995836257935,
+        "total": 21.041000366210938,
+        "bytes": 31,
+        "audio_seconds": null,
+        "rtf": null
+      },
+      {
+        "text": "远处的村庄升起炊烟，老人坐在门口看着夕阳。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 22.887126922607422,
+        "total": 22.887129545211792,
+        "bytes": 31,
+        "audio_seconds": null,
+        "rtf": null
+      },
+      {
+        "text": "傍晚的钟声穿过树林，把一天的疲惫都带走了。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 22.318983793258667,
+        "total": 22.318986415863037,
+        "bytes": 31,
+        "audio_seconds": null,
+        "rtf": null
+      },
+      {
+        "text": "愿每一个努力生活的人，都能被温柔以待。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 23.05263638496399,
+        "total": 23.05263900756836,
+        "bytes": 31,
+        "audio_seconds": null,
+        "rtf": null
+      }
+    ],
+    "sentence_count": 5,
+    "wall_total": 112.63703417778015,
+    "audio_total_seconds": 0,
+    "overall_rtf": null,
+    "first_sentence_ttfb": 23.30997610092163,
+    "peak_mem_mb": 16129
+  },
+  "ws": {
+    "ok": false,
+    "url": "ws://127.0.0.1:8084/ws/chat/gpu_verify_1794285147",
+    "error": "ConnectionClosedError: no close frame received or sent"
+  },
+  "concurrency": [
+    {
+      "concurrency": 1,
+      "ok_count": 1,
+      "failed": 0,
+      "wall_seconds": 20.708027839660645,
+      "audio_seconds": 0,
+      "aggregate_rtf": null,
+      "per_request_rtf": [
+        null
+      ],
+      "peak_mem_mb": 16129
+    },
+    {
+      "concurrency": 2,
+      "ok_count": 2,
+      "failed": 0,
+      "wall_seconds": 22.945873022079468,
+      "audio_seconds": 0,
+      "aggregate_rtf": null,
+      "per_request_rtf": [
+        null,
+        null
+      ],
+      "peak_mem_mb": 16129
+    },
+    {
+      "concurrency": 4,
+      "ok_count": 4,
+      "failed": 0,
+      "wall_seconds": 54.78107762336731,
+      "audio_seconds": 0,
+      "aggregate_rtf": null,
+      "per_request_rtf": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "peak_mem_mb": 16129
+    }
+  ],
+  "gateway_429_retries": 0
+}

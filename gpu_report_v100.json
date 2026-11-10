@@ -1,0 +1,249 @@
+{
+  "generated_at": "2026-11-10T14:53:55+0800",
+  "base": "http://127.0.0.1:8084",
+  "preflight": {
+    "nvidia_smi": {
+      "ok": true,
+      "gpus": [
+        {
+          "name": "Tesla V100-SXM2-16GB",
+          "mem_total_mb": 16384,
+          "mem_used_mb": 3,
+          "driver": "550.163.01"
+        }
+      ]
+    },
+    "torch": {
+      "ok": true,
+      "version": "2.5.1+cu124",
+      "cuda_available": true,
+      "cuda_version": "12.4",
+      "device_count": 1,
+      "device_name": "Tesla V100-SXM2-16GB",
+      "mem_total_gb": 15.77
+    }
+  },
+  "service": {
+    "/health": {
+      "status": 200,
+      "body": {
+        "status": "healthy",
+        "device": "cuda",
+        "tts_service": "gpu",
+        "llm_service": "unconfigured"
+      }
+    },
+    "/ready": {
+      "status": 200,
+      "body": {
+        "status": "ready",
+        "problems": [],
+        "device": "cuda",
+        "tts_service": "voxcpm2",
+        "cloud_dependency": {
+          "ok": true,
+          "detail": ""
+        },
+        "state_store": {
+          "backend": "file",
+          "state_file": "/mnt/workspace/yuban/data/state.json",
+          "sessions": 3,
+          "deleted_sessions": 0,
+          "dialogue_messages": 0
+        }
+      }
+    },
+    "nvidia_smi_ok": true
+  },
+  "voice": {
+    "voice_design": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok",
+        "voice_definition": "温暖、轻柔的女声，语速偏慢（pitch: 1.0, speed: 1.0, volume: 1.0, emotionIntensity: 0.5, cfg_value: 2.0, inference_timesteps: 20），推理参数: CFG=2.0, Steps=20 [GPU]",
+        "voice_params": {
+          "pitch": 1.0,
+          "speed": 1.0,
+          "volume": 1.0,
+          "emotionIntensity": 0.5,
+          "cfg_value": 2.0,
+          "inference_timesteps": 20
+        }
+      }
+    },
+    "voice_clone": {
+      "ok": true,
+      "status": 200,
+      "body": {
+        "status": "ok",
+        "voice_definition": "（pitch: 1.0, speed: 1.0, volume: 1.0, emotionIntensity: 0.5, cfg_value: 2.0, inference_timesteps: 20），推理参数: CFG=2.0, Steps=20 [GPU]",
+        "voice_params": {
+          "pitch": 1.0,
+          "speed": 1.0,
+          "volume": 1.0,
+          "emotionIntensity": 0.5,
+          "cfg_value": 2.0,
+          "inference_timesteps": 20
+        }
+      }
+    }
+  },
+  "tts_single": {
+    "cold": {
+      "ok": true,
+      "status": 200,
+      "ttfb": 44.100989818573,
+      "total": 44.10166621208191,
+      "bytes": 169004,
+      "audio_seconds": 1.76,
+      "rtf": 25.057764893228356,
+      "peak_mem_mb": 6651,
+      "base_mem_mb": 3,
+      "cold_start": true
+    },
+    "steady": [
+      {
+        "ok": true,
+        "status": 200,
+        "ttfb": 4.72780966758728,
+        "total": 4.728647708892822,
+        "bytes": 215084,
+        "audio_seconds": 2.24,
+        "rtf": 2.1110034414700096,
+        "cold_start": false
+      },
+      {
+        "ok": true,
+        "status": 200,
+        "ttfb": 4.396044731140137,
+        "total": 4.396739959716797,
+        "bytes": 199724,
+        "audio_seconds": 2.08,
+        "rtf": 2.113817288325383,
+        "cold_start": false
+      },
+      {
+        "ok": true,
+        "status": 200,
+        "ttfb": 4.393735885620117,
+        "total": 4.394402742385864,
+        "bytes": 199724,
+        "audio_seconds": 2.08,
+        "rtf": 2.11269362614705,
+        "cold_start": false
+      }
+    ],
+    "steady_median_total": 4.396739959716797,
+    "steady_median_rtf": 2.11269362614705,
+    "peak_mem_mb": 6849
+  },
+  "long_text": {
+    "sentences": [
+      {
+        "text": "春天来了，风从山谷里吹过来。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 10.691457509994507,
+        "total": 10.693530082702637,
+        "bytes": 491564,
+        "audio_seconds": 5.12,
+        "rtf": 2.0885800942778587
+      },
+      {
+        "text": "河边的柳树抽出了新芽，孩子们在草地上奔跑。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 9.744935512542725,
+        "total": 9.746376276016235,
+        "bytes": 445484,
+        "audio_seconds": 4.64,
+        "rtf": 2.100512128451775
+      },
+      {
+        "text": "远处的村庄升起炊烟，老人坐在门口看着夕阳。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 11.387596368789673,
+        "total": 11.38931679725647,
+        "bytes": 522284,
+        "audio_seconds": 5.44,
+        "rtf": 2.09362441126038
+      },
+      {
+        "text": "傍晚的钟声穿过树林，把一天的疲惫都带走了。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 9.0853431224823,
+        "total": 9.086677551269531,
+        "bytes": 414764,
+        "audio_seconds": 4.32,
+        "rtf": 2.1033975813123913
+      },
+      {
+        "text": "愿每一个努力生活的人，都能被温柔以待。",
+        "ok": true,
+        "status": 200,
+        "ttfb": 8.081583023071289,
+        "total": 8.082791566848755,
+        "bytes": 368684,
+        "audio_seconds": 3.84,
+        "rtf": 2.1048936372001967
+      }
+    ],
+    "sentence_count": 5,
+    "wall_total": 49.026902198791504,
+    "audio_total_seconds": 23.36,
+    "overall_rtf": 2.0987543749482667,
+    "first_sentence_ttfb": 10.691457509994507,
+    "peak_mem_mb": 6853
+  },
+  "ws": {
+    "ok": false,
+    "url": "ws://127.0.0.1:8084/ws/chat/gpu_verify_1794293635",
+    "error": "ConnectionClosedError: no close frame received or sent"
+  },
+  "concurrency": [
+    {
+      "concurrency": 1,
+      "ok_count": 1,
+      "failed": 0,
+      "wall_seconds": 7.462836742401123,
+      "audio_seconds": 2.24,
+      "aggregate_rtf": 3.3316235457147867,
+      "per_request_rtf": [
+        3.319646843842097
+      ],
+      "peak_mem_mb": 6853
+    },
+    {
+      "concurrency": 2,
+      "ok_count": 2,
+      "failed": 0,
+      "wall_seconds": 12.000036716461182,
+      "audio_seconds": 3.6799999999999997,
+      "aggregate_rtf": 3.2608795425166255,
+      "per_request_rtf": [
+        6.508151374079964,
+        6.236337994535765
+      ],
+      "peak_mem_mb": 6931
+    },
+    {
+      "concurrency": 4,
+      "ok_count": 4,
+      "failed": 0,
+      "wall_seconds": 20.633155345916748,
+      "audio_seconds": 6.24,
+      "aggregate_rtf": 3.306595407999479,
+      "per_request_rtf": [
+        12.87938877940178,
+        12.863480597734451,
+        13.255387213495043,
+        12.861182242631912
+      ],
+      "peak_mem_mb": 7347
+    }
+  ],
+  "gateway_429_retries": 0
+}
