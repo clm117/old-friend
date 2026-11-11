@@ -46,7 +46,11 @@ class CloudTTSService:
     """DashScope qwen3-tts 云语音合成（接口与 VoxCPM2 对齐）"""
 
     def __init__(self):
-        self.api_key = os.environ.get("LLM_API_KEY", "")
+        # DashScope Key 与对话模型 Key 相互独立：仅当对话模型也跑在 qwen 上时才允许回退复用
+        key = os.environ.get("DASHSCOPE_API_KEY", "").strip()
+        if not key and os.environ.get("LLM_PROVIDER", "qwen").strip().lower() == "qwen":
+            key = os.environ.get("LLM_API_KEY", "").strip()
+        self.api_key = key
         self.voice = DEFAULT_VOICE
 
     def available(self):

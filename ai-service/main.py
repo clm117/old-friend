@@ -39,8 +39,10 @@ def _load_dotenv():
 
 _load_dotenv()
 
-# ===== TTS 提供方：voxcpm2（本地模型，实时交互需 GPU）| cloud（云 TTS，验证期免 GPU）=====
+# ===== TTS 提供方：voxcpm2（本地模型，实时交互需 GPU）| cloud（云 TTS，验证期免 GPU）| edge（edge-tts 日常合成 + Fish Audio 克隆）=====
 _TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "voxcpm2").strip().lower()
+# edge/fish 输出 MP3，其余输出 WAV（HTTP /api/ai/tts media_type 用）
+_TTS_MEDIA_TYPE = "audio/mpeg" if _TTS_PROVIDER == "edge" else "audio/wav"
 
 # FunAudioChatService（语音对话 ASR 入口）—— 仅在本地 TTS 模式下实例化
 # cloud 模式跳过：该服务依赖本地 transformers，且 cloud 模式下 /api/ai/process 端点不会被前端调用
@@ -137,29 +139,47 @@ def _internal_error(endpoint: str, exc: Exception) -> dict:
     return {"error": "服务内部错误"}
 
 # 初始化服务
-if _TTS_PROVIDER == "cloud":
-    # 云 TTS 模式：跳过 FunAudioChatService（本地模型）实例化，省 import/加载时间
+if _TTS_PROVIDER in ("cloud", "edge"):
+    # 云端 TTS 模式：跳过 FunAudioChatService（本地模型）实例化，省 import/加载时间
     class _MockAudioService:
         def process_audio(self, *a, **kw):
-            return "Cloud TTS 模式：Fun-Audio-Chat 未启用"
+            return "云端 TTS 模式：Fun-Audio-Chat 未启用"
         def get_voice_response(self, *a, **kw):
             return b""
         def streaming_process(self, *a, **kw):
-            return "Cloud TTS 模式"
+            return "云端 TTS 模式"
     aio_service = _MockAudioService()
-    print("[启动] TTS_PROVIDER=cloud，FunAudioChatService 跳过（mock 占位）")
+    print(f"[启动] TTS_PROVIDER={_TTS_PROVIDER}，FunAudioChatService 跳过（mock 占位）")
 else:
     from fun_audio_chat.fun_audio_chat_service import FunAudioChatService
     aio_service = FunAudioChatService()
+
+cloud_tts_service = None
+cloud_voice = None
+edge_tts_service = None
+voice_clone = None  # 当前克隆后端（volc / fish），voice_id 前缀即其 prefix
+CloneError = Exception
+
 if _TTS_PROVIDER == "cloud":
     # 云 TTS 验证模式：不实例化本地 VoxCPM2（声音定义/克隆走云 voice-enrollment，见 cloud_voice_service）
     from cloud_tts_service import cloud_tts_service
     from cloud_voice_service import cloud_voice_service as cloud_voice, CloudVoiceError
     voxcpm2_service = None
     print("[启动] TTS_PROVIDER=cloud，使用云 TTS（本地 VoxCPM2 不加载）")
+elif _TTS_PROVIDER == "edge":
+    # edge 模式：日常合成走 edge-tts（免费无限量），声音克隆走 VOICE_CLONE_PROVIDER 指定后端
+    # volc = 火山引擎声音复刻（国内直连，默认）；fish = Fish Audio（当前网络被 DNS 污染，不可用）
+    from edge_tts_service import edge_tts_service
+    _CLONE_PROVIDER = os.environ.get("VOICE_CLONE_PROVIDER", "volc").strip().lower()
+    if _CLONE_PROVIDER == "volc":
+        from volc_tts_service import volc_tts_service as voice_clone, VolcTTSError as CloneError
+    elif _CLONE_PROVIDER == "fish":
+        from fish_audio_service import fish_audio_service as voice_clone, FishAudioError as CloneError
+    voxcpm2_service = None
+    _clone_name = voice_clone.prefix if voice_clone is not None else "none"
+    _clone_ready = bool(voice_clone.enabled) if voice_clone is not None else False
+    print(f"[启动] TTS_PROVIDER=edge，edge-tts 日常合成 + 克隆后端={_clone_name}（ready={_clone_ready}）")
 else:
-    cloud_tts_service = None
-    cloud_voice = None
     voxcpm2_service = _ServiceClass()
 llm_service = LLMService()
 character_engine = CharacterEngine()
@@ -212,13 +232,27 @@ async def _synthesize_speech(text, style, emotion_params, quick_mode, speed=1.0,
     """
     统一 TTS 入口：
     - 云模式（cloud）：走 DashScope 云 TTS，style/emotion 参数忽略；voice_id 为云声音定义产物
+    - edge 模式：voice_id 带克隆后端前缀（"volc:"/"fish:"）走克隆音色，失败回退 edge-tts；其余走 edge-tts
     - 本地 GPU 版：synthesize 为 async，直接 await
     - 本地 CPU 版：同步推理放线程池，避免阻塞事件循环
-    speed: 语速（0.5-2.0），本地经 prompt 节奏描述生效；云侧暂不支持变速，仅记录
-    返回 (wav_bytes, sample_rate)；wav_bytes 为 None 表示服务不可用
+    speed: 语速（0.5-2.0），本地经 prompt 节奏描述生效；云侧暂不支持变速，仅记录；edge 映射 rate
+    返回 (audio_bytes, sample_rate)；audio_bytes 为 None 表示服务不可用
     """
     if _TTS_PROVIDER == "cloud":
         return await cloud_tts_service.synthesize(
+            text, voice=voice_id, quick_mode=quick_mode, speed=speed
+        )
+    if _TTS_PROVIDER == "edge":
+        if voice_id and ":" in voice_id:
+            prefix, _, ref = voice_id.partition(":")
+            if voice_clone is not None and prefix == voice_clone.prefix and voice_clone.enabled and ref:
+                try:
+                    return await voice_clone.synthesize(text, reference_id=ref, speed=speed)
+                except Exception as e:
+                    # 额度耗尽/超时等不阻断对话：回退 edge-tts 默认音色
+                    logger.warning("[TTS] 克隆音色合成失败，回退 edge-tts: %s", e)
+            voice_id = None  # 避免把 "volc:xxx"/"fish:xxx" 当 edge 音色名
+        return await edge_tts_service.synthesize(
             text, voice=voice_id, quick_mode=quick_mode, speed=speed
         )
     if _USE_GPU:
@@ -645,12 +679,18 @@ def _resolve_session_speed(session_id: str, character_id: str = None) -> float:
 
 def _resolve_session_voice(session_id: str, character_id: str = None):
     """
-    解析云 voice_id，返回 (voice_id, notice)：
-    0. 会话选择的预设音色（GAP-05：已绑定则用真实 voice_id；未绑定回退默认音色 + 提示）
-    1. 会话已定义音色（cloud_voice 映射，target_model 匹配且部署就绪）
-    2. 角色方言音色（voice_catalog voice_ids；未就绪则回退默认音色 + 提示）
+    解析 voice_id，返回 (voice_id, notice)：
+    - edge 模式：会话已绑定克隆音色 → "<后端前缀>:<音色ID>"；未绑定 → None（edge 默认音色）
+    - cloud/voxcpm2：0. 会话选择的预设音色（GAP-05）→ 1. 会话已定义音色（cloud_voice 映射）→ 2. 角色方言音色
     notice 为 None 表示无需提示；不静默失败
     """
+    if _TTS_PROVIDER == "edge":
+        if voice_clone is not None:
+            vid = memory_storage.get_short_term_memory(session_id, "clone_voice_id") or \
+                memory_storage.get_short_term_memory(session_id, "fish_voice_id")
+            if vid:
+                return f"{voice_clone.prefix}:{vid}", None
+        return None, None
     notice = None
     preset_id = memory_storage.get_short_term_memory(session_id, "voice_preset_id")
     if preset_id:
@@ -727,6 +767,68 @@ async def _define_voice_cloud(request, session_id, description, audio, mode,
         return JSONResponse({**e.to_dict(), "mode": "cloud"}, status_code=e.status)
     except Exception as e:
         return _internal_error("define-voice-cloud", e)
+
+
+async def _define_voice_edge(request, session_id, description, audio, mode, voice_prompt):
+    """edge 模式声音定义：克隆走 VOICE_CLONE_PROVIDER 后端；文字设计音色暂不支持（501）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    err = _session_owner_error(session_id, user)
+    if err:
+        return err
+    memory_storage.claim_session(session_id, user)
+
+    is_design = mode == "design" or (audio is None and (voice_prompt or "").strip())
+    if is_design:
+        return JSONResponse(
+            {"error": "edge 模式暂不支持文字描述设计音色（可上传 10 秒以上音频克隆）",
+             "code": "voice_define_unsupported", "mode": "edge"},
+            status_code=501,
+        )
+    if voice_clone is None or not voice_clone.enabled:
+        return JSONResponse(
+            {"error": "声音克隆未配置（缺少火山引擎 AppID/Access Token/音色ID）；日常合成不受影响",
+             "code": "voice_define_unsupported", "mode": "edge"},
+            status_code=501,
+        )
+    try:
+        audio_data = await audio.read() if audio is not None else b""
+        if not audio_data:
+            return JSONResponse(
+                {"error": "缺少参考音频", "code": "voice_audio_invalid", "mode": "edge"},
+                status_code=422,
+            )
+        if _too_large(audio_data):
+            return JSONResponse(
+                {"error": f"音频文件超过上限（{_MAX_UPLOAD_BYTES // (1024 * 1024)}MB）"},
+                status_code=413,
+            )
+        title = (description or "").strip() or "语伴克隆音色"
+        ref_id = await voice_clone.create_voice(title, audio_data)
+        definition = f"{voice_clone.prefix}:{ref_id}"
+        memory_storage.set_short_term_memory(session_id, "voice_definition", definition)
+        memory_storage.set_short_term_memory(session_id, "voice_description", description)
+        memory_storage.set_short_term_memory(session_id, "clone_voice_id", ref_id)
+        # 克隆音色优先，清除预设选择
+        memory_storage.set_short_term_memory(session_id, "voice_preset_id", "")
+        notice = "音色训练完成，已绑定到当前会话"
+        if voice_clone.prefix == "fish":
+            notice = "免费档克隆音色将在 Fish Audio 平台公开可见"
+        return {
+            "status": "ok",
+            "mode": "edge",
+            "voice_id": definition,
+            "definition_mode": "clone",
+            "voice_definition": definition,
+            "voice_params": {"speed": 1.0},
+            "notice": notice,
+        }
+    except CloneError as e:
+        logger.warning("[define-voice] 克隆失败: %s %s", e.code, e.message)
+        return JSONResponse({**e.to_dict(), "mode": "edge"}, status_code=e.status)
+    except Exception as e:
+        return _internal_error("define-voice-edge", e)
 
 # 语音处理接口
 @app.post("/api/ai/process")
@@ -807,6 +909,8 @@ async def define_voice(
     - 本地模式：使用 VoxCPM2 自定义音色
     失败分支统一返回明确 code（欠费 402 / 限流 429 / 超时 504 / 不可用 501）
     """
+    if _TTS_PROVIDER == "edge":
+        return await _define_voice_edge(request, session_id, description, audio, mode, voice_prompt)
     if _TTS_PROVIDER == "cloud":
         return await _define_voice_cloud(
             request, session_id, description, audio, mode, voice_prompt, preview_text, language_hints
@@ -883,6 +987,8 @@ async def define_voice_compat(
     - cloud 模式：voice-enrollment 复刻/设计
     - 本地模式：VoxCPM2 自定义音色
     """
+    if _TTS_PROVIDER == "edge":
+        return await _define_voice_edge(request, session_id, description, audio, mode, voice_prompt)
     if _TTS_PROVIDER == "cloud":
         return await _define_voice_cloud(
             request, session_id, description, audio, mode, voice_prompt, preview_text, language_hints
@@ -967,9 +1073,16 @@ async def tts(
     emotion_params = emotion_config.get("params") if emotion_config else None
 
     # 统一 TTS 入口（云/本地 GPU/CPU 分派见 _synthesize_speech）
-    wav_bytes, sample_rate = await _synthesize_speech(
-        text, style, emotion_params if not style else None, quick_mode, speed=speed, voice_id=voice_id
-    )
+    try:
+        wav_bytes, sample_rate = await _synthesize_speech(
+            text, style, emotion_params if not style else None, quick_mode, speed=speed, voice_id=voice_id
+        )
+    except Exception as e:
+        # 云 TTS 欠费/鉴权失败/超时等：返回 503 而不是 500，前端可提示稍后重试
+        logger.error("[tts] 合成失败: %s", e)
+        AI_REQUESTS.labels(endpoint="tts", status="503").inc()
+        AI_LATENCY.labels(endpoint="tts").observe(time.time() - _start)
+        return JSONResponse({"error": "TTS 服务暂时不可用（请检查云端余额或稍后重试）"}, status_code=503)
 
     if wav_bytes is None:
         AI_REQUESTS.labels(endpoint="tts", status="503").inc()
@@ -984,7 +1097,7 @@ async def tts(
         headers["X-Voice-Notice"] = quote(voice_notice)
     return Response(
         content=wav_bytes,
-        media_type="audio/wav",
+        media_type=_TTS_MEDIA_TYPE,
         headers=headers
     )
 
@@ -1173,22 +1286,30 @@ _READY_CLOUD_TTL = 120
 
 
 async def _cloud_ready_probe():
-    """真实探测云 TTS 依赖（欠费/鉴权失败时返回不可用），结果缓存 120 秒"""
-    if _TTS_PROVIDER != "cloud":
+    """真实探测远端 TTS 依赖（欠费/鉴权失败时返回不可用），结果缓存 120 秒；本地 voxcpm2 直接通过"""
+    if _TTS_PROVIDER == "edge":
+        if edge_tts_service is None:
+            return False, "edge_tts_not_configured"
+        if not edge_tts_service.available():
+            return False, "edge_tts_not_installed"
+        probe = lambda: edge_tts_service.synthesize("好", quick_mode=True)
+    elif _TTS_PROVIDER == "cloud":
+        if cloud_tts_service is None:
+            return False, "cloud_tts_not_configured"
+        if not cloud_tts_service.available():
+            return False, "cloud_tts_api_key_missing"
+        probe = lambda: cloud_tts_service.synthesize("好", quick_mode=True)
+    else:
         return True, ""
-    if cloud_tts_service is None:
-        return False, "cloud_tts_not_configured"
-    if not cloud_tts_service.available():
-        return False, "cloud_tts_api_key_missing"
     now = time.time()
     cached = _READY_CLOUD_CACHE
     if cached["ok"] is not None and now - cached["ts"] < _READY_CLOUD_TTL:
         return cached["ok"], cached["detail"]
     ok, detail = False, ""
     try:
-        wav, _sr = await cloud_tts_service.synthesize("好", quick_mode=True)
-        ok = bool(wav)
-        detail = "" if ok else "cloud_tts_returned_empty"
+        audio, _sr = await probe()
+        ok = bool(audio)
+        detail = "" if ok else "remote_tts_returned_empty"
     except Exception as e:
         detail = f"{type(e).__name__}: {str(e)[:160]}"
     _READY_CLOUD_CACHE.update({"ts": now, "ok": ok, "detail": detail})
@@ -1203,7 +1324,7 @@ async def readiness_check():
         problems.append("tts_model_not_loaded")
     cloud_ok, cloud_detail = await _cloud_ready_probe()
     if not cloud_ok:
-        problems.append("cloud_tts_unavailable")
+        problems.append(f"{_TTS_PROVIDER}_tts_unavailable")
     try:
         memory_storage.flush(force=True)
         state_stats = memory_storage.stats()

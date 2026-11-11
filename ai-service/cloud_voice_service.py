@@ -94,7 +94,15 @@ class CloudVoiceService:
 
     def __init__(self, target_model=None, api_key=None, registry_path=None):
         self.target_model = (target_model or os.environ.get("CLOUD_TTS_MODEL", "qwen3-tts-flash")).strip()
-        self.api_key = api_key if api_key is not None else os.environ.get("LLM_API_KEY", "")
+        if api_key is not None:
+            self.api_key = api_key.strip()
+        elif os.environ.get("DASHSCOPE_API_KEY", "").strip():
+            self.api_key = os.environ["DASHSCOPE_API_KEY"].strip()
+        elif os.environ.get("LLM_PROVIDER", "qwen").strip().lower() == "qwen":
+            # 仅当对话模型也跑在 qwen 上时才复用同一个 Key
+            self.api_key = os.environ.get("LLM_API_KEY", "").strip()
+        else:
+            self.api_key = ""
         data_dir = Path(os.environ.get("YUBAN_DATA_DIR", Path(__file__).parent / "data"))
         self.registry_path = Path(registry_path) if registry_path else data_dir / "cloud_voice_registry.json"
         self._lock = threading.Lock()

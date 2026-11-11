@@ -35,3 +35,7 @@ websockets==17.1
 prometheus-client==0.24.0
 # 可选：配置 REDIS_URL 后状态双写 Redis（多实例共享），未配置时本地 JSON + 内存兜底
 redis==7.4.0
+
+# --- TTS（TTS_PROVIDER=edge 降级 MVP 模式）---
+# edge-tts 为微软非官方接口，微软侧变动会导致旧版 403，故要求 >=7.3.0 且不锁死小版本
+edge-tts>=7.3.0

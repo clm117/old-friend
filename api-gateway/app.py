@@ -16,6 +16,7 @@ import asyncio
 import hashlib
 import hmac
 import ipaddress
+import json
 import logging
 import os
 import re
@@ -50,6 +51,7 @@ from jwt.exceptions import PyJWTError as JWTError
 
 from auth_store import dummy_verify, load_users, users_file_path, verify_password
 from rate_limit_store import RateLimitStore
+from usage_store import UsageStore, quota_error_payload
 
 # ===== Prometheus 指标 =====
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
@@ -231,6 +233,21 @@ def _validate_audio(audio_bytes: bytes) -> str | None:
 
 # ===== 限流实现（Redis 可选，进程内滑动窗口兜底）=====
 _rate_limiter = RateLimitStore(os.environ.get("GATEWAY_REDIS_URL", "").strip() or None)
+
+# ===== 用量计量 + 日配额（Redis 可选，进程内兜底）=====
+_usage_store = UsageStore(os.environ.get("GATEWAY_REDIS_URL", "").strip() or None)
+
+
+def _quota_check(request: Request, metric: str):
+    """配额预检：超限返回 402 JSONResponse，否则 None"""
+    user = _user_of(request)
+    if user is None:
+        return None
+    ok, remaining = _usage_store.check(user, metric)
+    if ok:
+        return None
+    METRICS_REQUESTS.labels(method=request.method, path=request.url.path, status="402").inc()
+    return JSONResponse(quota_error_payload(metric, remaining), status_code=402)
 
 
 def _is_trusted_proxy(host: str) -> bool:
@@ -418,6 +435,9 @@ async def tts(request: Request, session_id: str = Form(...), text: str = Form(""
         return JSONResponse({"error": "text 不能为空"}, status_code=400)
     if len(text) > 1000:
         return JSONResponse({"error": "text 过长（上限 1000 字）"}, status_code=400)
+    quota_err = _quota_check(request, "tts_chars")
+    if quota_err:
+        return quota_err
     try:
         response = await _async_request(
             "post",
@@ -431,12 +451,14 @@ async def tts(request: Request, session_id: str = Form(...), text: str = Form(""
             headers=_internal_headers(_user_of(request)),
             timeout=AI_SERVICE_TTS_TIMEOUT,
         )
-        if response.headers.get("content-type") == "audio/wav":
+        content_type = (response.headers.get("content-type") or "").split(";")[0].strip()
+        if content_type.startswith("audio/") and response.status_code == 200:
+            _usage_store.record(_user_of(request) or "anonymous", "tts_chars", len(text))
             headers = {"X-Sample-Rate": response.headers.get("X-Sample-Rate", "16000")}
             notice = response.headers.get("X-Voice-Notice")
             if notice:
                 headers["X-Voice-Notice"] = notice
-            return Response(content=response.content, media_type="audio/wav", headers=headers)
+            return Response(content=response.content, media_type=content_type, headers=headers)
         return _relay_json(response)
     except Exception as e:
         return _upstream_error("voice/tts", e)
@@ -451,6 +473,9 @@ async def transcribe_voice(request: Request, session_id: str = Form("default"), 
     invalid = _validate_audio(audio_bytes)
     if invalid:
         return JSONResponse({"error": invalid}, status_code=400)
+    quota_err = _quota_check(request, "asr_seconds")
+    if quota_err:
+        return quota_err
     try:
         response = await _async_request(
             "post",
@@ -459,6 +484,10 @@ async def transcribe_voice(request: Request, session_id: str = Form("default"), 
             files={"audio": ("recording.wav", audio_bytes, "audio/wav")},
             headers=_internal_headers(_user_of(request)),
         )
+        if response.status_code == 200:
+            # 16kHz/16bit/单声道 PCM ≈ 32KB/s，按体积保守估算时长
+            est_seconds = max(1, len(audio_bytes) // 32000)
+            _usage_store.record(_user_of(request) or "anonymous", "asr_seconds", est_seconds)
         return _relay_json(response)
     except Exception as e:
         return _upstream_error("voice/transcribe", e)
@@ -506,6 +535,11 @@ async def define_voice(
         return JSONResponse({"error": "description 过长（上限 200 字）"}, status_code=400)
     if is_design and not (1 <= len(voice_prompt.strip()) <= 500 and 15 <= len(preview_text.strip()) <= 200):
         return JSONResponse({"error": "voice_prompt 需 1-500 字，preview_text 需 15-200 字"}, status_code=400)
+    if not is_design:
+        # 克隆按次配额（训练单价高）；design 走普通 TTS 字符计费，不占克隆名额
+        quota_err = _quota_check(request, "voice_clones")
+        if quota_err:
+            return quota_err
     try:
         files = None
         if audio is not None:
@@ -534,6 +568,8 @@ async def define_voice(
             files=files,
             headers=_internal_headers(_user_of(request)),
         )
+        if not is_design and response.status_code == 200:
+            _usage_store.record(_user_of(request) or "anonymous", "voice_clones", 1)
         return _relay_json(response)
     except Exception as e:
         return _upstream_error("voice/define", e)
@@ -1022,6 +1058,17 @@ async def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+# 当日用量与配额（前端"设置"页展示；无需管理员权限，仅看自己的）
+@app.get("/api/usage/me")
+async def usage_me(request: Request):
+    user = _user_of(request)
+    if not user:
+        return JSONResponse({"error": "缺少访问凭证"}, status_code=401)
+    snap = _usage_store.snapshot(user)
+    snap["backend"] = _usage_store.backend
+    return snap
+
+
 # WebSocket 实时对话透传（转发到 ai-service/ws/chat/{session_id}）
 @app.websocket("/ws/chat/{session_id}")
 async def ws_chat_proxy(ws: WebSocket, session_id: str):
@@ -1071,6 +1118,20 @@ async def ws_chat_proxy(ws: WebSocket, session_id: str):
         await ws.close(code=1008, reason="forbidden")
         return
 
+    # 对话额度预检：llm_chars 当日已用完则拒绝建连（402 语义经 WS close code 传达）
+    quota_user = user_id or "anonymous"
+    llm_ok, llm_remaining = _usage_store.check(quota_user, "llm_chars")
+    if not llm_ok:
+        try:
+            await ws.send_json({
+                "type": "error",
+                "code": "user_quota_exceeded",
+                "message": "今日对话额度已用完，明天再来或联系管理员调整配额",
+            })
+        finally:
+            await ws.close(code=1008, reason="quota_exceeded")
+        return
+
     try:
         upstream_headers = _internal_headers(user_id)
         try:
@@ -1093,14 +1154,38 @@ async def ws_chat_proxy(ws: WebSocket, session_id: str):
                     pass
 
             async def upstream_to_client():
+                # 计量：AI 文本帧按字符累计（LLM 用量），音频帧不重复计（TTS 字符已在文本侧覆盖）
+                counted = 0
                 try:
                     async for msg in upstream:
                         if isinstance(msg, str):
+                            try:
+                                frame = json.loads(msg)
+                                if frame.get("type") == "text":
+                                    counted += len(frame.get("content") or "")
+                            except ValueError:
+                                pass
+                            # 流中实时熔断：超过建连时剩余额度即中断，防止长回复穿透配额
+                            if counted > llm_remaining >= 0:
+                                _usage_store.record(quota_user, "llm_chars", counted)
+                                counted = 0
+                                try:
+                                    await ws.send_json({
+                                        "type": "error",
+                                        "code": "user_quota_exceeded",
+                                        "message": "今日对话额度已用完",
+                                    })
+                                finally:
+                                    await ws.close(code=1008, reason="quota_exceeded")
+                                return
                             await ws.send_text(msg)
                         else:
                             await ws.send_bytes(msg)
                 except Exception:
                     pass
+                finally:
+                    if counted > 0:
+                        _usage_store.record(quota_user, "llm_chars", counted)
 
             await asyncio.gather(client_to_upstream(), upstream_to_client())
     except Exception as e:

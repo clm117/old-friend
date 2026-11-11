@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="theme-color" content="#4A7C59">
-    <title>语伴 · 松绿的声音陪伴</title>
+    <meta name="theme-color" content="#2E6B4E">
+    <title>语伴 · 用声音陪伴你</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600&display=swap" rel="stylesheet">
@@ -41,18 +41,18 @@
             <section class="tab-content active" id="chat">
                 <div class="chat-container">
                     <!-- 历史会话侧栏：仅展示当前账号的会话，支持新建/切换/重命名/删除 -->
-                    <div id="sessionPanel" style="border:1px solid #e3e6ea; border-radius:12px; padding:10px 12px; margin:0 0 10px; background:#fff;">
+                    <div id="sessionPanel">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
                             <strong style="font-size:0.95rem;">历史会话</strong>
                             <div style="display:flex; gap:6px;">
-                                <button type="button" id="newSessionBtn" style="padding:4px 10px; border:none; border-radius:6px; background:#4CAF50; color:#fff; cursor:pointer; font-size:0.85rem;">新建</button>
-                                <button type="button" id="sessionCollapseBtn" style="padding:4px 10px; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; font-size:0.85rem;">收起</button>
+                                <button type="button" id="newSessionBtn" class="btn-pill btn-primary-sm">新建</button>
+                                <button type="button" id="sessionCollapseBtn" class="btn-ghost-sm">收起</button>
                             </div>
                         </div>
                         <div id="sessionListBody">
                             <div id="sessionList" style="display:flex; flex-direction:column; gap:6px; margin-top:8px; max-height:170px; overflow-y:auto;"></div>
                             <div style="text-align:center; margin-top:6px;">
-                                <button type="button" id="sessionMoreBtn" style="display:none; padding:4px 12px; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; font-size:0.85rem;">加载更多</button>
+                                <button type="button" id="sessionMoreBtn" class="btn-ghost-sm" style="display:none;">加载更多</button>
                             </div>
                         </div>
                     </div>
@@ -256,7 +256,7 @@
                     </div>
 
                     <button class="submit-btn" id="saveEmotionBtn">保存情感配置</button>
-                    <button type="button" id="resetEmotionBtn" style="margin-left:8px; padding:10px 16px; border:1px solid #ccc; border-radius:8px; background:#fff; cursor:pointer;">恢复默认</button>
+                    <button type="button" id="resetEmotionBtn" class="btn-ghost" style="margin-left:8px;">恢复默认</button>
                     <div class="response" id="emotionConfigResponse"></div>
 
                     <h4 class="section-title">已保存的情感配置</h4>
@@ -270,17 +270,17 @@
                     <h3>角色选择</h3>
                     <p class="page-desc">选择官方预设角色，或创建自定义角色。角色决定对话的声音（音色）与人设（性格/说话风格）。</p>
 
-                    <div id="characterStatus" style="margin-bottom: 12px; padding: 10px; background: #e8f5e9; border-radius: 8px; font-size: 0.9rem; display: none;"></div>
+                    <div id="characterStatus" class="status-banner" style="display: none;"></div>
 
-                    <h4 style="margin: 16px 0 8px;">官方预设</h4>
-                    <div id="presetCharacterList" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                    <h4 class="block-title">官方预设</h4>
+                    <div id="presetCharacterList" class="stack-list"></div>
 
-                    <h4 style="margin: 20px 0 8px;">我的自定义角色</h4>
-                    <div id="customCharacterList" style="display: flex; flex-direction: column; gap: 10px;">
-                        <p style="color: #999; font-size: 0.9rem;">还没有自定义角色，在下方创建。</p>
+                    <h4 class="block-title">我的自定义角色</h4>
+                    <div id="customCharacterList" class="stack-list">
+                        <p class="empty-note">还没有自定义角色，在下方创建。</p>
                     </div>
 
-                    <h4 style="margin: 20px 0 8px;">创建自定义角色</h4>
+                    <h4 class="block-title">创建自定义角色</h4>
                     <div class="form-group">
                         <label for="charName">角色名称 *</label>
                         <input type="text" id="charName" placeholder="例如：邻家姐姐">
@@ -296,7 +296,7 @@
                     <div class="form-group">
                         <label for="charDialect">方言（可选）</label>
                         <select id="charDialect"></select>
-                        <p id="charDialectHint" style="margin:6px 0 0; font-size:0.82rem; color:#b26a00; display:none;"></p>
+                        <p id="charDialectHint" class="hint-warm" style="display:none;"></p>
                     </div>
                     <div class="form-group">
                         <label>音色标签（可多选）</label>
@@ -305,9 +305,9 @@
                     <div class="form-group">
                         <label for="charPresetVoice">预设音色（12 选 1，应用当前会话）</label>
                         <select id="charPresetVoice"></select>
-                        <p id="charPresetVoiceHint" style="margin:6px 0 0; font-size:0.82rem; color:#b26a00; display:none;"></p>
-                        <p id="charPresetVoicePrompt" style="margin:4px 0 0; font-size:0.82rem; color:#555; display:none;"></p>
-                        <button type="button" id="applyPresetVoiceBtn" style="margin-top:8px; padding:6px 14px; border:none; border-radius:6px; background:#4CAF50; color:#fff; cursor:pointer;">应用到当前会话</button>
+                        <p id="charPresetVoiceHint" class="hint-warm" style="display:none;"></p>
+                        <p id="charPresetVoicePrompt" class="hint-muted" style="display:none;"></p>
+                        <button type="button" id="applyPresetVoiceBtn" class="btn-pill btn-primary-sm" style="margin-top:8px;">应用到当前会话</button>
                     </div>
                     <div class="form-group">
                         <label for="charIdentity">身份/职业（可选）</label>
@@ -330,7 +330,7 @@
                         <textarea id="charFreeDesc" placeholder="其他想补充的人设背景，可留空"></textarea>
                     </div>
                     <button class="submit-btn" id="createCharacterBtn">创建角色</button>
-                    <button type="button" id="cancelCharacterEditBtn" style="display:none; margin-left:8px; padding:10px 16px; border:1px solid #ccc; border-radius:8px; background:#fff; cursor:pointer;">取消编辑</button>
+                    <button type="button" id="cancelCharacterEditBtn" class="btn-ghost" style="display:none; margin-left:8px;">取消编辑</button>
                     <div class="response" id="characterResponse"></div>
                 </div>
             </section>
@@ -339,7 +339,7 @@
             <section class="tab-content" id="tts">
                 <div class="page-container">
                     <h3>语音合成</h3>
-                    <p class="page-desc">输入文本，使用已定义的语音或指定风格合成语音（VoxCPM2，固化参数 CFG=2.0/Steps=10）</p>
+                    <p class="page-desc">输入文本，使用已定义的语音或指定风格合成语音</p>
 
                     <div class="form-group">
                         <label for="ttsText">合成文本</label>
@@ -376,6 +376,14 @@
             <section class="tab-content" id="settings">
                 <div class="page-container">
                     <h3>设置</h3>
+
+                    <!-- 当日用量与配额（网关 /api/usage/me） -->
+                    <div class="usage-panel">
+                        <h4>今日用量</h4>
+                        <p class="usage-subtitle">每天 00:00 重置</p>
+                        <div id="usageBars" class="usage-bars"></div>
+                        <p id="usageRefreshHint" class="usage-refresh">自动刷新中…</p>
+                    </div>
 
                     <div class="form-group">
                         <label for="apiUrl">API Gateway 地址</label>

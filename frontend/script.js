@@ -76,7 +76,7 @@ function showAuthOverlay(show, hintText) {
     }
 }
 
-// 全局 fetch 包装：自动注入 Authorization；收到 401 说明令牌失效 → 清令牌并回到登录页
+// 全局 fetch 包装：自动注入 Authorization；收到 401 清令牌 + 回登录；402 额度用尽 → 提示
 const _nativeFetch = window.fetch.bind(window);
 window.fetch = async function(input, init) {
     const opts = Object.assign({}, init);
@@ -94,13 +94,38 @@ window.fetch = async function(input, init) {
         if (authRequired) {
             showAuthOverlay(true, '登录状态已失效，请重新登录');
         } else {
-            // authRequired 尚未由 /health 初始化（竞态），401 也说明 token 失效
-            // 等待 initAuth 稍后跑完 checkAuthGate 自然会弹门禁
             console.warn('401 收到但 authRequired 未初始化，已清 token');
         }
+    } else if (resp.status === 402) {
+        // 用量额度用尽：读 body 里的 code / metric / error，发友好 Toast 并刷新用量条
+        try {
+            const body = await resp.clone().json();
+            _showQuotaAlert(body);
+        } catch (_) {}
+        _refreshUsagePanel();  // 用量已达上限，立即刷一次
     }
     return resp;
 };
+
+// 配额用尽提示：首次触发的 metric 用中文标签（与网关 METRIC_LABELS 保持一致）
+const METRIC_LABELS = {
+    llm_chars: '对话额度', tts_chars: '语音合成额度',
+    voice_clones: '音色克隆次数', asr_seconds: '语音识别额度',
+};
+let _quotaToastActive = false;
+function _showQuotaAlert(body) {
+    if (_quotaToastActive) return;  // 避免连续请求同时弹 N 次
+    _quotaToastActive = true;
+    const metric = body && body.metric ? body.metric : '';
+    const label = METRIC_LABELS[metric] || metric || '今日额度';
+    const remaining = body && typeof body.remaining === 'number' ? body.remaining : 0;
+    const msg = remaining === 0
+        ? `今日${label}已用完，明天再来或联系管理员调整配额。`
+        : `今日${label}不足，剩余 ${remaining}。`;
+    // 优先用 window.alert（所有浏览器通用），避免引入新的 toast 组件
+    alert(msg);
+    setTimeout(() => { _quotaToastActive = false; }, 1500);
+}
 
 // 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', function() {
@@ -176,9 +201,76 @@ function setupTabSwitching() {
             if (tabId === 'emotion-config' && typeof window.loadEmotionPresets === 'function') {
                 window.loadEmotionPresets();
             }
+
+            // 切换到设置页时刷新用量条（含首次），并启动 30s 轮询
+            if (tabId === 'settings') {
+                _refreshUsagePanel();
+                _startUsagePolling();
+            } else {
+                _stopUsagePolling();
+            }
         });
     });
 }
+
+// ============ 用量面板：拉取 /api/usage/me 渲染 4 条进度条 ============
+const _USAGE_POLL_MS = 30000;
+let _usagePollTimer = null;
+function _startUsagePolling() {
+    if (_usagePollTimer) return;
+    _usagePollTimer = setInterval(_refreshUsagePanel, _USAGE_POLL_MS);
+}
+function _stopUsagePolling() {
+    if (_usagePollTimer) { clearInterval(_usagePollTimer); _usagePollTimer = null; }
+}
+async function _refreshUsagePanel() {
+    const container = document.getElementById('usageBars');
+    const hint = document.getElementById('usageRefreshHint');
+    if (!container) return;
+    const token = getToken();
+    if (!token) {
+        container.innerHTML = '<p class="empty-note">登录后可查看今日用量</p>';
+        if (hint) hint.textContent = '';
+        return;
+    }
+    let snap;
+    try {
+        const r = await fetch(`${apiUrl}/api/usage/me`, { method: 'GET' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        snap = await r.json();
+    } catch (e) {
+        container.innerHTML = '<p class="empty-note">用量数据加载失败（网关未就绪或鉴权失败）</p>';
+        if (hint) hint.textContent = '';
+        return;
+    }
+    const order = ['llm_chars', 'tts_chars', 'voice_clones', 'asr_seconds'];
+    const fmt = {
+        llm_chars:  v => `${v} 字`,
+        tts_chars:  v => `${v} 字`,
+        voice_clones: v => `${v} 次`,
+        asr_seconds: v => { if (v >= 60) return `${Math.round(v/60)}分${v%60}秒`; return `${v} 秒`; },
+    };
+    const rows = order.map(k => {
+        const used = snap.usage[k] || 0;
+        const quota = snap.quota[k];
+        const pct = quota > 0 ? Math.min(100, Math.round(used * 100 / quota)) : 0;
+        const cls = pct >= 100 ? 'exhausted' : pct >= 80 ? 'danger' : pct >= 50 ? 'warn' : '';
+        const label = METRIC_LABELS[k] || k;
+        return `
+            <div class="usage-row">
+                <span class="usage-label">${label}</span>
+                <div class="usage-bar ${cls}"><div class="usage-bar-fill" style="width:${pct}%"></div></div>
+                <span class="usage-count">${fmt[k](used)} / ${fmt[k](quota)}</span>
+            </div>`;
+    }).join('');
+    container.innerHTML = rows;
+    if (hint) {
+        const t = new Date().toLocaleTimeString();
+        hint.textContent = `最近更新 ${t} · 每 30 秒自动刷新`;
+    }
+}
+
+// ============ 标签页切换 end ============
 
 // 对话交互：麦克风语音输入（主） + 文字输入（辅） + WebSocket 实时回复
 function setupChatInput() {
@@ -661,6 +753,12 @@ async function connectChatWebSocket() {
                 ensureSession().then(() => loadSessions(true));
                 return;
             }
+            if (reason.indexOf('quota_exceeded') >= 0) {
+                // 建连时被 llm_chars 预检拒连
+                addMessage('ai', '今日对话额度已用完，明天再来或联系管理员调整配额。');
+                setInputLocked(false);
+                return;
+            }
             // 服务端因鉴权失败关闭（1008）→ 回登录页
             if (authRequired) {
                 tokenInvalidated = true;
@@ -696,7 +794,12 @@ function handleWsMessage(msg) {
             console.log(`Audio ${msg.index}: sr=${msg.sample_rate}, size=${msg.size}`);
             break;
         case 'error':
-            addMessage('ai', '错误：' + msg.message);
+            if (msg.code === 'user_quota_exceeded') {
+                // 流中熔断（AI 回复触发时额度已耗尽）
+                addMessage('ai', '今日对话额度已用完，明天再来或联系管理员调整配额。');
+            } else {
+                addMessage('ai', '错误：' + (msg.message || msg.error || '未知错误'));
+            }
             setInputLocked(false);
             break;
     }
@@ -1801,7 +1904,7 @@ function setupTts() {
                 });
 
                 const contentType = response.headers.get('content-type') || '';
-                if (contentType.includes('audio/wav')) {
+                if (contentType.includes('audio/')) {
                     const note = response.headers.get('X-Voice-Notice');
                     if (note && ttsResponse) {
                         let txt = note;
