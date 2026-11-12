@@ -53,11 +53,13 @@ LLM_CONFIGS = {
     },
 }
 
-# 系统提示词：语伴 AI 助手角色设定
+# 系统提示词：育儿教练定位（Pivot 2026-11）
 SYSTEM_PROMPT = (
-    "你是语伴，一个温暖、有亲和力的智能语音交互助手。"
-    "回答要简洁自然，适合语音播报，避免使用 Markdown 格式和过长的段落。"
-    "每次回复控制在 2-3 句话以内，像朋友聊天一样。"
+    "你是语伴，家长的育儿沟通教练。"
+    "回答要准确、可执行、不啰嗦，适合语音播报。"
+    "优先输出结构化话术卡：此刻可以说什么、不要说什么、为什么、后续步骤。"
+    "避免 Markdown 和长段落，单次回复不超过 150 字。"
+    "涉及儿童心理健康问题（抑郁、自伤迹象）必须提示家长寻求专业帮助。"
 )
 
 
@@ -71,11 +73,14 @@ class LLMService:
             print(f"[LLM] 警告: 未配置 API Key（LLM_PROVIDER={self.provider}），"
                   f"请设置环境变量 LLM_API_KEY")
 
-    async def chat_stream(self, messages: list, system_prompt: str = None) -> AsyncGenerator[str, None]:
+    async def chat_stream(self, messages: list, system_prompt: str = None,
+                          max_tokens: int = 256, temperature: float = 0.2) -> AsyncGenerator[str, None]:
         """
         流式对话，逐 token 产出文本
         messages: [{"role": "system/user/assistant", "content": "..."}]
         system_prompt: 可选，自定义系统提示词（来自角色 persona_profile）；缺省用默认语伴人设
+        max_tokens: 最大输出 token 数（默认 256）
+        temperature: 采样温度（默认 0.2）
         yield: 逐个 token 的文本片段
         """
         # 注入系统提示词（角色人设优先于默认人设）；过滤调用方自带的 system 消息
@@ -90,8 +95,8 @@ class LLMService:
             "model": self.config["model"],
             "messages": full_messages,
             "stream": True,
-            "temperature": 0.7,
-            "max_tokens": 512,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
         }
 
         async with httpx.AsyncClient(timeout=30) as client:
@@ -134,9 +139,11 @@ class LLMService:
         if buffer.strip():
             yield buffer.strip()
 
-    async def chat(self, messages: list, system_prompt: str = None) -> str:
+    async def chat(self, messages: list, system_prompt: str = None,
+                   max_tokens: int = 256, temperature: float = 0.2) -> str:
         """非流式对话，返回完整文本（简单场景用）"""
         result = ""
-        async for token in self.chat_stream(messages, system_prompt=system_prompt):
+        async for token in self.chat_stream(messages, system_prompt=system_prompt,
+                                            max_tokens=max_tokens, temperature=temperature):
             result += token
         return result

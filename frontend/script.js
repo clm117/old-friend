@@ -1,4 +1,4 @@
-// 全局变量
+﻿// 全局变量
 let mediaRecorder;
 let audioChunks = [];
 // API 地址策略：
@@ -185,11 +185,10 @@ function setupTabSwitching() {
             // 滚动到顶部
             const main = document.querySelector('.app-main');
             if (main) main.scrollTop = 0;
-            
-            // 如果切换到语音定义标签，更新基础语音下拉列表 + 云定义能力提示
-            if (tabId === 'voice-define') {
-                updateBaseVoiceSelect();
-                if (typeof loadVoiceDesignCapability === 'function') loadVoiceDesignCapability();
+
+            // 孩子档案页懒加载
+            if (tabId === 'child-profile' && typeof window.loadChildren === 'function') {
+                window.loadChildren();
             }
 
             // 如果切换到语音合成标签，更新语音选择列表
@@ -197,7 +196,7 @@ function setupTabSwitching() {
                 updateTtsVoiceSelect();
             }
 
-            // 情感预设需登录后才能拉取：首次进入情感页时懒加载
+            // 语气预设需登录后才能拉取：首次进入语气页时懒加载
             if (tabId === 'emotion-config' && typeof window.loadEmotionPresets === 'function') {
                 window.loadEmotionPresets();
             }
@@ -313,6 +312,12 @@ async function sendUserText(text) {
     addMessage('user', text);
     setInputLocked(true);
 
+    // 1. 先调用育儿急救话术卡（HTTP，独立于 WS，失败不阻塞主链路）
+    _fetchAdviceCard(text).catch(err => {
+        console.warn('话术卡获取失败，继续走 AI 对话：', err);
+    });
+
+    // 2. 正常走 WebSocket 流式对话
     if (!chatWs || chatWs.readyState !== WebSocket.OPEN) {
         try {
             await connectChatWebSocket();
@@ -323,6 +328,23 @@ async function sendUserText(text) {
         }
     }
     chatWs.send(JSON.stringify({ text: text }));
+}
+
+// 调 parenting-advice API，渲染话术卡
+async function _fetchAdviceCard(scene) {
+    // 走网关路由（全局 fetch 包装已自动注入 Authorization）
+    const resp = await fetch(`${apiUrl}/api/parenting-advice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scene })
+    });
+    if (!resp.ok) {
+        throw new Error('advice HTTP ' + resp.status);
+    }
+    const data = await resp.json();
+    if (data.status === 'ok' && data.advice) {
+        renderAdviceCard(data.advice);
+    }
 }
 
 // ===== 麦克风录音 =====
@@ -862,6 +884,85 @@ function addMessage(sender, text, streaming = false, thinking = false) {
     chatHistory.scrollTop = chatHistory.scrollHeight;
 }
 
+// 渲染育儿话术卡（插在 AI 回复气泡之前）
+function renderAdviceCard(advice) {
+    const chatHistory = document.getElementById('chatHistory');
+    const welcome = chatHistory.querySelector('.chat-welcome');
+    if (welcome) welcome.remove();
+
+    const card = document.createElement('div');
+    card.className = 'advice-card';
+    if (advice.emergency) card.classList.add('advice-emergency');
+
+    card.innerHTML = `
+        <div class="advice-header">
+            <span class="advice-badge">🆘 急救话术卡</span>
+            ${advice.emergency ? '<span class="advice-urgent">⚠️ 建议立即寻求专业帮助</span>' : ''}
+        </div>
+        ${advice.say ? `
+        <div class="advice-block advice-say">
+            <div class="advice-label">✅ 此刻可以说</div>
+            <div class="advice-text">${escapeHtml(advice.say)}</div>
+            <button type="button" class="advice-play" title="点一下听话术">🔊 听一遍</button>
+        </div>` : ''}
+        ${advice.not_say ? `
+        <div class="advice-block advice-not-say">
+            <div class="advice-label">🚫 不要说</div>
+            <div class="advice-text">${escapeHtml(advice.not_say)}</div>
+        </div>` : ''}
+        ${advice.why ? `
+        <div class="advice-block advice-why">
+            <div class="advice-label">💡 为什么</div>
+            <div class="advice-text">${escapeHtml(advice.why)}</div>
+        </div>` : ''}
+        ${advice.next_steps ? `
+        <div class="advice-block advice-next">
+            <div class="advice-label">📋 事后可以做</div>
+            <div class="advice-text">${escapeHtml(advice.next_steps)}</div>
+        </div>` : ''}
+    `;
+
+    // 🔊 听一遍：用 edge-tts 朗读 say 字段
+    const playBtn = card.querySelector('.advice-play');
+    if (playBtn && advice.say) {
+        playBtn.addEventListener('click', () => {
+            _speakAdvice(advice.say, playBtn);
+        });
+    }
+
+    chatHistory.appendChild(card);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+// 话术卡的 say 字段转语音播放
+async function _speakAdvice(text, btn) {
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = '合成中…';
+    try {
+        const fd = new FormData();
+        fd.append('text', text);
+        fd.append('session_id', window.sessionId || 'advice');
+        fd.append('quick_mode', 'true');
+        const resp = await fetch(`${apiUrl}/api/voice/tts`, {
+            method: 'POST',
+            body: fd
+        });
+        if (!resp.ok) {
+            let detail = resp.status;
+            try { detail = await resp.text(); } catch (_) {}
+            throw new Error(`${resp.status} ${detail.slice(0,120)}`);
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.play();
+        audio.onended = () => { URL.revokeObjectURL(url); btn.disabled = false; btn.textContent = orig; };
+    } catch (e) {
+        btn.disabled = false; btn.textContent = orig;
+        alert('播放失败：' + e.message);
+    }
+}
+
 // 语音录入
 // ===== 录音音频：转 WAV + IndexedDB 存储 =====
 // MediaRecorder 在浏览器中通常产出 webm/ogg，而网关只接受 wav/mp3/ogg/flac/m4a，
@@ -1061,152 +1162,9 @@ function setupVoiceInput() {
     });
 }
 
-// 语音定义
+// 语音定义（voice-define tab 已替换为 child-profile，声音克隆整条链路移除）
 function setupVoiceDefine() {
-    // 初始化滑块值显示
-    const sliders = ['pitch', 'speed', 'volume', 'emotionIntensity'];
-    sliders.forEach(sliderId => {
-        const slider = document.getElementById(sliderId);
-        const valueDisplay = document.getElementById(sliderId + 'Value');
-        
-        if (slider && valueDisplay) {
-            slider.addEventListener('input', function() {
-                valueDisplay.textContent = this.value;
-            });
-        }
-    });
-    
-    const defineVoiceBtn = document.getElementById('defineVoiceBtn');
-    
-    defineVoiceBtn.addEventListener('click', async function() {
-        const voiceName = document.getElementById('voiceNameDefine').value;
-        const voiceDescription = document.getElementById('voiceDescriptionDefine').value;
-        const baseVoice = document.getElementById('baseVoice').value;
-        const pitch = parseFloat(document.getElementById('pitch').value);
-        const speed = parseFloat(document.getElementById('speed').value);
-        const volume = parseFloat(document.getElementById('volume').value);
-        const emotionIntensity = parseFloat(document.getElementById('emotionIntensity').value);
-        
-        if (!voiceName) {
-            alert('请输入语音名称');
-            return;
-        }
-        
-        // 获取用户上传的音频文件
-        const voiceFileInput = document.getElementById('voiceFileDefine');
-        // 参考音频（下方统一转为 WAV 后上传）
-        
-        if (voiceFileInput.files.length === 0) {
-            alert('请先上传参考音频文件（支持 wav / mp3 / m4a / ogg 等）');
-            return;
-        }
-
-        // 网关已原生支持 wav/mp3/ogg/flac/m4a 五种格式（见 api-gateway/_AUDIO_MAGIC），
-        // 无需前端预先解码转码，直接上传原文件即可，避免 _encodeWav 的同步 CPU 密集循环阻塞主线程
-        const audioFile = voiceFileInput.files[0];
-        
-        try {
-            // 构建表单数据
-            const formData = new FormData();
-            formData.append('session_id', sessionId);
-            formData.append('description', voiceDescription || voiceName);
-            formData.append('audio', audioFile);
-            formData.append('pitch', pitch);
-            formData.append('speed', speed);
-            formData.append('volume', volume);
-            formData.append('emotion_intensity', emotionIntensity);
-            
-            // 调用后台API
-            const response = await fetch(`${apiUrl}/api/voice/define`, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                // 云声音定义失败分支：透出服务端 code / hint（欠费 402、限流 429、超时 504、不可用 501）
-                let errBody = {};
-                try { errBody = await response.json(); } catch (_) {}
-                const bits = [`HTTP ${response.status}`];
-                if (errBody && errBody.code) bits.push(errBody.code);
-                if (errBody && errBody.error) bits.push(errBody.error);
-                if (errBody && errBody.hint) bits.push(errBody.hint);
-                const msg = bits.join(' · ');
-                document.getElementById('voiceDefineResponse').innerHTML =
-                    `<p style="color: red;">语音定义失败：${escapeHtml(msg)}</p>`;
-                showVoiceDesignCapability(errBody && errBody.code ? {
-                    supported: false, provider: 'cloud',
-                    last_error: { code: errBody.code, hint: errBody.hint || errBody.error || '' },
-                    design: { supported: false, reason: errBody.error || '' }
-                } : null);
-                return;
-            }
-            
-            const result = await response.json();
-            console.log('Voice define response:', result);
-
-            // 云 TTS 模式下服务端以 200 返回 error（声音定义不可用），此处明确提示而非误报成功
-            if (result && result.error) {
-                document.getElementById('voiceDefineResponse').innerHTML =
-                    `<p style="color: red;">语音定义失败: ${escapeHtml(result.error)}</p>`;
-                return;
-            }
-            
-            // 保存语音定义到本地存储
-            const voice = {
-                id: 'voice_' + Date.now(),
-                name: voiceName,
-                description: voiceDescription || voiceName,
-                baseVoice: baseVoice,
-                params: {
-                    pitch: pitch,
-                    speed: speed,
-                    volume: volume,
-                    emotionIntensity: emotionIntensity
-                },
-                voiceDefinition: result.voice_definition,
-                voiceParams: result.voice_params,
-                timestamp: new Date().toISOString()
-            };
-            
-            voices.push(voice);
-            localStorage.setItem('voices', JSON.stringify(voices));
-            
-            // 显示保存成功消息
-            const responseDiv = document.getElementById('voiceDefineResponse');
-            responseDiv.innerHTML = `
-                <h4>语音定义结果</h4>
-                <p style="color: green;">语音定义成功！</p>
-                <p>名称: ${escapeHtml(voiceName)}</p>
-                <p>描述: ${escapeHtml(voiceDescription)}</p>
-                <p>音调: ${pitch}</p>
-                <p>语速: ${speed}</p>
-                <p>音量: ${volume}</p>
-                <p>情感强度: ${emotionIntensity}</p>
-                <p>语音定义: ${escapeHtml(result.voice_definition)}</p>
-            `;
-            
-            // 重置表单
-            document.getElementById('voiceNameDefine').value = '';
-            document.getElementById('voiceDescriptionDefine').value = '';
-            document.getElementById('baseVoice').value = '';
-            document.getElementById('voiceFileDefine').value = '';
-            document.getElementById('pitch').value = 1;
-            document.getElementById('speed').value = 1;
-            document.getElementById('volume').value = 1;
-            document.getElementById('emotionIntensity').value = 0.5;
-            document.getElementById('pitchValue').textContent = '1.0';
-            document.getElementById('speedValue').textContent = '1.0';
-            document.getElementById('volumeValue').textContent = '1.0';
-            document.getElementById('emotionIntensityValue').textContent = '0.5';
-            
-            // 更新已保存的语音列表
-            displaySavedVoices();
-        } catch (error) {
-            console.error('Error defining voice:', error);
-            const responseDiv = document.getElementById('voiceDefineResponse');
-            responseDiv.innerHTML = `<p style="color: red;">定义语音时出错: ${escapeHtml(error.message)}</p>`;
-        }
-    });
+    // 空壳：保留函数名避免 DOMContentLoaded 里 setupVoiceDefine() 调用报错
 }
 
 // 云声音定义能力提示（GAP-07）：支持范围 / 欠费 / 限流 / 最近错误
@@ -1247,9 +1205,9 @@ function showVoiceDesignCapability(cap) {
         setBox('#ad6800', '#fffbe6', '音色部署超时，请稍后重试。', false);
         return;
     }
-    if (code === 'voice_define_unsupported' || !cap.supported) {
+    if (code === 'voice_define_unsupported' || code === 'voice_define_removed' || !cap.supported) {
         setBox('#a8071a', '#fff1f0',
-            (cap.last_error && cap.last_error.hint) || '当前音色模式不支持云声音定义。', true);
+            (cap.clone && cap.clone.reason) || '声音克隆功能已移除（合规要求）；日常合成不受影响。', true);
         return;
     }
     if (cap.design && !cap.design.supported) {
@@ -2407,3 +2365,107 @@ async function createCharacter() {
         btn.textContent = editingCharacterId ? '保存修改' : '创建角色';
     }
 }
+
+// ===== 孩子档案 + 育儿急救 =====
+const AGE_LABELS = { toddler: '1-3岁学步期', preschool: '3-6岁学龄前', early: '6-9岁低年级', middle: '9-12岁高年级', preteen: '12-14岁青春期前', teen: '14-18岁青春期' };
+const TEMP_LABELS = { sensitive: '敏感型', active: '活跃型', calm: '沉稳型', stubborn: '执拗型', social: '社交型' };
+
+window.loadChildren = async function() {
+    const list = document.getElementById('childProfileList');
+    if (!list) return;
+    list.innerHTML = '<p style="color:#888;">加载中…</p>';
+    try {
+        const resp = await fetch(`${apiUrl}/api/children`);
+        if (!resp.ok) throw new Error(resp.status);
+        const data = await resp.json();
+        const children = data.children || [];
+        if (children.length === 0) {
+            list.innerHTML = '<p style="color:#888;">还没有孩子档案，点下方按钮添加</p>';
+            return;
+        }
+        list.innerHTML = children.map(c => `
+            <div style="padding:10px 12px; border:1px solid #e0e0e0; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-weight:500;">${escapeHtml(c.name)}</div>
+                    <div style="font-size:0.8rem; color:#888;">${AGE_LABELS[c.age_stage] || c.age_stage} · ${TEMP_LABELS[c.temperament] || c.temperament}${c.sensitivities ? ' · ' + escapeHtml(c.sensitivities) : ''}</div>
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <button type="button" class="btn-ghost btn-sm" onclick="editChild('${c.id}')">编辑</button>
+                    <button type="button" class="btn-ghost btn-sm" style="color:#c00;" onclick="deleteChild('${c.id}')">删除</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        list.innerHTML = '<p style="color:#c00;">加载失败：' + e.message + '</p>';
+    }
+};
+
+window.editChild = function(id) {
+    // 从全局缓存或直接拉：简化处理，直接跳表单
+    loadChildren().then(async () => {
+        // 简易版：用 prompt 式编辑占位
+        alert('编辑功能请在表单中操作');
+    });
+};
+
+window.deleteChild = async function(id) {
+    if (!confirm('确定删除这个孩子档案吗？')) return;
+    try {
+        const resp = await fetch(`${apiUrl}/api/children/` + id, { method: 'DELETE' });
+        if (!resp.ok) throw new Error(resp.status);
+        alert('已删除');
+        loadChildren();
+    } catch (e) {
+        alert('删除失败：' + e.message);
+    }
+};
+
+// 绑定孩子档案表单按钮（只绑一次）
+document.addEventListener('DOMContentLoaded', () => {
+    const newBtn = document.getElementById('cpNewBtn');
+    if (newBtn && !newBtn._bound) {
+        newBtn._bound = true;
+        newBtn.addEventListener('click', () => {
+            document.getElementById('childProfileForm').style.display = 'block';
+        });
+    }
+    const cancelBtn = document.getElementById('cpCancelBtn');
+    if (cancelBtn && !cancelBtn._bound) {
+        cancelBtn._bound = true;
+        cancelBtn.addEventListener('click', () => {
+            document.getElementById('childProfileForm').style.display = 'none';
+        });
+    }
+    const saveBtn = document.getElementById('cpSaveBtn');
+    if (saveBtn && !saveBtn._bound) {
+        saveBtn._bound = true;
+        saveBtn.addEventListener('click', async () => {
+            const name = document.getElementById('cpName').value.trim();
+            const age_stage = document.getElementById('cpAgeStage').value;
+            const temperament = document.getElementById('cpTemperament').value;
+            const sensitivities = document.getElementById('cpSensitivities').value.trim();
+            if (!name) { alert('请输入昵称'); return; }
+            saveBtn.disabled = true; saveBtn.textContent = '保存中…';
+            try {
+                const resp = await fetch(`${apiUrl}/api/children`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, age_stage, temperament, sensitivities })
+                });
+                if (!resp.ok) {
+                    const d = await resp.json().catch(() => ({}));
+                    throw new Error(d.error || resp.status);
+                }
+                document.getElementById('childProfileForm').style.display = 'none';
+                document.getElementById('cpName').value = '';
+                document.getElementById('cpSensitivities').value = '';
+                alert('已保存');
+                loadChildren();
+            } catch (e) {
+                alert('保存失败：' + e.message);
+            } finally {
+                saveBtn.disabled = false; saveBtn.textContent = '保存';
+            }
+        });
+    }
+});

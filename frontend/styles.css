@@ -1279,3 +1279,145 @@ input[type="range"]::-moz-range-thumb {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* ===== 育儿急救话术卡 =====
+   苔径暖阳设计令牌驱动：松绿可信 + 暖杏金点缀
+   核心：say 块是视觉焦点，其余 3 块做弱层级分区
+*/
+.advice-card {
+    background: var(--c-bg);
+    border: 1px solid var(--c-border);
+    border-radius: 16px;
+    padding: 0;
+    margin: 16px 0 20px;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    box-shadow: var(--shadow-sm);
+    animation: adviceEntry 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+}
+@keyframes adviceEntry {
+    from { opacity: 0; transform: translateY(14px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+/* 顶部条：品牌绿 + 暖金点缀 */
+.advice-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 18px;
+    background: var(--grad-header);
+    color: #fff;
+}
+.advice-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+}
+.advice-badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--c-warm);
+    box-shadow: 0 0 0 2px rgba(232,165,88,0.3);
+    animation: advicePulse 2s ease-in-out infinite;
+}
+@keyframes advicePulse {
+    0%,100% { box-shadow: 0 0 0 2px rgba(232,165,88,0.3); }
+    50%     { box-shadow: 0 0 0 5px rgba(232,165,88,0); }
+}
+.advice-urgent {
+    background: rgba(200,80,60,0.2);
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+.advice-card.advice-emergency .advice-header {
+    background: var(--grad-live);
+}
+
+/* 内容区 */
+.advice-block {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--c-border);
+    position: relative;
+}
+.advice-block:last-child {
+    border-bottom: none;
+}
+.advice-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--c-text-subtle);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.advice-block.advice-say .advice-label   { color: var(--c-primary); }
+.advice-block.advice-not-say .advice-label { color: var(--c-danger); }
+.advice-block.advice-why .advice-label   { color: var(--c-primary-dark); }
+.advice-block.advice-next .advice-label  { color: var(--c-warm); }
+
+/* say 块：视觉焦点 */
+.advice-say {
+    background: var(--c-primary-whisper);
+    border-left: 3px solid var(--c-primary);
+    padding: 16px 18px;
+    margin: 2px 0 0;
+}
+.advice-say .advice-text {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--c-text);
+    line-height: 1.7;
+}
+
+/* 🔊 听一遍按钮 */
+.advice-play {
+    margin-top: 10px;
+    background: var(--c-primary);
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.18s;
+    box-shadow: var(--shadow-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.advice-play:hover:not(:disabled) {
+    background: var(--c-primary-dark);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-primary);
+}
+.advice-play:active:not(:disabled) {
+    transform: translateY(0);
+}
+.advice-play:disabled {
+    background: var(--c-border-strong);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* 其余 3 块：弱层级 */
+.advice-not-say .advice-text {
+    color: var(--c-danger);
+    font-weight: 500;
+}
+.advice-block.advice-why {
+    background: var(--c-bg-alt);
+}
+.advice-next .advice-text {
+    color: var(--c-text);
+}

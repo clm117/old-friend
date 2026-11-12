@@ -509,70 +509,14 @@ async def get_response(session_id: str, request: Request):
         return _upstream_error("ai/response", e)
 
 
-# 语音定义接口
+# 语音定义接口 —— 声音克隆已移除（育儿教练场景合规要求）
 @app.post("/api/voice/define")
-async def define_voice(
-    request: Request,
-    session_id: str = Form(...),
-    description: str = Form(""),
-    audio: Optional[UploadFile] = File(None),
-    pitch: float = Form(1.0),
-    speed: float = Form(1.0),
-    volume: float = Form(1.0),
-    emotion_intensity: float = Form(0.5),
-    mode: str = Form("auto"),
-    voice_prompt: str = Form(""),
-    preview_text: str = Form(""),
-    language_hints: str = Form(""),
-):
-    """语音定义：复刻（上传音频）/ 设计（voice_prompt + preview_text）"""
-    if not _safe_id(session_id):
-        return JSONResponse({"error": "session_id 非法"}, status_code=400)
-    is_design = mode == "design" or (audio is None and voice_prompt.strip())
-    if not is_design and not description.strip():
-        return JSONResponse({"error": "description 不能为空"}, status_code=400)
-    if len(description) > 200:
-        return JSONResponse({"error": "description 过长（上限 200 字）"}, status_code=400)
-    if is_design and not (1 <= len(voice_prompt.strip()) <= 500 and 15 <= len(preview_text.strip()) <= 200):
-        return JSONResponse({"error": "voice_prompt 需 1-500 字，preview_text 需 15-200 字"}, status_code=400)
-    if not is_design:
-        # 克隆按次配额（训练单价高）；design 走普通 TTS 字符计费，不占克隆名额
-        quota_err = _quota_check(request, "voice_clones")
-        if quota_err:
-            return quota_err
-    try:
-        files = None
-        if audio is not None:
-            audio_data = await audio.read()
-            invalid = _validate_audio(audio_data)
-            if invalid:
-                return JSONResponse({"error": invalid}, status_code=400)
-            files = {"audio": (audio.filename, audio_data, audio.content_type or "application/octet-stream")}
-
-        # 转发到核心AI服务（包进线程池，避免同步 requests 阻塞 asyncio 事件循环）
-        response = await _async_request(
-            "post",
-            f"{AI_SERVICE_URL}/api/ai/define-voice",
-            data={
-                "session_id": session_id,
-                "description": description,
-                "pitch": pitch,
-                "speed": speed,
-                "volume": volume,
-                "emotion_intensity": emotion_intensity,
-                "mode": mode,
-                "voice_prompt": voice_prompt,
-                "preview_text": preview_text,
-                "language_hints": language_hints,
-            },
-            files=files,
-            headers=_internal_headers(_user_of(request)),
-        )
-        if not is_design and response.status_code == 200:
-            _usage_store.record(_user_of(request) or "anonymous", "voice_clones", 1)
-        return _relay_json(response)
-    except Exception as e:
-        return _upstream_error("voice/define", e)
+async def define_voice_removed():
+    return JSONResponse(
+        {"error": "声音克隆已移除（育儿教练场景合规要求）；日常合成不受影响",
+         "code": "voice_define_removed"},
+        status_code=501,
+    )
 
 
 @app.get("/api/voice-design/capability")
@@ -803,6 +747,78 @@ async def delete_character(character_id: str, request: Request):
         return _relay_json(resp)
     except Exception as e:
         return _upstream_error("characters/delete", e)
+
+
+# ===== 孩子档案 / 育儿急救透传 =====
+@app.get("/api/children")
+async def list_children(request: Request):
+    try:
+        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/children",
+                                    headers=_internal_headers(_user_of(request)))
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("children/list", e)
+
+
+@app.post("/api/children")
+async def create_child(request: Request):
+    try:
+        payload = await request.json()
+        resp = await _async_request("post", f"{AI_SERVICE_URL}/api/ai/children",
+                                    json=payload, headers=_internal_headers(_user_of(request)))
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("children/create", e)
+
+
+@app.put("/api/children/{child_id}")
+@app.patch("/api/children/{child_id}")
+async def update_child(child_id: str, request: Request):
+    if not _safe_id(child_id):
+        return JSONResponse({"error": "child_id 非法"}, status_code=400)
+    try:
+        payload = await request.json()
+        resp = await _async_request("put", f"{AI_SERVICE_URL}/api/ai/children/{child_id}",
+                                    json=payload, headers=_internal_headers(_user_of(request)))
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("children/update", e)
+
+
+@app.delete("/api/children/{child_id}")
+async def delete_child(child_id: str, request: Request):
+    if not _safe_id(child_id):
+        return JSONResponse({"error": "child_id 非法"}, status_code=400)
+    try:
+        resp = await _async_request("delete", f"{AI_SERVICE_URL}/api/ai/children/{child_id}",
+                                    headers=_internal_headers(_user_of(request)))
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("children/delete", e)
+
+
+@app.post("/api/parenting-advice")
+async def parenting_advice(request: Request):
+    """育儿急救话术卡（贵接口，纳入 LLM 字符配额）"""
+    try:
+        payload = await request.json()
+        if not isinstance(payload, dict) or not (payload.get("scene") or "").strip():
+            return JSONResponse({"error": "scene 不能为空"}, status_code=400)
+    except Exception:
+        return JSONResponse({"error": "请求体必须是合法 JSON"}, status_code=400)
+
+    quota_err = _quota_check(request, "llm_chars")
+    if quota_err:
+        return quota_err
+
+    try:
+        resp = await _async_request("post", f"{AI_SERVICE_URL}/api/ai/parenting-advice",
+                                    json=payload, headers=_internal_headers(_user_of(request)))
+        if resp.status_code == 200:
+            _usage_store.record(_user_of(request) or "anonymous", "llm_calls", 1)
+        return _relay_json(resp)
+    except Exception as e:
+        return _upstream_error("parenting-advice", e)
 
 
 @app.post("/api/sessions")

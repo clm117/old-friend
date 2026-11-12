@@ -13,8 +13,18 @@ import asyncio
 import hashlib
 import hmac
 import time
-import torch
 from urllib.parse import quote
+
+# torch 仅在 voxcpm2 本地 TTS 模式需要；edge/cloud 模式免 GPU，延迟导入避免 CPU 环境缺 torch 报错
+torch = None
+_USE_GPU = False
+_TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "edge").strip().lower()
+if _TTS_PROVIDER == "voxcpm2":
+    try:
+        import torch
+        _USE_GPU = torch.cuda.is_available()
+    except ImportError:
+        print("[启动] 警告：TTS_PROVIDER=voxcpm2 但 torch 未安装，VoxCPM2 本地模型不可用")
 
 # 添加当前目录和项目根目录到Python路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -39,27 +49,27 @@ def _load_dotenv():
 
 _load_dotenv()
 
-# ===== TTS 提供方：voxcpm2（本地模型，实时交互需 GPU）| cloud（云 TTS，验证期免 GPU）| edge（edge-tts 日常合成 + Fish Audio 克隆）=====
-_TTS_PROVIDER = os.environ.get("TTS_PROVIDER", "voxcpm2").strip().lower()
-# edge/fish 输出 MP3，其余输出 WAV（HTTP /api/ai/tts media_type 用）
+# ===== TTS 提供方：edge（edge-tts 免费日常合成）| cloud（云 TTS）| voxcpm2（本地模型）=====
+# 育儿教练场景：edge-tts 已足够，声音克隆整条链路移除
+# _TTS_PROVIDER 已在文件顶部根据 .env 加载值初始化；此处无需再次赋值
 _TTS_MEDIA_TYPE = "audio/mpeg" if _TTS_PROVIDER == "edge" else "audio/wav"
 
 # FunAudioChatService（语音对话 ASR 入口）—— 仅在本地 TTS 模式下实例化
 # cloud 模式跳过：该服务依赖本地 transformers，且 cloud 模式下 /api/ai/process 端点不会被前端调用
 
-# ===== GPU/CPU 自动切换 =====
-# 有 CUDA → 加载 GPU 版服务（optimize=True, 高质量参数, 异步合成）
-# 无 CUDA → 加载 CPU 版服务（optimize=False, 快速模式, 同步合成）
-_USE_GPU = torch.cuda.is_available()
-
-if _USE_GPU:
-    from voxcpm2.voxcpm2_service_gpu import VoxCPM2ServiceGPU as _ServiceClass, \
-        DEFAULT_CFG_VALUE, DEFAULT_TIMESTEPS, QUICK_CFG_VALUE, QUICK_TIMESTEPS
-    print("[启动] 检测到 CUDA，使用 GPU 版 VoxCPM2 服务")
-else:
-    from voxcpm2.voxcpm2_service import VoxCPM2Service as _ServiceClass, \
-        DEFAULT_CFG_VALUE, DEFAULT_TIMESTEPS, QUICK_CFG_VALUE, QUICK_TIMESTEPS
-    print("[启动] 未检测到 CUDA，使用 CPU 版 VoxCPM2 服务")
+voxcpm2_service = None
+if _TTS_PROVIDER == "voxcpm2" and torch is not None:
+    if _USE_GPU:
+        from voxcpm2.voxcpm2_service_gpu import VoxCPM2ServiceGPU as _ServiceClass, \
+            DEFAULT_CFG_VALUE, DEFAULT_TIMESTEPS, QUICK_CFG_VALUE, QUICK_TIMESTEPS
+        print("[启动] TTS_PROVIDER=voxcpm2，检测到 CUDA，使用 GPU 版 VoxCPM2 服务")
+    else:
+        from voxcpm2.voxcpm2_service import VoxCPM2Service as _ServiceClass, \
+            DEFAULT_CFG_VALUE, DEFAULT_TIMESTEPS, QUICK_CFG_VALUE, QUICK_TIMESTEPS
+        print("[启动] TTS_PROVIDER=voxcpm2，未检测到 CUDA，使用 CPU 版 VoxCPM2 服务")
+    voxcpm2_service = _ServiceClass()
+elif _TTS_PROVIDER == "voxcpm2":
+    print("[启动] TTS_PROVIDER=voxcpm2 但 torch 未安装，跳过本地模型加载")
 
 from llm_service import LLMService
 from character_engine.character_engine import CharacterEngine
@@ -157,30 +167,17 @@ else:
 cloud_tts_service = None
 cloud_voice = None
 edge_tts_service = None
-voice_clone = None  # 当前克隆后端（volc / fish），voice_id 前缀即其 prefix
-CloneError = Exception
+# voice_clone 已移除（育儿教练场景合规红线 + 无业务必要）
 
 if _TTS_PROVIDER == "cloud":
-    # 云 TTS 验证模式：不实例化本地 VoxCPM2（声音定义/克隆走云 voice-enrollment，见 cloud_voice_service）
     from cloud_tts_service import cloud_tts_service
     from cloud_voice_service import cloud_voice_service as cloud_voice, CloudVoiceError
-    voxcpm2_service = None
-    print("[启动] TTS_PROVIDER=cloud，使用云 TTS（本地 VoxCPM2 不加载）")
+    print("[启动] TTS_PROVIDER=cloud，使用云 TTS")
 elif _TTS_PROVIDER == "edge":
-    # edge 模式：日常合成走 edge-tts（免费无限量），声音克隆走 VOICE_CLONE_PROVIDER 指定后端
-    # volc = 火山引擎声音复刻（国内直连，默认）；fish = Fish Audio（当前网络被 DNS 污染，不可用）
     from edge_tts_service import edge_tts_service
-    _CLONE_PROVIDER = os.environ.get("VOICE_CLONE_PROVIDER", "volc").strip().lower()
-    if _CLONE_PROVIDER == "volc":
-        from volc_tts_service import volc_tts_service as voice_clone, VolcTTSError as CloneError
-    elif _CLONE_PROVIDER == "fish":
-        from fish_audio_service import fish_audio_service as voice_clone, FishAudioError as CloneError
-    voxcpm2_service = None
-    _clone_name = voice_clone.prefix if voice_clone is not None else "none"
-    _clone_ready = bool(voice_clone.enabled) if voice_clone is not None else False
-    print(f"[启动] TTS_PROVIDER=edge，edge-tts 日常合成 + 克隆后端={_clone_name}（ready={_clone_ready}）")
+    print("[启动] TTS_PROVIDER=edge，edge-tts 日常合成（声音克隆已移除）")
 else:
-    voxcpm2_service = _ServiceClass()
+    print(f"[启动] TTS_PROVIDER={_TTS_PROVIDER}，使用 VoxCPM2 本地模型")
 llm_service = LLMService()
 character_engine = CharacterEngine()
 
@@ -231,11 +228,10 @@ def _session_owner_error(session_id: str, user: str):
 async def _synthesize_speech(text, style, emotion_params, quick_mode, speed=1.0, voice_id=None):
     """
     统一 TTS 入口：
-    - 云模式（cloud）：走 DashScope 云 TTS，style/emotion 参数忽略；voice_id 为云声音定义产物
-    - edge 模式：voice_id 带克隆后端前缀（"volc:"/"fish:"）走克隆音色，失败回退 edge-tts；其余走 edge-tts
-    - 本地 GPU 版：synthesize 为 async，直接 await
-    - 本地 CPU 版：同步推理放线程池，避免阻塞事件循环
-    speed: 语速（0.5-2.0），本地经 prompt 节奏描述生效；云侧暂不支持变速，仅记录；edge 映射 rate
+    - cloud 模式：走 DashScope 云 TTS
+    - edge 模式：走 edge-tts（声音克隆已移除）
+    - voxcpm2 模式：走本地模型
+    speed: 语速（0.5-2.0）
     返回 (audio_bytes, sample_rate)；audio_bytes 为 None 表示服务不可用
     """
     if _TTS_PROVIDER == "cloud":
@@ -243,15 +239,6 @@ async def _synthesize_speech(text, style, emotion_params, quick_mode, speed=1.0,
             text, voice=voice_id, quick_mode=quick_mode, speed=speed
         )
     if _TTS_PROVIDER == "edge":
-        if voice_id and ":" in voice_id:
-            prefix, _, ref = voice_id.partition(":")
-            if voice_clone is not None and prefix == voice_clone.prefix and voice_clone.enabled and ref:
-                try:
-                    return await voice_clone.synthesize(text, reference_id=ref, speed=speed)
-                except Exception as e:
-                    # 额度耗尽/超时等不阻断对话：回退 edge-tts 默认音色
-                    logger.warning("[TTS] 克隆音色合成失败，回退 edge-tts: %s", e)
-            voice_id = None  # 避免把 "volc:xxx"/"fish:xxx" 当 edge 音色名
         return await edge_tts_service.synthesize(
             text, voice=voice_id, quick_mode=quick_mode, speed=speed
         )
@@ -349,15 +336,15 @@ async def get_voice_preset_prompt(preset_id: str):
 
 @app.get("/api/ai/voice-design/capability")
 async def voice_design_capability():
-    """云声音定义能力（GAP-07）：支持范围/配额/限流/错误码；不做网络探测"""
+    """声音定义能力：edge 模式下声音克隆已移除，仅 cloud 模式支持"""
     if _TTS_PROVIDER == "cloud" and cloud_voice is not None:
         cap = cloud_voice.capability()
     else:
         cap = {
-            "supported": voxcpm2_service is not None,
-            "provider": "voxcpm2",
-            "clone": {"supported": voxcpm2_service is not None, "reason": None},
-            "design": {"supported": False, "reason": "本地 VoxCPM2 不支持云端声音设计"},
+            "supported": False,
+            "provider": _TTS_PROVIDER,
+            "clone": {"supported": False, "reason": "声音克隆已移除（育儿教练场景合规要求）"},
+            "design": {"supported": False, "reason": "仅 cloud 模式支持声音设计"},
             "quota": {"limit": None, "used": None},
             "rate_limit": None,
             "last_error": None,
@@ -446,6 +433,263 @@ async def delete_character(character_id: str, request: Request):
         return JSONResponse({"error": "无权删除该角色"}, status_code=403)
     character_engine.delete_character(character_id)
     return {"status": "ok", "deleted_id": character_id}
+
+
+# ===== 孩子档案 API（育儿教练核心）=====
+_CHILD_AGE_STAGES = {"toddler", "preschool", "early", "middle", "preteen", "teen"}
+_CHILD_TEMPERAMENTS = {"sensitive", "active", "calm", "stubborn", "social"}
+_MAX_CHILDREN_PER_USER = 5
+_CHILD_STORE: dict[str, list[dict]] = {}  # owner -> [child dict]
+
+
+def _children_of(owner: str) -> list[dict]:
+    return _CHILD_STORE.setdefault(owner, [])
+
+
+def _new_child_id() -> str:
+    import uuid
+    return "ch_" + uuid.uuid4().hex[:12]
+
+
+@app.get("/api/ai/children")
+async def list_children(request: Request):
+    """列出当前用户的孩子档案"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    return {"status": "ok", "children": _children_of(user)}
+
+
+@app.post("/api/ai/children")
+async def create_child(request: Request):
+    """创建孩子档案（最多 5 个）"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "无效请求体"}, status_code=400)
+
+    name = (body.get("name") or "").strip()[:20]
+    age_stage = (body.get("age_stage") or "").strip()
+    temperament = (body.get("temperament") or "").strip()
+    sensitivities = (body.get("sensitivities") or "")[:200]
+
+    if not name:
+        return JSONResponse({"error": "昵称不能为空"}, status_code=400)
+    if age_stage not in _CHILD_AGE_STAGES:
+        return JSONResponse({"error": "年龄段无效"}, status_code=400)
+    if temperament not in _CHILD_TEMPERAMENTS:
+        return JSONResponse({"error": "气质类型无效"}, status_code=400)
+
+    children = _children_of(user)
+    if len(children) >= _MAX_CHILDREN_PER_USER:
+        return JSONResponse({"error": f"最多 {_MAX_CHILDREN_PER_USER} 个孩子档案"}, status_code=400)
+
+    child = {
+        "id": _new_child_id(),
+        "name": name,
+        "age_stage": age_stage,
+        "temperament": temperament,
+        "sensitivities": sensitivities,
+        "created_at": time.time(),
+        "updated_at": time.time(),
+    }
+    children.append(child)
+    return {"status": "ok", "child": child}
+
+
+@app.put("/api/ai/children/{child_id}")
+async def update_child(child_id: str, request: Request):
+    """更新孩子档案"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "无效请求体"}, status_code=400)
+
+    children = _children_of(user)
+    target = None
+    for c in children:
+        if c["id"] == child_id:
+            target = c
+            break
+    if target is None:
+        return JSONResponse({"error": "孩子档案不存在"}, status_code=404)
+
+    if "name" in body:
+        target["name"] = (body["name"] or "").strip()[:20] or target["name"]
+    if "age_stage" in body and body["age_stage"] in _CHILD_AGE_STAGES:
+        target["age_stage"] = body["age_stage"]
+    if "temperament" in body and body["temperament"] in _CHILD_TEMPERAMENTS:
+        target["temperament"] = body["temperament"]
+    if "sensitivities" in body:
+        target["sensitivities"] = (body["sensitivities"] or "")[:200]
+    target["updated_at"] = time.time()
+    return {"status": "ok", "child": target}
+
+
+@app.delete("/api/ai/children/{child_id}")
+async def delete_child(child_id: str, request: Request):
+    """删除孩子档案"""
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    children = _children_of(user)
+    for i, c in enumerate(children):
+        if c["id"] == child_id:
+            children.pop(i)
+            return {"status": "ok", "deleted_id": child_id}
+    return JSONResponse({"error": "孩子档案不存在"}, status_code=404)
+
+
+@app.post("/api/ai/parenting-advice")
+async def parenting_advice(request: Request):
+    """
+    育儿急救：根据场景描述 + 孩子档案，生成话术卡
+    请求体: { scene: str, child_id?: str, child_ids?: [str], tone_profile_id?: str }
+    返回: { status, advice: { say, not_say, why, next_steps } }
+    """
+    user = _trusted_user(request)
+    if not user:
+        return _unauthorized()
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "无效请求体"}, status_code=400)
+
+    scene = (body.get("scene") or "").strip()
+    if not scene:
+        return JSONResponse({"error": "请描述一下场景"}, status_code=400)
+    if len(scene) > 500:
+        scene = scene[:500]
+
+    # 组装孩子档案上下文
+    child_ids = body.get("child_ids") or []
+    if body.get("child_id") and body["child_id"] not in child_ids:
+        child_ids.append(body["child_id"])
+    all_children = _children_of(user)
+    context_children = [c for c in all_children if c["id"] in child_ids] or []
+
+    stage_map = {
+        "toddler": "1-3岁学步期（自我意识萌芽、语言发展、安全探索）",
+        "preschool": "3-6岁学龄前（规则意识建立、社交能力、情绪管理初学）",
+        "early": "6-9岁低年级（入学适应、学习习惯、同伴关系）",
+        "middle": "9-12岁高年级（独立意识、学业压力、同伴影响增强）",
+        "preteen": "12-14岁青春期前（生理变化、自我认同、亲子冲突增多）",
+        "teen": "14-18岁青春期（追求独立、情绪波动大、同伴价值高于家长）",
+    }
+    temp_map = {
+        "sensitive": "敏感型（情绪细腻、容易被批评伤到、需要温柔引导）",
+        "active": "活跃型（精力旺盛、坐不住、需要释放渠道）",
+        "calm": "沉稳型（节奏慢、需要耐心等待、不喜欢被催促）",
+        "stubborn": "执拗型（有主见、需要讲道理、不接受强压）",
+        "social": "社交型（外向、在意朋友看法、需要在群体中给面子）",
+    }
+
+    child_ctx_parts = []
+    for c in context_children:
+        part = f"孩子「{c['name']}」：{stage_map.get(c['age_stage'], c['age_stage'])}，{temp_map.get(c['temperament'], c['temperament'])}"
+        if c.get("sensitivities"):
+            part += f"，敏感点：{c['sensitivities']}"
+        child_ctx_parts.append(part)
+    child_ctx = "\n".join(child_ctx_parts) if child_ctx_parts else ""
+
+    system = (
+        "你是家长的育儿沟通教练，精通正面管教和非暴力沟通。\n"
+        "根据家长描述的现场和孩子情况，输出一张话术卡。\n"
+        "严格按以下四行格式输出，每行开头必须有标签，不要额外解释：\n"
+        "此刻可以说：（家长此刻能逐字说的1-3句话）\n"
+        "不要说：（家长绝对不能说的1-2句具体原话，不是泛化标签）\n"
+        "为什么：（先点出孩子行为背后的发展阶段需求，再解释 say/not_say）\n"
+        "后续步骤：（1-3条有主语有动作有时间点的可执行指令）\n"
+        "\n"
+        "质量红线：\n"
+        "- 不要说 必须是具体原话如'你怎么这么不懂事'，禁止'不要情绪化''不要翻旧账'这种标签\n"
+        "- 为什么 必须先点出发展阶段如'4岁处于秩序敏感期''13岁青春期追求独立'，再解释\n"
+        "- 后续步骤 每条必须有'家长+动作+时间点'如'今晚睡前和孩子聊聊，10分钟'\n"
+        "- 紧急情况（孩子自伤/自杀/严重心理危机）在 为什么 开头加'⚠️紧急：'\n"
+    )
+
+    user_msg = f"场景：{scene}"
+    if child_ctx:
+        user_msg += f"\n\n孩子情况：\n{child_ctx}"
+    user_msg += "\n\n再次提醒：为什么字段必须点出发展阶段需求，后续步骤每条必须有时间点。"
+
+    try:
+        advice_text = await llm_service.chat(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_msg},
+            ],
+            max_tokens=512,
+            temperature=0.1,
+        )
+    except Exception as e:
+        logger.warning("[parenting-advice] LLM 调用失败: %s", e)
+        return JSONResponse({"error": "AI 服务暂时不可用，请稍后再试"}, status_code=503)
+
+    logger.info("[parenting-advice] LLM 原始输出前 500 字: %s", advice_text[:500])
+
+    # 从可能包裹 markdown 的文本中提取 JSON
+    import re
+    advice_json = advice_text
+    match = re.search(r'\{[\s\S]*\}', advice_text)
+    if match:
+        advice_json = match.group(0)
+    try:
+        advice = json.loads(advice_json)
+    except json.JSONDecodeError as e:
+        logger.warning("[parenting-advice] JSON 解析失败: %s, 尝试从纯文本提取", e)
+        advice = _parse_plain_advice(advice_text)
+
+    # 字段兜底 + 紧急标记检测
+    advice.setdefault("say", advice_text[:120])
+    advice.setdefault("not_say", "")
+    advice.setdefault("why", "")
+    advice.setdefault("next_steps", "")
+    advice.setdefault("emergency", "⚠️紧急" in advice_text or "紧急" in advice.get("why", ""))
+
+    return {"status": "ok", "advice": advice}
+
+
+def _parse_plain_advice(text: str) -> dict:
+    """
+    LLM 偶尔不输出 JSON 而是输出纯文本格式：
+      此刻可以说：xxx
+      不要说：xxx
+      为什么：xxx
+      后续步骤：xxx
+    按关键词切分，提取各字段。
+    """
+    import re
+    result = {"say": "", "not_say": "", "why": "", "next_steps": ""}
+    # 统一关键词到英文 key
+    patterns = [
+        ("say",         [r'此刻可以说[：:]', r'可以说[：:]', r'say[：:]']),
+        ("not_say",     [r'不要说[：:]', r'不要这样说[：:]', r'禁止说[：:]', r'not[_\s]*say[：:]']),
+        ("why",         [r'为什么[：:]', r'原因[：:]', r'why[：:]']),
+        ("next_steps",  [r'后续步骤[：:]', r'事后可以做[：:]', r'之后可以做[：:]', r'next[_\s]*steps[：:]']),
+    ]
+    # 找到每个字段的起始位置
+    spans = []
+    for key, pats in patterns:
+        for p in pats:
+            m = re.search(p, text)
+            if m:
+                spans.append((m.start(), m.end(), key))
+                break
+    spans.sort()
+    # 按起止位置切分
+    for i, (start, sep_end, key) in enumerate(spans):
+        field_start = sep_end
+        field_end = spans[i + 1][0] if i + 1 < len(spans) else len(text)
+        value = text[field_start:field_end].strip().strip('。.\n')
+        result[key] = value
+    return result
 
 
 @app.post("/api/ai/sessions")
@@ -680,16 +924,11 @@ def _resolve_session_speed(session_id: str, character_id: str = None) -> float:
 def _resolve_session_voice(session_id: str, character_id: str = None):
     """
     解析 voice_id，返回 (voice_id, notice)：
-    - edge 模式：会话已绑定克隆音色 → "<后端前缀>:<音色ID>"；未绑定 → None（edge 默认音色）
-    - cloud/voxcpm2：0. 会话选择的预设音色（GAP-05）→ 1. 会话已定义音色（cloud_voice 映射）→ 2. 角色方言音色
+    - edge 模式：无克隆音色，返回 None（edge 默认音色）
+    - cloud/voxcpm2：0. 预设音色 → 1. cloud_voice 映射 → 2. 角色方言音色
     notice 为 None 表示无需提示；不静默失败
     """
     if _TTS_PROVIDER == "edge":
-        if voice_clone is not None:
-            vid = memory_storage.get_short_term_memory(session_id, "clone_voice_id") or \
-                memory_storage.get_short_term_memory(session_id, "fish_voice_id")
-            if vid:
-                return f"{voice_clone.prefix}:{vid}", None
         return None, None
     notice = None
     preset_id = memory_storage.get_short_term_memory(session_id, "voice_preset_id")
@@ -770,65 +1009,12 @@ async def _define_voice_cloud(request, session_id, description, audio, mode,
 
 
 async def _define_voice_edge(request, session_id, description, audio, mode, voice_prompt):
-    """edge 模式声音定义：克隆走 VOICE_CLONE_PROVIDER 后端；文字设计音色暂不支持（501）"""
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    err = _session_owner_error(session_id, user)
-    if err:
-        return err
-    memory_storage.claim_session(session_id, user)
-
-    is_design = mode == "design" or (audio is None and (voice_prompt or "").strip())
-    if is_design:
-        return JSONResponse(
-            {"error": "edge 模式暂不支持文字描述设计音色（可上传 10 秒以上音频克隆）",
-             "code": "voice_define_unsupported", "mode": "edge"},
-            status_code=501,
-        )
-    if voice_clone is None or not voice_clone.enabled:
-        return JSONResponse(
-            {"error": "声音克隆未配置（缺少火山引擎 AppID/Access Token/音色ID）；日常合成不受影响",
-             "code": "voice_define_unsupported", "mode": "edge"},
-            status_code=501,
-        )
-    try:
-        audio_data = await audio.read() if audio is not None else b""
-        if not audio_data:
-            return JSONResponse(
-                {"error": "缺少参考音频", "code": "voice_audio_invalid", "mode": "edge"},
-                status_code=422,
-            )
-        if _too_large(audio_data):
-            return JSONResponse(
-                {"error": f"音频文件超过上限（{_MAX_UPLOAD_BYTES // (1024 * 1024)}MB）"},
-                status_code=413,
-            )
-        title = (description or "").strip() or "语伴克隆音色"
-        ref_id = await voice_clone.create_voice(title, audio_data)
-        definition = f"{voice_clone.prefix}:{ref_id}"
-        memory_storage.set_short_term_memory(session_id, "voice_definition", definition)
-        memory_storage.set_short_term_memory(session_id, "voice_description", description)
-        memory_storage.set_short_term_memory(session_id, "clone_voice_id", ref_id)
-        # 克隆音色优先，清除预设选择
-        memory_storage.set_short_term_memory(session_id, "voice_preset_id", "")
-        notice = "音色训练完成，已绑定到当前会话"
-        if voice_clone.prefix == "fish":
-            notice = "免费档克隆音色将在 Fish Audio 平台公开可见"
-        return {
-            "status": "ok",
-            "mode": "edge",
-            "voice_id": definition,
-            "definition_mode": "clone",
-            "voice_definition": definition,
-            "voice_params": {"speed": 1.0},
-            "notice": notice,
-        }
-    except CloneError as e:
-        logger.warning("[define-voice] 克隆失败: %s %s", e.code, e.message)
-        return JSONResponse({**e.to_dict(), "mode": "edge"}, status_code=e.status)
-    except Exception as e:
-        return _internal_error("define-voice-edge", e)
+    """edge 模式声音定义：声音克隆已移除，统一返回 501"""
+    return JSONResponse(
+        {"error": "声音克隆已移除（育儿教练场景合规要求）；日常合成不受影响",
+         "code": "voice_define_removed", "mode": "edge"},
+        status_code=501,
+    )
 
 # 语音处理接口
 @app.post("/api/ai/process")

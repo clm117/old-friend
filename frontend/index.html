@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="theme-color" content="#2E6B4E">
-    <title>语伴 · 用声音陪伴你</title>
+    <title>语伴 · 家长的育儿沟通教练</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600&display=swap" rel="stylesheet">
@@ -31,7 +31,7 @@
         <!-- 顶部标题栏 -->
         <header class="app-header">
             <h1>语伴</h1>
-            <p>智能语音交互助手</p>
+            <p>家长的育儿沟通教练</p>
             <button type="button" class="logout-btn" id="logoutBtn" style="display: none;">退出</button>
         </header>
 
@@ -60,7 +60,7 @@
                         <!-- 对话历史将在这里显示 -->
                         <div class="chat-welcome">
                             <div class="welcome-icon">🎤</div>
-                            <p>点下方大麦克风按钮，直接说话与语伴对话<br>也可以用输入框打字</p>
+                            <p>遇到育儿难题？直接说话描述现场，3 秒内给你此刻该说的话术卡<br>也可以打字提问</p>
                         </div>
                     </div>
 
@@ -120,88 +120,59 @@
                 </div>
             </section>
 
-            <!-- 语音定义界面 -->
-            <section class="tab-content" id="voice-define">
+            <!-- 孩子档案界面 -->
+            <section class="tab-content" id="child-profile">
                 <div class="page-container">
-                    <h3>语音定义</h3>
-                    <p class="page-desc">通过声学特征参数定义新的声音，或调整已录入的声音</p>
-                    <div id="voiceDesignCapability" style="display:none; margin-bottom:12px; padding:10px; border-radius:8px; font-size:0.9rem;"></div>
-
-                    <div class="form-group">
-                        <label for="voiceNameDefine">语音名称</label>
-                        <input type="text" id="voiceNameDefine" placeholder="例如：温暖女声">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="voiceDescriptionDefine">语音描述</label>
-                        <textarea id="voiceDescriptionDefine" placeholder="例如：温暖的女性声音，语速适中，带有亲和力"></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="baseVoice">基础语音</label>
-                        <select id="baseVoice">
-                            <option value="">选择已保存的语音</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="voiceFileDefine">上传参考音频</label>
-                        <input type="file" id="voiceFileDefine" accept="audio/*">
-                    </div>
-
-                    <h4 class="section-title">声学特征参数</h4>
-                    <div class="params-grid">
-                        <div class="param-item">
-                            <div class="param-header">
-                                <label for="pitch">音调</label>
-                                <span id="pitchValue">1.0</span>
-                            </div>
-                            <input type="range" id="pitch" min="0.5" max="1.5" step="0.1" value="1">
+                    <h3>孩子档案</h3>
+                    <p class="page-desc">记录孩子的年龄段、气质和敏感点，AI 才能给你更个性化的建议</p>
+                    <div id="childProfileList" style="display:flex; flex-direction:column; gap:8px;"></div>
+                    <div id="childProfileForm" style="display:none; margin-top:12px;">
+                        <div class="form-group"><label>孩子昵称</label><input type="text" id="cpName" placeholder="例如：大宝"></div>
+                        <div class="form-group"><label>年龄段</label>
+                            <select id="cpAgeStage">
+                                <option value="toddler">1-3 岁 学步期</option>
+                                <option value="preschool">3-6 岁 学龄前</option>
+                                <option value="early">6-9 岁 低年级</option>
+                                <option value="middle">9-12 岁 高年级</option>
+                                <option value="preteen">12-14 岁 青春期前</option>
+                                <option value="teen">14-18 岁 青春期</option>
+                            </select>
                         </div>
-                        <div class="param-item">
-                            <div class="param-header">
-                                <label for="speed">语速</label>
-                                <span id="speedValue">1.0</span>
-                            </div>
-                            <input type="range" id="speed" min="0.5" max="2" step="0.1" value="1">
+                        <div class="form-group"><label>气质类型</label>
+                            <select id="cpTemperament">
+                                <option value="sensitive">敏感型（情绪起伏大、怕生）</option>
+                                <option value="active">活跃型（爱动、坐不住）</option>
+                                <option value="calm">沉稳型（安静、做事慢）</option>
+                                <option value="stubborn">执拗型（坚持、讲道理）</option>
+                                <option value="social">社交型（外向、爱交朋友）</option>
+                            </select>
                         </div>
-                        <div class="param-item">
-                            <div class="param-header">
-                                <label for="volume">音量</label>
-                                <span id="volumeValue">1.0</span>
-                            </div>
-                            <input type="range" id="volume" min="0.5" max="1.5" step="0.1" value="1">
-                        </div>
-                        <div class="param-item">
-                            <div class="param-header">
-                                <label for="emotionIntensity">情感强度</label>
-                                <span id="emotionIntensityValue">0.5</span>
-                            </div>
-                            <input type="range" id="emotionIntensity" min="0" max="1" step="0.1" value="0.5">
+                        <div class="form-group"><label>敏感点（逗号分隔，可选）</label><textarea id="cpSensitivities" placeholder="例如：被批评、被催促、当众表演失败"></textarea></div>
+                        <div style="display:flex; gap:8px;">
+                            <button type="button" class="submit-btn" id="cpSaveBtn">保存</button>
+                            <button type="button" class="btn-ghost" id="cpCancelBtn">取消</button>
                         </div>
                     </div>
-
-                    <button class="submit-btn" id="defineVoiceBtn">定义语音</button>
-                    <div class="response" id="voiceDefineResponse"></div>
+                    <button type="button" class="btn-pill btn-primary-sm" id="cpNewBtn" style="margin-top:12px;">+ 添加孩子</button>
                 </div>
             </section>
 
-            <!-- 情感配置界面 -->
+            <!-- 语气配置界面（原"情感配置"） -->
             <section class="tab-content" id="emotion-config">
                 <div class="page-container">
-                    <h3>情感配置</h3>
-                    <p class="page-desc">定义AI具有的情感特征，使声音更加人性化</p>
+                    <h3>语气风格</h3>
+                    <p class="page-desc">调整 AI 建议话术的表达风格，让建议更贴合你平时说话的感觉</p>
 
                     <div class="form-group">
-                        <label for="emotionPresetSelect">情感类型（预设）</label>
+                        <label for="emotionPresetSelect">语气风格（预设）</label>
                         <select id="emotionPresetSelect">
-                            <option value="">请选择预设情感</option>
+                            <option value="">请选择预设风格</option>
                         </select>
                     </div>
 
                     <div class="form-group">
-                        <label for="emotionProfileName">情感配置名称</label>
-                        <input type="text" id="emotionProfileName" placeholder="例如：友好助手">
+                        <label for="emotionProfileName">语气配置名称</label>
+                        <input type="text" id="emotionProfileName" placeholder="例如：冷静讲道理">
                     </div>
 
                     <h4 class="section-title">基本情感</h4>
@@ -413,27 +384,27 @@
         <nav class="bottom-nav">
             <button class="nav-btn active" data-tab="chat">
                 <span class="nav-icon">💬</span>
-                <span class="nav-label">对话</span>
+                <span class="nav-label">急救</span>
             </button>
             <button class="nav-btn" data-tab="voice-input">
                 <span class="nav-icon">🎙️</span>
-                <span class="nav-label">录入</span>
+                <span class="nav-label">说话</span>
             </button>
-            <button class="nav-btn" data-tab="voice-define">
-                <span class="nav-icon">⚙️</span>
-                <span class="nav-label">定义</span>
-            </button>
-            <button class="nav-btn" data-tab="emotion-config">
-                <span class="nav-icon">😊</span>
-                <span class="nav-label">情感</span>
+            <button class="nav-btn" data-tab="child-profile">
+                <span class="nav-icon">👶</span>
+                <span class="nav-label">孩子</span>
             </button>
             <button class="nav-btn" data-tab="character">
                 <span class="nav-icon">🧑‍🎤</span>
-                <span class="nav-label">角色</span>
+                <span class="nav-label">练习场</span>
+            </button>
+            <button class="nav-btn" data-tab="emotion-config">
+                <span class="nav-icon">😊</span>
+                <span class="nav-label">语气</span>
             </button>
             <button class="nav-btn" data-tab="tts">
                 <span class="nav-icon">🔊</span>
-                <span class="nav-label">合成</span>
+                <span class="nav-label">试音</span>
             </button>
             <button class="nav-btn" data-tab="settings">
                 <span class="nav-icon">🔧</span>
@@ -442,6 +413,6 @@
         </nav>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=20261112c"></script>
 </body>
 </html>

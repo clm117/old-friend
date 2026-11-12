@@ -1,8 +1,7 @@
 """
-Edge TTS 服务 —— 微软 edge-tts 免费语音合成（降级 MVP 主力 TTS）
+Edge TTS 服务 —— 微软 edge-tts 免费语音合成（育儿教练场景主力 TTS）
 
-定位：TTS_PROVIDER=edge 时的日常合成提供方；声音克隆由 Fish Audio 承担
-（voice_id 以 "fish:" 前缀标识，见 fish_audio_service 与 main._synthesize_speech）。
+定位：TTS_PROVIDER=edge 时的日常合成提供方；声音克隆已移除（合规要求）。
 
 事实（2026-11 调研）：
 - 非官方接口，须 edge-tts>=7.3.0（旧版被微软 403）；输出 MP3 流（24kHz）
