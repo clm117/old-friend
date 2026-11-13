@@ -629,14 +629,14 @@ body {
 /* ============================================================
    参数滑块
    ============================================================ */
-.params-grid, .emotions-grid {
+.params-grid {
     display: grid;
     grid-template-columns: 1fr;
     gap: 12px;
     margin: 12px 0;
 }
 
-.param-item, .emotion-item {
+.param-item {
     background: var(--c-card);
     padding: 14px 16px 16px;
     border-radius: var(--radius-md);
@@ -649,7 +649,7 @@ body {
     align-items: center;
     margin-bottom: 8px;
 }
-.param-header label, .emotion-item label {
+.param-header label {
     font-size: 0.88rem;
     font-weight: 600;
     color: var(--c-text);
@@ -818,9 +818,9 @@ input[type="range"]::-moz-range-thumb {
 .response:empty { display: none; }
 
 /* ============================================================
-   卡片列表（语音 / 情感 / 角色）
+   卡片列表（语音 / 角色）
    ============================================================ */
-.saved-voices, .saved-emotions {
+.saved-voices {
     margin-top: 12px;
     padding: 8px;
     background: var(--c-card);
@@ -828,9 +828,9 @@ input[type="range"]::-moz-range-thumb {
     border: 1px solid var(--c-border);
     box-shadow: var(--shadow-sm);
 }
-.saved-voices:empty, .saved-emotions:empty { display: none; }
+.saved-voices:empty { display: none; }
 
-.voice-card, .emotion-card {
+.voice-card {
     padding: 13px;
     margin-bottom: 8px;
     background: var(--c-bg);
@@ -843,21 +843,21 @@ input[type="range"]::-moz-range-thumb {
     gap: 8px;
     transition: transform 0.15s var(--ease), box-shadow 0.2s;
 }
-.voice-card:last-child, .emotion-card:last-child { margin-bottom: 0; }
-.voice-card h5, .emotion-card h5 {
+.voice-card:last-child { margin-bottom: 0; }
+.voice-card h5 {
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--c-text);
     margin-bottom: 4px;
 }
-.voice-card p, .emotion-card p {
+.voice-card p {
     font-size: 0.79rem;
     color: var(--c-text-muted);
     line-height: 1.55;
     flex: 1;
     min-width: 0;
 }
-.voice-card button, .emotion-card button {
+.voice-card button {
     padding: 7px 15px;
     border: none;
     border-radius: var(--radius-pill);
@@ -868,16 +868,16 @@ input[type="range"]::-moz-range-thumb {
     min-height: 36px;
     min-width: 56px;
 }
-.voice-card .use-btn, .emotion-card .use-btn {
+.voice-card .use-btn {
     background: var(--c-primary);
     color: #fff;
 }
-.voice-card .delete-btn, .emotion-card .delete-btn {
+.voice-card .delete-btn {
     background: var(--c-live);
     color: #fff;
     margin-left: 6px;
 }
-.voice-card button:active, .emotion-card button:active { transform: scale(0.94); }
+.voice-card button:active { transform: scale(0.94); }
 
 /* 角色列表容器 */
 .stack-list { display: flex; flex-direction: column; gap: 10px; }
@@ -1217,7 +1217,7 @@ input[type="range"]::-moz-range-thumb {
         margin: 0 auto;
         box-shadow: 0 0 48px rgba(41,49,43,0.1);
     }
-    .params-grid, .emotions-grid { grid-template-columns: repeat(2, 1fr); }
+    .params-grid { grid-template-columns: repeat(2, 1fr); }
     .app-header h1 { font-size: 1.85rem; letter-spacing: 8px; }
     .app-header p { font-size: 0.8rem; }
 }
@@ -1262,7 +1262,7 @@ input[type="range"]::-moz-range-thumb {
     .auth-card input { background: #272D29; color: #EBEEE9; }
     .auth-card input:focus { background: #1B1F1C; }
     .btn-ghost, .btn-ghost-sm { background: #272D29; }
-    .voice-card, .emotion-card { background: #1B1F1C; }
+    .voice-card { background: #1B1F1C; }
     .status-banner { background: #243029; }
     .hint-warm { color: #D9B36C; }
     .chat-voice-tip { background: #243029; }

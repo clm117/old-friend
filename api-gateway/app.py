@@ -8,7 +8,7 @@
 - CORS：白名单制，禁止 allow_credentials 与 "*" 混用
 - 限流：按客户端 IP + 路由分桶的滑动窗口限流，昂贵接口单独降额
 - 上传：Content-Length 预检 + 魔数校验，拒绝超限与伪造格式
-- 输入：session_id / character_id 白名单校验，阻断上游 URL 注入
+- 输入：session_id 白名单校验，阻断上游 URL 注入
 - 错误：对外仅返回通用错误，异常详情只进服务端日志
 - 响应头：补充 nosniff / frame / referrer 等安全头
 """
@@ -213,7 +213,7 @@ def _with_cors(response: JSONResponse, request) -> JSONResponse:
 
 
 def _safe_id(value: str) -> bool:
-    """校验 session_id / character_id，阻断拼接进上游 URL 的注入"""
+    """校验 session_id，阻断拼接进上游 URL 的注入"""
     return bool(value) and bool(_SAFE_ID_RE.match(value))
 
 
@@ -529,105 +529,6 @@ async def voice_design_capability():
         return _upstream_error("voice-design/capability", e)
 
 
-# 情感配置接口
-@app.get("/api/emotion-presets")
-async def emotion_presets():
-    """情感预设（GAP-09）透传"""
-    try:
-        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/emotion-presets")
-        return _relay_json(resp)
-    except Exception as e:
-        return _upstream_error("emotion-presets", e)
-
-
-@app.post("/api/emotion-config")
-async def emotion_config(
-    request: Request,
-    session_id: str = Form(...),
-    emotion_name: str = Form(...),
-    emotion_description: str = Form(""),
-    happiness: float = Form(0.5),
-    sadness: float = Form(0.1),
-    anger: float = Form(0.1),
-    fear: float = Form(0.1),
-    disgust: float = Form(0.1),
-    surprise: float = Form(0.3),
-):
-    if not _safe_id(session_id):
-        return JSONResponse({"error": "session_id 非法"}, status_code=400)
-    if len(emotion_name) > 64:
-        return JSONResponse({"error": "emotion_name 过长（上限 64 字）"}, status_code=400)
-    if len(emotion_description) > 500:
-        return JSONResponse({"error": "emotion_description 过长（上限 500 字）"}, status_code=400)
-    # 情感值 clamp 到 [0, 1]，与文档注释一致
-    _clamp = lambda x: max(0.0, min(1.0, float(x)))
-    happiness, sadness, anger = _clamp(happiness), _clamp(sadness), _clamp(anger)
-    fear, disgust, surprise = _clamp(fear), _clamp(disgust), _clamp(surprise)
-    try:
-        # 转发到核心AI服务
-        response = await _async_request(
-            "post",
-            f"{AI_SERVICE_URL}/api/ai/emotion-config",
-            data={
-                "session_id": session_id,
-                "emotion_name": emotion_name,
-                "emotion_description": emotion_description,
-                "happiness": happiness,
-                "sadness": sadness,
-                "anger": anger,
-                "fear": fear,
-                "disgust": disgust,
-                "surprise": surprise,
-            },
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_json(response)
-    except Exception as e:
-        return _upstream_error("emotion-config", e)
-
-
-# 获取情感配置接口
-@app.get("/api/emotion-config/{session_id}")
-async def get_emotion_config(session_id: str, request: Request):
-    if not _safe_id(session_id):
-        return JSONResponse({"error": "session_id 非法"}, status_code=400)
-    try:
-        response = await _async_request(
-            "get",
-            f"{AI_SERVICE_URL}/api/ai/emotion-config/{session_id}",
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_json(response)
-    except Exception as e:
-        return _upstream_error("emotion-config/get", e)
-
-
-@app.delete("/api/emotion-config/{session_id}")
-async def delete_emotion_config(session_id: str, request: Request):
-    """解绑情感配置：清空该会话的情感配置（幂等）"""
-    if not _safe_id(session_id):
-        return JSONResponse({"error": "session_id 非法"}, status_code=400)
-    try:
-        response = await _async_request(
-            "delete",
-            f"{AI_SERVICE_URL}/api/ai/emotion-config/{session_id}",
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_or_empty(response)
-    except Exception as e:
-        return _upstream_error("emotion-config/delete", e)
-
-
-# ===== 角色管理接口（透传到核心AI服务）=====
-@app.get("/api/characters/options")
-async def character_options():
-    try:
-        resp = await _async_request("get", f"{AI_SERVICE_URL}/api/ai/characters/options")
-        return _relay_json(resp)
-    except Exception as e:
-        return _upstream_error("characters/options", e)
-
-
 @app.get("/api/voice-catalog")
 async def voice_catalog():
     """音色目录（GAP-05 底座）透传"""
@@ -660,93 +561,6 @@ async def voice_preset_prompt(preset_id: str):
         return _relay_json(resp)
     except Exception as e:
         return _upstream_error("voice/preset-prompt", e)
-
-
-@app.get("/api/characters")
-async def list_characters(request: Request):
-    try:
-        resp = await _async_request(
-            "get",
-            f"{AI_SERVICE_URL}/api/ai/characters",
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_json(resp)
-    except Exception as e:
-        return _upstream_error("characters/list", e)
-
-
-@app.get("/api/characters/{character_id}")
-async def get_character(character_id: str, request: Request):
-    if not _safe_id(character_id):
-        return JSONResponse({"error": "character_id 非法"}, status_code=400)
-    try:
-        resp = await _async_request(
-            "get",
-            f"{AI_SERVICE_URL}/api/ai/characters/{character_id}",
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_json(resp)
-    except Exception as e:
-        return _upstream_error("characters/get", e)
-
-
-@app.put("/api/characters/{character_id}")
-@app.patch("/api/characters/{character_id}")
-async def update_character(character_id: str, request: Request):
-    """修改自定义角色：仅归属者；请求体按 JSON 透传，状态码原样返回"""
-    if not _safe_id(character_id):
-        return JSONResponse({"error": "character_id 非法"}, status_code=400)
-    try:
-        payload = await request.json()
-    except Exception:
-        return JSONResponse({"error": "请求体必须是合法 JSON"}, status_code=400)
-    if not isinstance(payload, dict):
-        return JSONResponse({"error": "请求体必须是 JSON 对象"}, status_code=400)
-    try:
-        resp = await _async_request(
-            request.method.lower(),
-            f"{AI_SERVICE_URL}/api/ai/characters/{character_id}",
-            json=payload,
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_json(resp)
-    except Exception as e:
-        return _upstream_error("characters/update", e)
-
-
-@app.post("/api/characters")
-async def create_character(request: Request):
-    try:
-        payload = await request.json()
-    except Exception:
-        return JSONResponse({"error": "请求体必须是合法 JSON"}, status_code=400)
-    if not isinstance(payload, dict):
-        return JSONResponse({"error": "请求体必须是 JSON 对象"}, status_code=400)
-    try:
-        resp = await _async_request(
-            "post",
-            f"{AI_SERVICE_URL}/api/ai/characters",
-            json=payload,
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_json(resp)
-    except Exception as e:
-        return _upstream_error("characters/create", e)
-
-
-@app.delete("/api/characters/{character_id}")
-async def delete_character(character_id: str, request: Request):
-    if not _safe_id(character_id):
-        return JSONResponse({"error": "character_id 非法"}, status_code=400)
-    try:
-        resp = await _async_request(
-            "delete",
-            f"{AI_SERVICE_URL}/api/ai/characters/{character_id}",
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_json(resp)
-    except Exception as e:
-        return _upstream_error("characters/delete", e)
 
 
 # ===== 孩子档案 / 育儿急救透传 =====
@@ -890,39 +704,6 @@ async def delete_session(session_id: str, request: Request):
         return _relay_or_empty(resp)
     except Exception as e:
         return _upstream_error("sessions/delete", e)
-
-
-@app.post("/api/sessions/{session_id}/character")
-async def bind_character(session_id: str, request: Request, character_id: str = Form(...)):
-    if not _safe_id(session_id):
-        return JSONResponse({"error": "session_id 非法"}, status_code=400)
-    if not _safe_id(character_id):
-        return JSONResponse({"error": "character_id 非法"}, status_code=400)
-    try:
-        resp = await _async_request(
-            "post",
-            f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/character",
-            data={"character_id": character_id},
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_json(resp)
-    except Exception as e:
-        return _upstream_error("sessions/bind-character", e)
-
-
-@app.get("/api/sessions/{session_id}/character")
-async def get_session_character(session_id: str, request: Request):
-    if not _safe_id(session_id):
-        return JSONResponse({"error": "session_id 非法"}, status_code=400)
-    try:
-        resp = await _async_request(
-            "get",
-            f"{AI_SERVICE_URL}/api/ai/sessions/{session_id}/character",
-            headers=_internal_headers(_user_of(request)),
-        )
-        return _relay_json(resp)
-    except Exception as e:
-        return _upstream_error("sessions/get-character", e)
 
 
 @app.post("/api/ai/sessions/{session_id}/voice-style")

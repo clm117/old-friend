@@ -331,7 +331,6 @@ class PersistentStateStore:
                 "session_id": session_id,
                 "title": short.get("title", ""),
                 "owner": short.get("owner"),
-                "character_id": short.get("character_id"),
                 "message_count": len(entry.get("dialogue_history", [])),
                 "created_at": entry.get("created_at", entry.get("updated_at")),
                 "updated_at": entry.get("updated_at"),
@@ -359,7 +358,6 @@ class PersistentStateStore:
                 items.append({
                     "session_id": sid,
                     "title": short.get("title", ""),
-                    "character_id": short.get("character_id"),
                     "message_count": len(entry.get("dialogue_history", [])),
                     "created_at": entry.get("created_at", entry.get("updated_at")),
                     "updated_at": entry.get("updated_at"),

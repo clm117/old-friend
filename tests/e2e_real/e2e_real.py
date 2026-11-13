@@ -753,22 +753,13 @@ def restart_persistence_case(token, services):
     sid = f"e2e_persist_{START_TS}"
     t0 = time.time()
     try:
-        r = requests.get(f"{GW_BASE}/api/characters",
-                         headers={"Authorization": f"Bearer {token}"}, timeout=15)
-        chars = (safe_json(r) or {}).get("characters") or []
-        if not chars:
-            raise RuntimeError(f"角色列表为空: {snippet(r.text)}")
-        cid = chars[0]["id"]
-        r1 = requests.post(f"{GW_BASE}/api/sessions/{sid}/character",
-                           headers={"Authorization": f"Bearer {token}"},
-                           data={"character_id": cid}, timeout=15)
-        r2 = requests.post(f"{GW_BASE}/api/emotion-config",
-                           headers={"Authorization": f"Bearer {token}"},
-                           data={"session_id": sid, "emotion_name": "e2e_persist",
-                                 "emotion_description": "重启恢复测试",
-                                 "happiness": 0.8, "sadness": 0.1, "anger": 0.1,
-                                 "fear": 0.1, "disgust": 0.1, "surprise": 0.3},
-                           timeout=15)
+        r = requests.post(f"{GW_BASE}/api/sessions",
+                          headers={"Authorization": f"Bearer {token}"},
+                          json={"title": "重启恢复测试"}, timeout=15)
+        body = safe_json(r) or {}
+        sid = body.get("session_id") or sid
+        if r.status_code != 200 or not sid:
+            raise RuntimeError(f"创建会话失败: {snippet(r.text)}")
         # /ready 会 force flush 状态存储，确保落盘
         requests.get(f"{AI_BASE}/ready", timeout=5)
         time.sleep(1.0)
@@ -791,38 +782,34 @@ def restart_persistence_case(token, services):
         services.stop_ai()
         ok_start, detail, elapsed_up = services.start_ai()
         ready = wait_http(f"{AI_BASE}/ready", timeout=60)[0]
-        r3 = requests.get(f"{GW_BASE}/api/sessions/{sid}/character",
+        r3 = requests.get(f"{GW_BASE}/api/sessions",
                           headers={"Authorization": f"Bearer {token}"}, timeout=15)
-        r4 = requests.get(f"{GW_BASE}/api/emotion-config/{sid}",
-                          headers={"Authorization": f"Bearer {token}"}, timeout=15)
-        c_after = (safe_json(r3) or {}).get("character") or {}
-        e_after = (safe_json(r4) or {}).get("emotion_config") or {}
-        ok = (r3.status_code == 200 and c_after.get("id") == cid
-              and r4.status_code == 200 and e_after.get("name") == "e2e_persist")
+        listed = safe_json(r3) or {}
+        sessions_after = listed.get("sessions") or []
+        persisted = any(s.get("session_id") == sid for s in sessions_after)
+        ok = (r3.status_code == 200 and persisted)
         record(
-            "E07a", "重启恢复：会话/角色绑定/情感配置", "重启恢复",
+            "E07a", "重启恢复：会话持久化", "重启恢复",
             "PASS" if ok else "FAIL", time.time() - t0,
             [assertion("AI 重启成功", ok_start, detail),
-             assertion("角色绑定仍在", c_after.get("id") == cid, c_after.get("id")),
-             assertion("情感配置仍在", e_after.get("name") == "e2e_persist", e_after.get("name"))],
-            {"session_id": sid, "character_id": cid, "state_file": str(state_file),
+             assertion("会话仍在列表中", persisted, f"total={listed.get('total')}")],
+            {"session_id": sid, "state_file": str(state_file),
              "state_keys_before_restart": state_keys, "restart_health": detail,
              "restart_elapsed": elapsed_up, "ready_after": ready,
-             "character_after": {"id": c_after.get("id"), "name": c_after.get("name")},
-             "emotion_after": e_after},
+             "sessions_after": len(sessions_after)},
             classification=None if ok else "产品缺陷",
-            notes="" if ok else "重启后状态丢失或读取失败",
+            notes="" if ok else "重启后会话丢失或列表读取失败",
         )
         record(
             "E07b", "重启恢复：对话历史", "重启恢复", "SKIP", 0,
             [assertion("存在真实对话历史", False, state_keys.get("has_chat_history"))],
             {"state_keys_before_restart": state_keys,
-             "evidence": "LLM 欠费导致无法产生真实对话；main.py L799-802 仅在 assistant_reply 非空时写 chat_history"},
+             "evidence": "LLM 欠费导致无法产生真实对话；main.py 仅在 assistant_reply 非空时写 chat_history"},
             classification="外部依赖不可用",
-            notes="未用 /api/ai/process 的 mock 音频路径制造历史；该项不计 PASS",
+            notes="未用 WS 制造真实对话历史；该项不计 PASS",
         )
     except Exception as e:
-        record("E07a", "重启恢复：会话/角色绑定/情感配置", "重启恢复", "FAIL", time.time() - t0,
+        record("E07a", "重启恢复：会话持久化", "重启恢复", "FAIL", time.time() - t0,
                [assertion("执行成功", False, e)], {"error": f"{type(e).__name__}: {e}",
                                                   "traceback": traceback.format_exc()[-800:]},
                classification="产品缺陷")
@@ -833,39 +820,33 @@ def isolation_cases(token_a, token_b):
     sid_b = f"e2e_iso_b_{START_TS}"
     t0 = time.time()
     try:
-        r = requests.get(f"{GW_BASE}/api/characters",
-                         headers={"Authorization": f"Bearer {token_a}"}, timeout=15)
-        chars = (safe_json(r) or {}).get("characters") or []
-        cid = chars[0]["id"] if chars else "preset_warm_companion"
-        requests.post(f"{GW_BASE}/api/sessions/{sid_a}/character",
-                      headers={"Authorization": f"Bearer {token_a}"},
-                      data={"character_id": cid}, timeout=15)
-        # B 用自己 token 读取 A 的会话角色
-        r_read = requests.get(f"{GW_BASE}/api/sessions/{sid_a}/character",
-                              headers={"Authorization": f"Bearer {token_b}"}, timeout=15)
-        body_read = safe_json(r_read) or {}
-        leaked_character = (body_read.get("character") or {}).get("id")
-        read_denied = r_read.status_code in (401, 403, 404)
-        # B 向 A 的会话写情感配置
-        r_write = requests.post(f"{GW_BASE}/api/emotion-config",
-                                headers={"Authorization": f"Bearer {token_b}"},
-                                data={"session_id": sid_a, "emotion_name": "e2e_cross_user"},
-                                timeout=15)
+        r = requests.post(f"{GW_BASE}/api/sessions",
+                          headers={"Authorization": f"Bearer {token_a}"},
+                          json={"title": "隔离测试A"}, timeout=15)
+        sid_a = (safe_json(r) or {}).get("session_id") or sid_a
+        # B 用自己 token 修改 A 的会话标题
+        r_write = requests.patch(f"{GW_BASE}/api/sessions/{sid_a}",
+                                 headers={"Authorization": f"Bearer {token_b}",
+                                          "Content-Type": "application/json"},
+                                 json={"title": "越权修改"}, timeout=15)
         write_denied = r_write.status_code in (401, 403, 404)
-        ok = read_denied and write_denied
+        # B 删除 A 的会话
+        r_del = requests.delete(f"{GW_BASE}/api/sessions/{sid_a}",
+                                headers={"Authorization": f"Bearer {token_b}"}, timeout=15)
+        del_denied = r_del.status_code in (401, 403, 404)
+        ok = write_denied and del_denied
         record(
             "E08", "多用户隔离：跨账号访问他人会话（HTTP）", "多用户隔离",
             "PASS" if ok else "FAIL", time.time() - t0,
-            [assertion("B 读取 A 会话被拒绝", read_denied,
-                       f"{r_read.status_code} {snippet(r_read.text, 120)}"),
-             assertion("B 写入 A 会话被拒绝", write_denied,
-                       f"{r_write.status_code} {snippet(r_write.text, 120)}")],
+            [assertion("B 修改 A 会话被拒绝", write_denied,
+                       f"{r_write.status_code} {snippet(r_write.text, 120)}"),
+             assertion("B 删除 A 会话被拒绝", del_denied,
+                       f"{r_del.status_code} {snippet(r_del.text, 120)}")],
             {"sid_a": sid_a, "sid_b": sid_b,
-             "b_read_status": r_read.status_code, "b_read_body": snippet(r_read.text, 200),
-             "leaked_character_id": leaked_character,
-             "b_write_status": r_write.status_code, "b_write_body": snippet(r_write.text, 120)},
+             "b_write_status": r_write.status_code, "b_write_body": snippet(r_write.text, 200),
+             "b_delete_status": r_del.status_code, "b_delete_body": snippet(r_del.text, 120)},
             classification=None if ok else "产品缺陷（越权）",
-            notes="" if ok else "AI 服务按 session_id 存取，无用户归属校验；B 成功读取/写入 A 的会话",
+            notes="" if ok else "会话归属校验失效，B 可修改/删除 A 的会话",
         )
     except Exception as e:
         record("E08", "多用户隔离：跨账号访问他人会话（HTTP）", "多用户隔离", "FAIL", time.time() - t0,
@@ -1058,12 +1039,12 @@ def case_brief(c):
     if cid == "E04":
         return "ASR/LLM/TTS 均不可用，未执行"
     if cid == "E07a":
-        return "重启后角色绑定与情感配置仍在"
+        return "重启后会话仍在列表中"
     if cid == "E07b":
         return "无 chat_history（LLM 欠费，无法产生真实对话）"
     if cid == "E08":
-        return (f"B 读取 A 会话 HTTP {e.get('b_read_status')}，泄漏角色 {e.get('leaked_character_id')}；"
-                f"B 写入 HTTP {e.get('b_write_status')}")
+        return (f"B 修改 A 会话 HTTP {e.get('b_write_status')}；"
+                f"B 删除 HTTP {e.get('b_delete_status')}")
     if cid == "E09":
         return f"B 用自身 token 连接 A 的 WS，{e.get('close_info')}"
     if cid == "E12":

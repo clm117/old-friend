@@ -66,7 +66,7 @@ def main() -> int:
     check("/ready 未就绪 → 503", r.status_code == 503 and "ai_service_not_ready" in body.get("problems", []),
           f"status={r.status_code}")
 
-    r = client.get("/api/characters", headers={"Origin": "http://localhost:8080"})
+    r = client.get("/api/children", headers={"Origin": "http://localhost:8080"})
     check("无凭证 → 401", r.status_code == 401, f"status={r.status_code}")
     check("401 携带 CORS 头", r.headers.get("access-control-allow-origin") == "http://localhost:8080",
           r.headers.get("access-control-allow-origin", "<none>"))
@@ -78,10 +78,10 @@ def main() -> int:
     r = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
     check("/api/auth/me → 200", r.status_code == 200, f"status={r.status_code}")
 
-    r = client.get("/api/characters", headers={"Authorization": "Bearer forged.token.value"})
+    r = client.get("/api/children", headers={"Authorization": "Bearer forged.token.value"})
     check("伪造 token → 401", r.status_code == 401, f"status={r.status_code}")
 
-    r = client.options("/api/characters", headers={
+    r = client.options("/api/children", headers={
         "Origin": "http://localhost:8080",
         "Access-Control-Request-Method": "DELETE",
     })

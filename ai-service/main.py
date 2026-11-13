@@ -72,11 +72,10 @@ elif _TTS_PROVIDER == "voxcpm2":
     print("[启动] TTS_PROVIDER=voxcpm2 但 torch 未安装，跳过本地模型加载")
 
 from llm_service import LLMService
-from character_engine.character_engine import CharacterEngine
 from asr_service import asr_service
 from state_store import PersistentStateStore
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel
+from typing import Optional
 import io
 import wave
 import threading
@@ -182,7 +181,6 @@ elif _TTS_PROVIDER == "edge":
 else:
     print(f"[启动] TTS_PROVIDER={_TTS_PROVIDER}，使用 VoxCPM2 本地模型")
 llm_service = LLMService()
-character_engine = CharacterEngine()
 
 # ===== 网关注入的可信用户身份 =====
 # 网关用共享密钥对 "账号|时间戳" 做 HMAC-SHA256，AI 服务只认签名，避免直连 8084 伪造 X-Yuban-User
@@ -266,41 +264,6 @@ async def _synthesize_speech(text, style, emotion_params, quick_mode, speed=1.0,
     )
 
 
-# ===== 角色管理 =====
-
-class VoiceProfile(BaseModel):
-    gender: str = "female"          # female | male
-    age_group: str = "young_adult"  # teen | young_adult | middle_aged | elderly
-    voice_tags: List[str] = []      # gentle/sweet/magnetic/...
-    # 语速 0.5–2.0，默认 1.0；越界由 FastAPI 返回 422（GAP-08）
-    speed: float = Field(default=1.0, ge=0.5, le=2.0)
-    # 方言结构位（GAP-05 第 3 批）：yue/sichuan/dongbei；未就绪时回退普通话音色并提示
-    dialect: Optional[str] = None
-
-class PersonaProfile(BaseModel):
-    identity: str = ""              # 身份/职业
-    relation: str = "friend"        # friend | mentor | partner | family | companion
-    personality_tags: List[str] = []
-    speaking_style: str = ""
-    free_description: str = ""
-
-class CharacterCreate(BaseModel):
-    name: str
-    voice_profile: Optional[VoiceProfile] = None
-    persona_profile: Optional[PersonaProfile] = None
-
-class CharacterUpdate(BaseModel):
-    name: Optional[str] = None
-    voice_profile: Optional[VoiceProfile] = None
-    persona_profile: Optional[PersonaProfile] = None
-
-
-@app.get("/api/ai/characters/options")
-async def get_character_options():
-    """获取角色创建向导所需的枚举选项"""
-    return {"status": "ok", "options": character_engine.list_options()}
-
-
 @app.get("/api/ai/voice-catalog")
 async def get_voice_catalog():
     """音色目录（GAP-05）：标签/方言结构位/预设音色/默认回退，供前端与后续扩展使用"""
@@ -354,88 +317,6 @@ async def voice_design_capability():
             "verified": False,
         }
     return {"status": "ok", "capability": cap}
-
-
-@app.get("/api/ai/characters")
-async def list_characters(request: Request):
-    """列出当前用户可见的角色（官方预设 + 历史共享 + 本人自定义）"""
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    return {"status": "ok", "characters": character_engine.list_characters(owner=user)}
-
-
-@app.get("/api/ai/characters/{character_id}")
-async def get_character(character_id: str, request: Request):
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    ch = character_engine.get_character(character_id)
-    if not ch:
-        return JSONResponse({"error": "角色不存在"}, status_code=404)
-    if not character_engine.is_accessible(ch, user):
-        # 不向非归属者泄露角色是否存在
-        return JSONResponse({"error": "角色不存在"}, status_code=404)
-    return {"status": "ok", "character": ch}
-
-
-@app.post("/api/ai/characters")
-async def create_character(payload: CharacterCreate, request: Request):
-    """创建自定义角色（归属当前登录账号）"""
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    ch = character_engine.create_character(
-        name=payload.name,
-        voice_profile=payload.voice_profile.dict() if payload.voice_profile else None,
-        persona_profile=payload.persona_profile.dict() if payload.persona_profile else None,
-        owner=user,
-    )
-    return {"status": "ok", "character": ch}
-
-
-@app.put("/api/ai/characters/{character_id}")
-@app.patch("/api/ai/characters/{character_id}")
-async def update_character(character_id: str, payload: CharacterUpdate, request: Request):
-    """修改自定义角色：仅归属者可改；预设/历史共享角色只读；重名 409"""
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    ch = character_engine.get_character(character_id)
-    if not ch:
-        return JSONResponse({"error": "角色不存在"}, status_code=404)
-    if ch.get("is_preset"):
-        return JSONResponse({"error": "预设角色不可修改"}, status_code=403)
-    if ch.get("shared") or ch.get("owner") != user:
-        return JSONResponse({"error": "无权修改该角色"}, status_code=403)
-    if payload.name is not None and character_engine.name_conflict(character_id, payload.name, user):
-        return JSONResponse({"error": "角色名称已存在"}, status_code=409)
-    updated = character_engine.update_character(
-        character_id,
-        name=payload.name,
-        voice_profile=payload.voice_profile.dict() if payload.voice_profile else None,
-        persona_profile=payload.persona_profile.dict() if payload.persona_profile else None,
-    )
-    if not updated:
-        return JSONResponse({"error": "角色不存在"}, status_code=404)
-    return {"status": "ok", "character": updated}
-
-
-@app.delete("/api/ai/characters/{character_id}")
-async def delete_character(character_id: str, request: Request):
-    """删除自定义角色（预设角色不可删除；非归属者 403）"""
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    ch = character_engine.get_character(character_id)
-    if not ch:
-        return JSONResponse({"error": "角色不存在"}, status_code=404)
-    if ch.get("is_preset"):
-        return JSONResponse({"error": "预设角色不可删除"}, status_code=400)
-    if not character_engine.is_accessible(ch, user) or ch.get("shared") or ch.get("owner") != user:
-        return JSONResponse({"error": "无权删除该角色"}, status_code=403)
-    character_engine.delete_character(character_id)
-    return {"status": "ok", "deleted_id": character_id}
 
 
 # ===== 孩子档案 API（育儿教练核心）=====
@@ -706,7 +587,9 @@ async def parenting_advice(request: Request):
     for k in ("say", "not_say", "why", "next_steps"):
         advice[k] = _clean_field(advice.get(k, ""))
     if not advice["say"]:
-        advice["say"] = _clean_field(advice_text)[:120]
+        # 兜底只取首个非空行，避免把整段（含其他字段标签）塞进 say
+        first_line = next((ln for ln in advice_text.splitlines() if ln.strip()), "")
+        advice["say"] = _clean_field(first_line)[:120]
     advice["emergency"] = bool(
         advice.get("emergency")
         or "⚠️" in advice_text
@@ -719,6 +602,10 @@ async def parenting_advice(request: Request):
 # 行首列表符号：- * • · 1. 1、1) (1) 等
 _BULLET_RE = re.compile(r'^[\s\u3000]*(?:[-*•·]+|\d+[.、)）]|[（(]\d+[）)])\s*')
 _QUOTE_PAIRS = ("“", "”"), ("\"", "\""), ("「", "」"), ("『", "』"), ("'", "'")
+# 句尾括号里以这些词开头时，视为模型的点评/自检，不属于正文
+_META_WORDS = r'(?:此处|避免|保持|注意|建议|提示|说明|补充|备注|原因|目的|这样|为了|注|ps|PS)'
+_META_PAREN_RE = re.compile(r'[（(]\s*' + _META_WORDS + r'[^（）()]{0,30}[）)]\s*$')
+_META_PAREN_OPEN_RE = re.compile(r'[（(]\s*' + _META_WORDS + r'[^（）()]*$')
 
 
 def _clean_field(value) -> str:
@@ -730,6 +617,8 @@ def _clean_field(value) -> str:
         line = _BULLET_RE.sub("", line).strip()
         if not line:
             continue
+        # 先去掉句末标点，否则「“原话”，」这种收尾会让包裹引号判断失效
+        line = line.rstrip("。.；;，,：:")
         # 去掉整行包裹的引号（可能多次嵌套）
         changed = True
         while changed and len(line) >= 2:
@@ -754,10 +643,10 @@ def _clean_field(value) -> str:
     text = items[0] if len(items) == 1 else "；".join(items)
     # 清掉模型自检泄漏进正文的括号说明（括号内含其他字段标签）
     text = re.sub(r'[（(][^（）()]*?(?:为什么|不要说|此刻可以说|后续步骤)[：:][^（）()]*[）)]', '', text)
-    # 清掉句尾的简短点评式括号（不含数字，如「（避免指责）」「（指责）」）
-    text = re.sub(r'[（(][^（）()\d]{1,14}[）)]\s*$', '', text)
-    # 清掉未闭合的尾部括号残片
-    text = re.sub(r'[（(][^（）()]*$', '', text)
+    # 只清句尾的点评式括号（如「（避免指责）」「（注：语气温和）」），括号内是实质内容的保留
+    text = re.sub(_META_PAREN_RE, '', text)
+    # 未闭合的尾部括号残片同样只在以点评词开头时才清
+    text = re.sub(_META_PAREN_OPEN_RE, '', text)
     return text.strip().rstrip("（(、，,；;：:。.").strip()
 
 
@@ -771,27 +660,33 @@ def _parse_plain_advice(text: str) -> dict:
     按关键词切分，提取各字段（字段内容后续由 _clean_field 统一清洗）。
     """
     result = {"say": "", "not_say": "", "why": "", "next_steps": ""}
-    # 统一关键词到英文 key
-    patterns = [
-        ("say",         [r'此刻可以说[：:]', r'可以说[：:]', r'say[：:]']),
-        ("not_say",     [r'不要说[：:]', r'不要这样说[：:]', r'禁止说[：:]', r'not[_\s]*say[：:]']),
-        ("why",         [r'为什么[：:]', r'原因[：:]', r'why[：:]']),
-        ("next_steps",  [r'后续步骤[：:]', r'事后可以做[：:]', r'之后可以做[：:]', r'next[_\s]*steps[：:]']),
+    # 标签 → 字段；长标签在前，避免「此刻可以说」被「可以说」抢先匹配
+    labels = [
+        ("此刻可以说", "say"), ("可以说", "say"),
+        ("不要这样说", "not_say"), ("不要说", "not_say"), ("禁止说", "not_say"),
+        ("为什么", "why"), ("原因", "why"),
+        ("后续步骤", "next_steps"), ("事后可以做", "next_steps"), ("之后可以做", "next_steps"),
     ]
-    # 找到每个字段的起始位置
+    # 标签出现位置：行首、句末标点后、逗号/冒号后、右引号后或空白前（兼容列表符号）
+    label_re = re.compile(
+        r'(?:^|(?<=[\n。；;！!？?，,、）)：:\s]))'
+        r'(?:' + "|".join(p for p, _ in labels) + r')'
+        r'\s*(?:[：:]\s*|(?=[“"「『])|\s+)'
+    )
+    key_of = dict(labels)
     spans = []
-    for key, pats in patterns:
-        for p in pats:
-            m = re.search(p, text)
-            if m:
-                spans.append((m.start(), m.end(), key))
-                break
-    spans.sort()
+    seen = set()
+    for m in label_re.finditer(text):
+        key = key_of[m.group(0).strip().rstrip("：:").strip()]
+        if key in seen:
+            continue
+        seen.add(key)
+        spans.append((m.start(), m.end(), key))
     # 按起止位置切分
     for i, (start, sep_end, key) in enumerate(spans):
         field_start = sep_end
         field_end = spans[i + 1][0] if i + 1 < len(spans) else len(text)
-        value = text[field_start:field_end].strip().strip('。.\n')
+        value = text[field_start:field_end].strip()
         result[key] = value
     return result
 
@@ -879,53 +774,6 @@ async def get_session_owner(session_id: str):
     }
 
 
-@app.post("/api/ai/sessions/{session_id}/character")
-async def bind_character(session_id: str, request: Request, character_id: str = Form(...)):
-    """为会话绑定角色（对话和合成均使用该角色的声音与人设）"""
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    ch = character_engine.get_character(character_id)
-    if not ch:
-        return JSONResponse({"error": "角色不存在"}, status_code=404)
-    if not character_engine.is_accessible(ch, user):
-        return JSONResponse({"error": "无权使用该角色"}, status_code=403)
-    err = _session_owner_error(session_id, user)
-    if err:
-        return err
-    # 历史会话无归属时由首次写入者接管，避免旧数据全部不可用
-    memory_storage.claim_session(session_id, user)
-    memory_storage.set_short_term_memory(session_id, "character_id", character_id)
-    # 绑定角色即接管音色，清除此前选择的预设音色
-    memory_storage.set_short_term_memory(session_id, "voice_preset_id", "")
-    # 同步刷新会话语音描述（voice_profile → 英文 prompt），供 TTS 使用
-    voice_prompt = character_engine.build_voice_prompt(character_id)
-    memory_storage.set_short_term_memory(session_id, "voice_description", voice_prompt)
-    return {
-        "status": "ok",
-        "character_id": character_id,
-        "character_name": ch["name"],
-        "voice_prompt": voice_prompt,
-        "system_prompt": character_engine.build_system_prompt(character_id),
-    }
-
-
-@app.get("/api/ai/sessions/{session_id}/character")
-async def get_session_character(session_id: str, request: Request):
-    """获取会话当前绑定的角色"""
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    err = _session_owner_error(session_id, user)
-    if err:
-        return err
-    character_id = memory_storage.get_short_term_memory(session_id, "character_id")
-    if not character_id:
-        return {"status": "ok", "character": None}
-    ch = character_engine.get_character(character_id)
-    return {"status": "ok", "character": ch}
-
-
 class VoiceStyleBind(BaseModel):
     description: str                       # 语音风格描述（英文 prompt，供 TTS 使用）
     voice_definition: Optional[str] = None  # 可选：VoxCPM2 声音定义字符串
@@ -934,7 +782,7 @@ class VoiceStyleBind(BaseModel):
 
 @app.post("/api/ai/sessions/{session_id}/voice-style")
 async def bind_voice_style(session_id: str, payload: VoiceStyleBind, request: Request):
-    """为会话绑定语音风格（覆盖角色自带的 voice_prompt）"""
+    """为会话绑定语音风格（覆盖会话已保存的 voice_description）"""
     user = _trusted_user(request)
     if not user:
         return _unauthorized()
@@ -994,8 +842,7 @@ def _resolve_session_style(session_id: str, explicit_description: str = None):
     解析 TTS 语音风格，优先级：
     1. 本次请求显式传入的 description
     2. 会话选择的预设音色 voice_prompt（GAP-05）
-    3. 会话绑定角色的 voice_profile（英文 prompt）
-    4. 会话中直接保存的 voice_description（旧版语音定义）
+    3. 会话中直接保存的 voice_description（旧版语音定义）
     """
     if explicit_description:
         return explicit_description
@@ -1004,32 +851,14 @@ def _resolve_session_style(session_id: str, explicit_description: str = None):
         prompt = voice_catalog.preset_prompt(preset_id)
         if prompt:
             return prompt
-    character_id = memory_storage.get_short_term_memory(session_id, "character_id")
-    if character_id:
-        voice_prompt = character_engine.build_voice_prompt(character_id)
-        if voice_prompt:
-            return voice_prompt
     return memory_storage.get_short_term_memory(session_id, "voice_description")
 
 
-def _resolve_session_speed(session_id: str, character_id: str = None) -> float:
-    """解析会话语速：绑定角色的 voice_profile.speed，缺省 1.0；越界兜底钳制（GAP-08）"""
-    cid = character_id or memory_storage.get_short_term_memory(session_id, "character_id")
-    if not cid:
-        return 1.0
-    ch = character_engine.get_character(cid)
-    vp = (ch or {}).get("voice_profile") or {}
-    try:
-        return max(0.5, min(2.0, float(vp.get("speed", 1.0))))
-    except (TypeError, ValueError):
-        return 1.0
-
-
-def _resolve_session_voice(session_id: str, character_id: str = None):
+def _resolve_session_voice(session_id: str):
     """
     解析 voice_id，返回 (voice_id, notice)：
     - edge 模式：无克隆音色，返回 None（edge 默认音色）
-    - cloud/voxcpm2：0. 预设音色 → 1. cloud_voice 映射 → 2. 角色方言音色
+    - cloud/voxcpm2：预设音色 → cloud_voice 映射
     notice 为 None 表示无需提示；不静默失败
     """
     if _TTS_PROVIDER == "edge":
@@ -1048,13 +877,6 @@ def _resolve_session_voice(session_id: str, character_id: str = None):
         notice = note
         if voice_id:
             return voice_id, notice
-    cid = character_id or memory_storage.get_short_term_memory(session_id, "character_id")
-    if cid:
-        _dialect, ids, dialect_note = character_engine.resolve_dialect_voice(cid)
-        if notice is None:
-            notice = dialect_note
-        if ids:
-            return ids[0], notice
     return None, notice
 
 
@@ -1355,17 +1177,15 @@ async def tts(
         AI_REQUESTS.labels(endpoint="tts", status="400").inc()
         return {"error": "text 不能为空"}
 
-    # 风格优先级：显式 description > 会话绑定角色 voice_profile > 旧版语音定义
+    # 风格优先级：显式 description > 预设音色 > 旧版语音定义
     style = _resolve_session_style(session_id, description)
-    speed = _resolve_session_speed(session_id)
+    speed = 1.0
     voice_id, voice_notice = _resolve_session_voice(session_id)
-    emotion_config = memory_storage.get_short_term_memory(session_id, "emotion_config")
-    emotion_params = emotion_config.get("params") if emotion_config else None
 
     # 统一 TTS 入口（云/本地 GPU/CPU 分派见 _synthesize_speech）
     try:
         wav_bytes, sample_rate = await _synthesize_speech(
-            text, style, emotion_params if not style else None, quick_mode, speed=speed, voice_id=voice_id
+            text, style, None, quick_mode, speed=speed, voice_id=voice_id
         )
     except Exception as e:
         # 云 TTS 欠费/鉴权失败/超时等：返回 503 而不是 500，前端可提示稍后重试
@@ -1423,136 +1243,6 @@ async def transcribe_audio(session_id: str = Form("default"),
     except Exception as e:
         print(f"[ASR] 转写失败: {e}")
         return _internal_error("asr/transcribe", e)
-
-# 情感预设（GAP-09）：6 类预设映射到既有 6 轴向量；历史自由文本名称继续可存可读
-EMOTION_PRESETS = [
-    {"id": "calm",      "name": "平静", "description": "平和、稳定的语气",
-     "params": {"happiness": 0.3, "sadness": 0.1, "anger": 0.1, "fear": 0.1, "disgust": 0.1, "surprise": 0.1}},
-    {"id": "happy",     "name": "开心", "description": "轻快、愉悦的语气",
-     "params": {"happiness": 0.9, "sadness": 0.05, "anger": 0.05, "fear": 0.05, "disgust": 0.05, "surprise": 0.5}},
-    {"id": "sad",       "name": "悲伤", "description": "低落、柔和的语气",
-     "params": {"happiness": 0.1, "sadness": 0.9, "anger": 0.1, "fear": 0.2, "disgust": 0.1, "surprise": 0.1}},
-    {"id": "anxious",   "name": "焦虑", "description": "紧张、不安的语气",
-     "params": {"happiness": 0.1, "sadness": 0.4, "anger": 0.2, "fear": 0.8, "disgust": 0.1, "surprise": 0.5}},
-    {"id": "angry",     "name": "生气", "description": "强烈、急促的语气",
-     "params": {"happiness": 0.05, "sadness": 0.1, "anger": 0.9, "fear": 0.1, "disgust": 0.3, "surprise": 0.1}},
-    {"id": "surprised", "name": "惊讶", "description": "意外、上扬的语气",
-     "params": {"happiness": 0.4, "sadness": 0.05, "anger": 0.05, "fear": 0.2, "disgust": 0.05, "surprise": 0.9}},
-]
-
-
-@app.get("/api/ai/emotion-presets")
-async def list_emotion_presets():
-    """情感预设列表（前端下拉只列这 6 项；自定义名称仍可自由保存）"""
-    return {
-        "status": "ok",
-        "axes": ["happiness", "sadness", "anger", "fear", "disgust", "surprise"],
-        "presets": EMOTION_PRESETS,
-    }
-
-
-# 情感配置接口
-@app.post("/api/ai/emotion-config")
-async def emotion_config(
-    request: Request,
-    session_id: str = Form(...),
-    emotion_name: str = Form(...),
-    emotion_description: str = Form(""),
-    happiness: float = Form(0.5),
-    sadness: float = Form(0.1),
-    anger: float = Form(0.1),
-    fear: float = Form(0.1),
-    disgust: float = Form(0.1),
-    surprise: float = Form(0.3)
-):
-    """
-    配置情感参数
-    session_id: 会话ID
-    emotion_name: 情感配置名称
-    emotion_description: 情感描述
-    happiness: 愉悦程度（范围：0.0-1.0，默认：0.5）
-    sadness: 悲伤程度（范围：0.0-1.0，默认：0.1）
-    anger: 愤怒程度（范围：0.0-1.0，默认：0.1）
-    fear: 恐惧程度（范围：0.0-1.0，默认：0.1）
-    disgust: 厌恶程度（范围：0.0-1.0，默认：0.1）
-    surprise: 惊讶程度（范围：0.0-1.0，默认：0.3）
-    """
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    if len(emotion_name) > 64:
-        return JSONResponse({"error": "emotion_name 过长（上限 64 字）"}, status_code=400)
-    if len(emotion_description) > 500:
-        return JSONResponse({"error": "emotion_description 过长（上限 500 字）"}, status_code=400)
-    err = _session_owner_error(session_id, user)
-    if err:
-        return err
-    memory_storage.claim_session(session_id, user)
-    try:
-        # clamp 所有情感值到 [0, 1]，与文档注释一致
-        _c = lambda x: max(0.0, min(1.0, float(x)))
-        # 构建情感参数
-        emotion_params = {
-            "happiness": _c(happiness),
-            "sadness": _c(sadness),
-            "anger": _c(anger),
-            "fear": _c(fear),
-            "disgust": _c(disgust),
-            "surprise": _c(surprise)
-        }
-        
-        # 保存情感配置到内存存储
-        emotion_config = {
-            "name": emotion_name,
-            "description": emotion_description,
-            "params": emotion_params
-        }
-        
-        memory_storage.set_short_term_memory(session_id, "emotion_config", emotion_config)
-        
-        return {
-            "status": "ok",
-            "emotion_config": emotion_config
-        }
-    except Exception as e:
-        return _internal_error("api-handler", e)
-
-# 获取情感配置接口
-@app.get("/api/ai/emotion-config/{session_id}")
-async def get_emotion_config(session_id: str, request: Request):
-    """
-    获取情感配置
-    session_id: 会话ID
-    """
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    err = _session_owner_error(session_id, user)
-    if err:
-        return err
-    try:
-        emotion_config = memory_storage.get_short_term_memory(session_id, "emotion_config")
-        
-        return {
-            "status": "ok",
-            "emotion_config": emotion_config
-        }
-    except Exception as e:
-        return _internal_error("api-handler", e)
-
-
-@app.delete("/api/ai/emotion-config/{session_id}")
-async def delete_emotion_config(session_id: str, request: Request):
-    """解绑情感配置：清空 short_term.emotion_config（幂等，GET 仍返回空配置）"""
-    user = _trusted_user(request)
-    if not user:
-        return _unauthorized()
-    err = _session_owner_error(session_id, user)
-    if err:
-        return err
-    memory_storage.claim_session(session_id, user)
-    memory_storage.delete_short_term_memory(session_id, "emotion_config")
-    return Response(status_code=204)
 
 
 @app.get("/health")
@@ -1660,25 +1350,9 @@ async def ws_chat(ws: WebSocket, session_id: str):
     if owner is None and user:
         memory_storage.claim_session(session_id, user)
 
-    # 加载会话上下文
-    emotion_config = memory_storage.get_short_term_memory(session_id, "emotion_config")
-    emotion_params = emotion_config.get("params") if emotion_config else None
-
-    # 角色：voice_profile → 声音 prompt；persona_profile → LLM system prompt
-    character_id = memory_storage.get_short_term_memory(session_id, "character_id")
-    style = None
-    system_prompt = None
-    character_name = None
-    voice_speed = 1.0
-    voice_id, voice_notice = _resolve_session_voice(session_id, character_id)
-    if character_id:
-        style = character_engine.build_voice_prompt(character_id)
-        voice_speed = _resolve_session_speed(session_id, character_id)
-        system_prompt = character_engine.build_system_prompt(character_id)
-        ch = character_engine.get_character(character_id)
-        character_name = ch["name"] if ch else None
-    if not style:
-        style = memory_storage.get_short_term_memory(session_id, "voice_description")
+    # 加载会话上下文（育儿教练默认 system prompt，不再有角色覆盖）
+    style = memory_storage.get_short_term_memory(session_id, "voice_description")
+    voice_id, voice_notice = _resolve_session_voice(session_id)
 
     # 对话历史
     chat_history = memory_storage.get_short_term_memory(session_id, "chat_history") or []
@@ -1704,28 +1378,12 @@ async def ws_chat(ws: WebSocket, session_id: str):
 
             chat_history.append({"role": "user", "content": user_text})
 
-            # 每轮重新解析角色（用户可能在对话中途切换角色）
-            emotion_config = memory_storage.get_short_term_memory(session_id, "emotion_config")
-            emotion_params = emotion_config.get("params") if emotion_config else None
-            character_id = memory_storage.get_short_term_memory(session_id, "character_id")
-            style = None
-            system_prompt = None
-            character_name = None
-            voice_speed = 1.0
-            voice_id, voice_notice = _resolve_session_voice(session_id, character_id)
-            if character_id:
-                style = character_engine.build_voice_prompt(character_id)
-                voice_speed = _resolve_session_speed(session_id, character_id)
-                system_prompt = character_engine.build_system_prompt(character_id)
-                ch = character_engine.get_character(character_id)
-                character_name = ch["name"] if ch else None
-            if not style:
-                style = memory_storage.get_short_term_memory(session_id, "voice_description")
+            # 每轮重新解析音色（用户可能在对话中途切换预设音色）
+            voice_id, voice_notice = _resolve_session_voice(session_id)
 
-            # 推送状态：开始生成（含当前角色名与方言回退提示，前端可展示）
+            # 推送状态：开始生成（含方言回退提示，前端可展示）
             await safe_send_json({
                 "type": "status", "status": "generating",
-                "character": character_name,
                 "voice_notice": voice_notice,
             })
 
@@ -1741,9 +1399,9 @@ async def ws_chat(ws: WebSocket, session_id: str):
                     wav_bytes, sample_rate = await _synthesize_speech(
                         sentence_text,
                         style,
-                        emotion_params if not style else None,
+                        None,
                         quick_mode=not _USE_GPU,
-                        speed=voice_speed,
+                        speed=1.0,
                         voice_id=voice_id,
                     )
                     if wav_bytes:
@@ -1757,9 +1415,7 @@ async def ws_chat(ws: WebSocket, session_id: str):
 
             # LLM 流式生成 → 推文本；TTS 后台并行
             sentence_count = 0
-            async for sentence in llm_service.chat_stream_sentences(
-                messages_for_llm, system_prompt=system_prompt
-            ):
+            async for sentence in llm_service.chat_stream_sentences(messages_for_llm):
                 sentence_count += 1
                 assistant_reply += sentence
                 await safe_send_json({"type": "text", "content": sentence, "index": sentence_count})

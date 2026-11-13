@@ -23,15 +23,15 @@ class StateStoreTest(unittest.TestCase):
 
     def test_persists_across_reload(self):
         store = PersistentStateStore(data_dir=str(self.tmp), redis_url="")
-        store.set_short_term_memory("s1", "character_id", "char-1")
-        store.set_short_term_memory("s1", "emotion_config", {"name": "开心", "params": {"happiness": 0.8}})
+        store.set_short_term_memory("s1", "theme", "char-1")
+        store.set_short_term_memory("s1", "tts_params", {"name": "开心", "params": {"happiness": 0.8}})
         store.update_dialogue_history("s1", "你好".encode("utf-8"))
         store.update_dialogue_history("s1", b"hello")
         store.flush(force=True)
 
         reloaded = PersistentStateStore(data_dir=str(self.tmp), redis_url="")
-        self.assertEqual(reloaded.get_short_term_memory("s1", "character_id"), "char-1")
-        self.assertEqual(reloaded.get_short_term_memory("s1", "emotion_config")["name"], "开心")
+        self.assertEqual(reloaded.get_short_term_memory("s1", "theme"), "char-1")
+        self.assertEqual(reloaded.get_short_term_memory("s1", "tts_params")["name"], "开心")
         history = reloaded.get_dialogue_history("s1")
         self.assertEqual(history[0], b"hello")
         self.assertEqual(history[1], "你好".encode("utf-8"))
@@ -135,7 +135,7 @@ class StateStoreTest(unittest.TestCase):
 
     def test_claim_legacy_and_index_rebuild(self):
         store = PersistentStateStore(data_dir=str(self.tmp), redis_url="")
-        store.set_short_term_memory("legacy_1", "character_id", "c1")
+        store.set_short_term_memory("legacy_1", "voice_description", "低沉男声")
         store.flush(force=True)
         reloaded = PersistentStateStore(data_dir=str(self.tmp), redis_url="")
         self.assertIsNone(reloaded.get_session_owner("legacy_1"))

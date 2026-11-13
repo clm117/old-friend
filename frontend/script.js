@@ -15,7 +15,6 @@ let wsUrl = _servedByProxy
 let sessionId = localStorage.getItem('sessionId') || '';
 if (sessionId && !/^s_/.test(sessionId)) sessionId = '';
 let voices = [];
-let emotions = [];
 let chatWs = null;  // WebSocket 连接
 let audioQueue = [];  // 待播放音频队列
 let isPlayingAudio = false;  // 是否正在播放
@@ -148,21 +147,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // 语音定义
     setupVoiceDefine();
     
-    // 情感配置
-    setupEmotionConfig();
-
     // 语音合成
     setupTts();
 
-    // 角色管理
-    setupCharacters();
+    // 历史会话面板
+    setupSessionPanel();
 
     // 设置保存
     setupSettings();
     
     // 加载已保存的数据
     loadVoices();
-    loadEmotions();
+
+    // 预加载孩子档案：聊天页话术卡按「当前关注的孩子」生成，无需先切到档案页
+    if (getToken()) window.loadChildren();
 });
 
 // 标签页切换（底部导航栏）
@@ -194,11 +192,6 @@ function setupTabSwitching() {
             // 如果切换到语音合成标签，更新语音选择列表
             if (tabId === 'tts') {
                 updateTtsVoiceSelect();
-            }
-
-            // 语气预设需登录后才能拉取：首次进入语气页时懒加载
-            if (tabId === 'emotion-config' && typeof window.loadEmotionPresets === 'function') {
-                window.loadEmotionPresets();
             }
 
             // 切换到设置页时刷新用量条（含首次），并启动 30s 轮询
@@ -332,11 +325,14 @@ async function sendUserText(text) {
 
 // 调 parenting-advice API，渲染话术卡
 async function _fetchAdviceCard(scene) {
+    const payload = { scene };
+    const childId = _activeChildId();
+    if (childId) payload.child_id = childId;
     // 走网关路由（全局 fetch 包装已自动注入 Authorization）
     const resp = await fetch(`${apiUrl}/api/parenting-advice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scene })
+        body: JSON.stringify(payload)
     });
     if (!resp.ok) {
         throw new Error('advice HTTP ' + resp.status);
@@ -623,10 +619,6 @@ async function createNewSession() {
         sessionId = '';
         localStorage.removeItem('sessionId');
         await ensureSession();
-        currentCharacterId = null;
-        const charEl = document.getElementById('currentCharacterName');
-        if (charEl) charEl.textContent = '未选择';
-        await loadSessionCharacter();
         await loadSessions(true);
     } catch (e) {
         console.warn('新建会话失败:', e.message);
@@ -640,8 +632,6 @@ async function switchSession(sid) {
     localStorage.setItem('sessionId', sessionId);
     const el = document.getElementById('sessionId');
     if (el) el.value = sessionId;
-    currentCharacterId = null;
-    await loadSessionCharacter();
     renderSessionList();
 }
 
@@ -679,10 +669,7 @@ async function deleteSessionById(sid) {
         if (sid === sessionId) {
             sessionId = '';
             localStorage.removeItem('sessionId');
-            localStorage.removeItem(`session_character_${sid}`);
             await ensureSession();
-            currentCharacterId = null;
-            await loadSessionCharacter();
         }
         await loadSessions(true);
     } catch (e) {
@@ -797,9 +784,8 @@ function handleWsMessage(msg) {
         case 'status':
             if (msg.status === 'generating') {
                 if (msg.voice_notice) console.info('语音提示：', msg.voice_notice);
-                const who = msg.character ? `「${msg.character}」` : '语伴';
                 // 思考占位：标记 streaming + thinking，首个文本到达时替换
-                addMessage('ai', `${who}正在思考…`, true, true);
+                addMessage('ai', '语伴正在思考…', true, true);
             } else if (msg.status === 'reply_done') {
                 // 文本回复已完整 → 立即解锁输入（音频可能仍在后台合成播放）
                 setInputLocked(false);
@@ -1220,209 +1206,6 @@ function showVoiceDesignCapability(cap) {
         `云声音定义可用（目标模型 ${cap.target_model}）；音色用量 ${quota.used ?? 0}/${quota.limit ?? 1000}。`, false);
 }
 
-// 情感配置
-function setupEmotionConfig() {
-    // 初始化情感滑块值显示
-    const emotionIds = ['happiness', 'sadness', 'anger', 'fear', 'disgust', 'surprise'];
-    emotionIds.forEach(emotionId => {
-        const slider = document.getElementById(emotionId);
-        const valueDisplay = document.getElementById(emotionId + 'Value');
-        
-        if (slider && valueDisplay) {
-            slider.addEventListener('input', function() {
-                valueDisplay.textContent = this.value;
-            });
-        }
-    });
-    
-    // GAP-09：预设情感下拉（只列 6 类预设；名称仍可自由输入，历史自定义名称继续可存）
-    const presetSelect = document.getElementById('emotionPresetSelect');
-    const presetMap = {};
-    async function loadEmotionPresets() {
-        if (!presetSelect || presetSelect.dataset.loaded === '1') return;
-        try {
-            const resp = await fetch(`${apiUrl}/api/emotion-presets`);
-            if (!resp.ok) return;
-            const data = await resp.json();
-            (data.presets || []).forEach(p => {
-                presetMap[p.id] = p;
-                const opt = document.createElement('option');
-                opt.value = p.id;
-                opt.textContent = p.name;
-                presetSelect.appendChild(opt);
-            });
-            presetSelect.dataset.loaded = '1';
-        } catch (e) {
-            console.warn('加载情感预设失败:', e);
-        }
-    }
-    // 页面初始化时若尚未登录会 401；切到情感页时再懒加载一次（登录后补载）
-    window.loadEmotionPresets = loadEmotionPresets;
-    loadEmotionPresets();
-    if (presetSelect) {
-        presetSelect.addEventListener('change', function() {
-            const preset = presetMap[this.value];
-            if (!preset) return;
-            const params = preset.params || {};
-            emotionIds.forEach(id => {
-                if (params[id] == null) return;
-                document.getElementById(id).value = params[id];
-                document.getElementById(id + 'Value').textContent = params[id];
-            });
-            document.getElementById('emotionProfileName').value = preset.name;
-            document.getElementById('emotionDescription').value = preset.description || '';
-        });
-    }
-
-    const saveEmotionBtn = document.getElementById('saveEmotionBtn');
-    
-    saveEmotionBtn.addEventListener('click', async function() {
-        const emotionProfileName = document.getElementById('emotionProfileName').value;
-        const emotionDescription = document.getElementById('emotionDescription').value;
-        const happiness = parseFloat(document.getElementById('happiness').value);
-        const sadness = parseFloat(document.getElementById('sadness').value);
-        const anger = parseFloat(document.getElementById('anger').value);
-        const fear = parseFloat(document.getElementById('fear').value);
-        const disgust = parseFloat(document.getElementById('disgust').value);
-        const surprise = parseFloat(document.getElementById('surprise').value);
-        
-        if (!emotionProfileName) {
-            alert('请输入情感配置名称');
-            return;
-        }
-
-        await ensureSession();
-        if (!sessionId) {
-            alert('尚未创建会话，请稍后重试');
-            return;
-        }
-        
-        try {
-            // 构建表单数据
-            const formData = new FormData();
-            formData.append('session_id', sessionId);
-            formData.append('emotion_name', emotionProfileName);
-            formData.append('emotion_description', emotionDescription);
-            formData.append('happiness', happiness);
-            formData.append('sadness', sadness);
-            formData.append('anger', anger);
-            formData.append('fear', fear);
-            formData.append('disgust', disgust);
-            formData.append('surprise', surprise);
-            
-            // 调用后台API
-            const response = await fetch(`${apiUrl}/api/emotion-config`, {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (!response.ok) {
-                // 透出服务端的具体错误（session_id/描述/音频格式等），避免只看到状态码无原因
-                let detail = `HTTP ${response.status}`;
-                try {
-                    const errBody = await response.json();
-                    if (errBody && errBody.error) detail = errBody.error;
-                } catch (_) { /* 响应非 JSON，保留状态码 */ }
-                throw new Error(detail);
-            }
-            
-            const result = await response.json();
-            console.log('Emotion config response:', result);
-            
-            // 保存情感配置到本地存储
-            const emotionProfile = {
-                id: 'emotion_' + Date.now(),
-                name: emotionProfileName,
-                description: emotionDescription || emotionProfileName,
-                emotions: {
-                    happiness: happiness,
-                    sadness: sadness,
-                    anger: anger,
-                    fear: fear,
-                    disgust: disgust,
-                    surprise: surprise
-                },
-                emotionConfig: result.emotion_config,
-                timestamp: new Date().toISOString()
-            };
-            
-            emotions.push(emotionProfile);
-            localStorage.setItem('emotions', JSON.stringify(emotions));
-            
-            // 显示保存成功消息
-            const responseDiv = document.getElementById('emotionConfigResponse');
-            responseDiv.innerHTML = `
-                <h4>情感配置结果</h4>
-                <p style="color: green;">情感配置保存成功！</p>
-                <p>名称: ${escapeHtml(emotionProfileName)}</p>
-                <p>描述: ${escapeHtml(emotionDescription)}</p>
-                <p>愉悦: ${happiness}</p>
-                <p>悲伤: ${sadness}</p>
-                <p>愤怒: ${anger}</p>
-                <p>恐惧: ${fear}</p>
-                <p>厌恶: ${disgust}</p>
-                <p>惊讶: ${surprise}</p>
-            `;
-            
-            // 重置表单
-            document.getElementById('emotionProfileName').value = '';
-            document.getElementById('emotionDescription').value = '';
-            if (presetSelect) presetSelect.value = '';
-            document.getElementById('happiness').value = 0.5;
-            document.getElementById('sadness').value = 0.1;
-            document.getElementById('anger').value = 0.1;
-            document.getElementById('fear').value = 0.1;
-            document.getElementById('disgust').value = 0.1;
-            document.getElementById('surprise').value = 0.3;
-            document.getElementById('happinessValue').textContent = '0.5';
-            document.getElementById('sadnessValue').textContent = '0.1';
-            document.getElementById('angerValue').textContent = '0.1';
-            document.getElementById('fearValue').textContent = '0.1';
-            document.getElementById('disgustValue').textContent = '0.1';
-            document.getElementById('surpriseValue').textContent = '0.3';
-            
-            // 更新已保存的情感配置列表
-            displaySavedEmotions();
-        } catch (error) {
-            console.error('Error saving emotion config:', error);
-            const responseDiv = document.getElementById('emotionConfigResponse');
-            responseDiv.innerHTML = `<p style="color: red;">保存情感配置时出错: ${escapeHtml(error.message)}</p>`;
-        }
-    });
-
-    // 恢复默认：DELETE 清空服务端情感配置（GAP-02）
-    const resetEmotionBtn = document.getElementById('resetEmotionBtn');
-    if (resetEmotionBtn) {
-        resetEmotionBtn.addEventListener('click', async function() {
-            await ensureSession();
-            if (!sessionId) {
-                alert('尚未创建会话');
-                return;
-            }
-            try {
-                const resp = await fetch(`${apiUrl}/api/emotion-config/${encodeURIComponent(sessionId)}`, {
-                    method: 'DELETE'
-                });
-                if (!resp.ok) {
-                    const err = await resp.json().catch(() => ({}));
-                    alert(`恢复默认失败（HTTP ${resp.status}）：${err.error || ''}`);
-                    return;
-                }
-                document.getElementById('emotionProfileName').value = '';
-                document.getElementById('emotionDescription').value = '';
-                if (presetSelect) presetSelect.value = '';
-                document.getElementById('emotionConfigResponse').innerHTML =
-                    '<p style="color: green;">已恢复默认情感配置（服务端配置已清空）。</p>';
-                const saved = document.getElementById('savedEmotions');
-                if (saved) saved.innerHTML = '<p style="color:#999;">暂无已保存的情感配置</p>';
-            } catch (e) {
-                alert('恢复默认失败：' + e.message);
-            }
-        });
-    }
-}
-
-// 设置保存
 function setupSettings() {
     const saveSettingsBtn = document.getElementById('saveSettingsBtn');
     
@@ -1576,53 +1359,6 @@ function displaySavedVoices() {
     });
 }
 
-// 加载已保存的情感配置
-function loadEmotions() {
-    const savedEmotions = localStorage.getItem('emotions');
-    if (savedEmotions) {
-        try {
-            emotions = JSON.parse(savedEmotions);
-            if (!Array.isArray(emotions)) emotions = [];
-        } catch (e) {
-            console.warn('emotions 脏数据已清除:', e.message);
-            localStorage.removeItem('emotions');
-            emotions = [];
-        }
-        displaySavedEmotions();
-    }
-}
-
-// 显示已保存的情感配置
-function displaySavedEmotions() {
-    const savedEmotionsDiv = document.getElementById('savedEmotions');
-    if (!savedEmotionsDiv) return;
-    
-    savedEmotionsDiv.innerHTML = '';
-    
-    if (emotions.length === 0) {
-        savedEmotionsDiv.innerHTML = '<p>暂无保存的情感配置</p>';
-        return;
-    }
-    
-    emotions.forEach(emotion => {
-        const emotionCard = document.createElement('div');
-        emotionCard.className = 'emotion-card';
-        emotionCard.innerHTML = `
-            <div>
-                <h5>${escapeHtml(emotion.name)}</h5>
-                <p>${escapeHtml(emotion.description || '无描述')}</p>
-                <p style="font-size: 0.8em; color: #999;">${new Date(emotion.timestamp).toLocaleString()}</p>
-            </div>
-            <div>
-                <button class="use-btn" onclick="useEmotion('${escapeHtml(emotion.id)}')">使用</button>
-                <button class="delete-btn" onclick="deleteEmotion('${escapeHtml(emotion.id)}')">删除</button>
-            </div>
-        `;
-        savedEmotionsDiv.appendChild(emotionCard);
-    });
-}
-
-// 更新基础语音下拉列表
 function updateBaseVoiceSelect() {
     const baseVoiceSelect = document.getElementById('baseVoice');
     if (!baseVoiceSelect) return;
@@ -1709,45 +1445,6 @@ function deleteVoice(voiceId) {
         deleteVoiceAudio(voiceId).catch(() => {});
         displaySavedVoices();
         updateBaseVoiceSelect();
-    }
-}
-
-// 使用情感配置（绑定到当前会话）
-async function useEmotion(emotionId) {
-    const emotion = emotions.find(e => e.id === emotionId);
-    if (!emotion) return;
-
-    try {
-        const fd = new FormData();
-        fd.append('session_id', sessionId);
-        fd.append('emotion_name', emotion.name);
-        fd.append('emotion_description', emotion.description || '');
-        const e = emotion.emotions || {};
-        fd.append('happiness', e.happiness ?? 0.5);
-        fd.append('sadness', e.sadness ?? 0.5);
-        fd.append('anger', e.anger ?? 0.5);
-        fd.append('fear', e.fear ?? 0.5);
-        fd.append('disgust', e.disgust ?? 0.5);
-        fd.append('surprise', e.surprise ?? 0.5);
-
-        const resp = await fetch(`${apiUrl}/api/emotion-config`, {
-            method: 'POST',
-            body: fd,
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        await resp.json();
-        alert(`已启用情感配置「${emotion.name}」，后续合成将带上该情感风格。`);
-    } catch (err) {
-        alert(`启用情感配置失败：${err.message}`);
-    }
-}
-
-// 删除情感配置
-function deleteEmotion(emotionId) {
-    if (confirm('确定要删除这个情感配置吗？')) {
-        emotions = emotions.filter(e => e.id !== emotionId);
-        localStorage.setItem('emotions', JSON.stringify(emotions));
-        displaySavedEmotions();
     }
 }
 
@@ -1931,444 +1628,50 @@ function loadSettings() {
 // 页面加载时从本地存储加载设置
 loadSettings();
 
-// ===== 角色管理 =====
-let characterOptions = null;
-let currentCharacterId = null;
-
-function setupCharacters() {
-    loadCharacterOptions();
-    loadVoicePresets();
-    loadCharacters();
-    loadSessionCharacter();
-    document.getElementById('createCharacterBtn').addEventListener('click', createCharacter);
-    const cancelBtn = document.getElementById('cancelCharacterEditBtn');
-    if (cancelBtn) cancelBtn.addEventListener('click', resetCharacterEdit);
-    const presetSel = document.getElementById('charPresetVoice');
-    if (presetSel) presetSel.addEventListener('change', onPresetVoiceChange);
-    const applyBtn = document.getElementById('applyPresetVoiceBtn');
-    if (applyBtn) applyBtn.addEventListener('click', applyPresetVoice);
-    setupSessionPanel();
-}
-
-// 加载枚举选项并填充下拉框/标签
-async function loadCharacterOptions() {
-    // 鉴权启动前（无 token）跳过，待登录后由 handleAuthSubmit 重载页面再执行
-    if (authRequired && !getToken()) return;
-    try {
-        const resp = await fetch(`${apiUrl}/api/characters/options`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const result = await resp.json();
-        characterOptions = result.options;
-
-        fillSelect('charGender', characterOptions.genders);
-        fillSelect('charAgeGroup', characterOptions.age_groups);
-        fillSelect('charRelation', characterOptions.relations);
-        renderDialectSelect(characterOptions.dialects || [], characterOptions.default_dialect);
-        renderTagGroup('charVoiceTags', characterOptions.voice_tags, 'voice');
-        renderTagGroup('charPersonalityTags', characterOptions.personality_tags, 'personality');
-
-        // 选项就绪后重新渲染角色列表（中文标签映射需要 options）
-        loadCharacters();
-    } catch (e) {
-        console.warn('加载角色选项失败:', e.message);
-    }
-}
-
-function fillSelect(selectId, dict) {
-    const sel = document.getElementById(selectId);
-    sel.innerHTML = Object.entries(dict).map(([k, v]) => `<option value="${escapeHtml(k)}">${escapeHtml(v)}</option>`).join('');
-}
-
-// 方言下拉（GAP-05 第 3 批）：未就绪项在文案上明确标注“暂不可用”，选中后给出回退提示
-function renderDialectSelect(dialects, defaultDialect) {
-    const sel = document.getElementById('charDialect');
-    if (!sel) return;
-    const defaultLabel = (defaultDialect && defaultDialect.label) || '普通话';
-    const defaultId = (defaultDialect && defaultDialect.id) || 'zh-CN';
-    const opts = [`<option value="">${escapeHtml(defaultLabel)}（默认）</option>`];
-    dialects.forEach((d) => {
-        const suffix = d.enabled ? '' : '（暂不可用）';
-        opts.push(`<option value="${escapeHtml(d.id)}" data-notice="${escapeHtml(d.notice || '')}" data-enabled="${d.enabled ? '1' : '0'}">${escapeHtml(d.label + suffix)}</option>`);
-    });
-    sel.innerHTML = opts.join('');
-    sel.dataset.defaultDialect = defaultId;
-    sel.onchange = updateDialectHint;
-}
-
-function updateDialectHint() {
-    const sel = document.getElementById('charDialect');
-    const hint = document.getElementById('charDialectHint');
-    if (!sel || !hint) return;
-    const opt = sel.options[sel.selectedIndex];
-    const notice = opt ? (opt.dataset.notice || '') : '';
-    if (sel.value && notice) {
-        hint.textContent = notice;
-        hint.style.display = 'block';
-    } else {
-        hint.textContent = '';
-        hint.style.display = 'none';
-    }
-}
-
-// ===== 预设音色（GAP-05：12 条目录 + 描述驱动）=====
-let voicePresets = [];
-
-async function loadVoicePresets() {
-    if (authRequired && !getToken()) return;
-    const sel = document.getElementById('charPresetVoice');
-    if (!sel) return;
-    try {
-        const resp = await fetch(`${apiUrl}/api/voice-presets`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const result = await resp.json();
-        voicePresets = result.presets || [];
-        const opts = ['<option value="">不使用预设音色</option>'];
-        voicePresets.forEach((p) => {
-            const suffix = p.ready ? '' : '（音色未就绪）';
-            opts.push(`<option value="${escapeHtml(p.id)}">${escapeHtml(p.name + suffix)}</option>`);
-        });
-        sel.innerHTML = opts.join('');
-    } catch (e) {
-        console.warn('加载预设音色失败:', e.message);
-    }
-}
-
-async function onPresetVoiceChange() {
-    const sel = document.getElementById('charPresetVoice');
-    const hint = document.getElementById('charPresetVoiceHint');
-    const promptEl = document.getElementById('charPresetVoicePrompt');
-    if (!sel || !hint || !promptEl) return;
-    const presetId = sel.value;
-    if (!presetId) {
-        hint.style.display = 'none';
-        promptEl.style.display = 'none';
-        return;
-    }
-    try {
-        const resp = await fetch(`${apiUrl}/api/voice-presets/${encodeURIComponent(presetId)}/prompt`);
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
-        const notice = data.notice || (data.ready ? '' : '音色未就绪，使用默认音色');
-        hint.textContent = notice;
-        hint.style.display = notice ? 'block' : 'none';
-        promptEl.textContent = data.voice_prompt ? `voice_prompt：${data.voice_prompt}` : '';
-        promptEl.style.display = data.voice_prompt ? 'block' : 'none';
-    } catch (e) {
-        hint.textContent = '查询预设音色失败：' + e.message;
-        hint.style.display = 'block';
-        promptEl.style.display = 'none';
-    }
-}
-
-async function applyPresetVoice() {
-    const sel = document.getElementById('charPresetVoice');
-    if (!sel || !sel.value) {
-        alert('请先选择预设音色');
-        return;
-    }
-    await ensureSession();
-    try {
-        const resp = await fetch(`${apiUrl}/api/sessions/${sessionId}/voice-preset`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ preset_id: sel.value }),
-        });
-        const data = await resp.json();
-        if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
-        const extra = data.notice ? `（${data.notice}）` : '';
-        showCharacterStatus(`已为当前会话选择预设音色「${data.name}」${extra}。voice_prompt：${data.voice_prompt}`);
-    } catch (e) {
-        alert('应用预设音色失败：' + e.message);
-    }
-}
-
-function renderTagGroup(containerId, dict, groupKey) {
-    const container = document.getElementById(containerId);
-    container.innerHTML = Object.entries(dict).map(([k, v]) =>
-        `<label style="display:inline-flex; align-items:center; gap:4px; padding:5px 10px; border:1px solid #ddd; border-radius:16px; font-size:0.85rem; cursor:pointer; background:#fff;">
-            <input type="checkbox" value="${escapeHtml(k)}" data-group="${groupKey}" style="margin:0;">${escapeHtml(v)}
-        </label>`
-    ).join('');
-}
-
-function getSelectedTags(groupKey) {
-    return Array.from(document.querySelectorAll(`input[data-group="${groupKey}"]:checked`)).map(cb => cb.value);
-}
-
-// 加载角色列表
-async function loadCharacters() {
-    if (authRequired && !getToken()) return;
-    try {
-        const resp = await fetch(`${apiUrl}/api/characters`);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const result = await resp.json();
-        const list = result.characters || [];
-        renderCharacterList('presetCharacterList', list.filter(c => c.is_preset));
-        renderCharacterList('customCharacterList', list.filter(c => !c.is_preset));
-    } catch (e) {
-        console.warn('加载角色列表失败:', e.message);
-    }
-}
-
-function renderCharacterList(containerId, characters) {
-    const container = document.getElementById(containerId);
-    if (!characters.length) {
-        if (containerId === 'customCharacterList') {
-            container.innerHTML = '<p style="color:#999; font-size:0.9rem;">还没有自定义角色，在下方创建。</p>';
-        } else {
-            container.innerHTML = '<p style="color:#999;">暂无预设角色</p>';
-        }
-        return;
-    }
-    const isCustom = containerId === 'customCharacterList';
-    container.innerHTML = characters.map(ch => {
-        const vp = ch.voice_profile || {};
-        const pp = ch.persona_profile || {};
-        const tags = (vp.voice_tags || []).map(t => characterOptions?.voice_tags?.[t] || t).join('、');
-        const personality = (pp.personality_tags || []).map(t => characterOptions?.personality_tags?.[t] || t).join('、');
-        const active = ch.id === currentCharacterId;
-        const delBtn = isCustom && !active
-            ? `<button onclick="deleteCharacter('${escapeHtml(ch.id)}')" style="margin-left:8px; padding:6px 12px; background:#ff5252; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.85rem;">删除</button>`
-            : '';
-        const editBtn = isCustom && !ch.shared
-            ? `<button onclick="editCharacter('${escapeHtml(ch.id)}')" style="margin-left:8px; padding:6px 12px; background:#1976d2; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.85rem;">编辑</button>`
-            : '';
-        const sharedTip = isCustom && ch.shared
-            ? '<span style="color:#999; font-size:0.8rem; margin-left:6px;">共享只读</span>'
-            : '';
-        return `
-        <div style="border:1px solid ${active ? '#4CAF50' : '#ddd'}; border-radius:10px; padding:12px; background:${active ? '#f1f8f2' : '#fff'};">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
-                <strong>${escapeHtml(ch.name)} ${active ? '<span style="color:#4CAF50; font-size:0.8rem;">✓ 使用中</span>' : ''}${sharedTip}</strong>
-                <div>
-                    <button onclick="bindCharacter('${escapeHtml(ch.id)}')" style="padding:6px 14px; background:${active ? '#ccc' : '#4CAF50'}; color:#fff; border:none; border-radius:6px; cursor:pointer;">${active ? '已选择' : '选择'}</button>
-                    ${editBtn}
-                    ${delBtn}
-                </div>
-            </div>
-            <div style="font-size:0.85rem; color:#666; margin-top:6px;">
-                ${characterOptions?.genders?.[vp.gender] || escapeHtml(vp.gender || '')} · ${characterOptions?.age_groups?.[vp.age_group] || escapeHtml(vp.age_group || '')} · 音色：${escapeHtml(tags) || '默认'}${vp.dialect ? ' · 方言：' + escapeHtml((characterOptions?.dialects || []).find(d => d.id === vp.dialect)?.label || vp.dialect) : ''}
-            </div>
-            <div style="font-size:0.85rem; color:#666; margin-top:2px;">
-                ${pp.identity ? '身份：' + escapeHtml(pp.identity) + ' · ' : ''}关系：${characterOptions?.relations?.[pp.relation] || escapeHtml(pp.relation || '朋友')}${personality ? ' · ' + escapeHtml(personality) : ''}
-            </div>
-        </div>`;
-    }).join('');
-}
-
-// 绑定角色到当前会话
-async function bindCharacter(characterId) {
-    await ensureSession();
-    const formData = new FormData();
-    formData.append('character_id', characterId);
-    try {
-        const resp = await fetch(`${apiUrl}/api/sessions/${sessionId}/character`, {
-            method: 'POST', body: formData
-        });
-        // 以 HTTP 状态码判定成败：403 越权 / 404 角色不存在 / 409 冲突都不再伪装成 200
-        if (!resp.ok) {
-            let detail = `HTTP ${resp.status}`;
-            try { const err = await resp.json(); if (err && err.error) detail = err.error; } catch (_) {}
-            alert('绑定失败：' + detail);
-            return;
-        }
-        const result = await resp.json();
-        currentCharacterId = characterId;
-        // 持久化到 localStorage，刷新后恢复
-        localStorage.setItem(`session_character_${sessionId}`, characterId);
-        showCharacterStatus(`已选择角色「${result.character_name}」，对话和合成将使用该角色的声音与人设。声音风格：${result.voice_prompt}`);
-        loadCharacters();
-        loadSessionCharacter();
-    } catch (e) {
-        alert('绑定失败：' + e.message);
-    }
-}
-
-function showCharacterStatus(msg) {
-    const el = document.getElementById('characterStatus');
-    el.style.display = 'block';
-    el.textContent = msg;
-}
-
-// 删除自定义角色
-async function deleteCharacter(characterId) {
-    if (!confirm('确认删除该自定义角色？')) return;
-    try {
-        const resp = await fetch(`${apiUrl}/api/characters/${characterId}`, { method: 'DELETE' });
-        if (!resp.ok) {
-            let detail = `HTTP ${resp.status}`;
-            try { const err = await resp.json(); if (err && err.error) detail = err.error; } catch (_) {}
-            alert('删除失败：' + detail);
-            return;
-        }
-        await resp.json();
-        // 如果删的是当前会话绑定角色，解绑
-        if (currentCharacterId === characterId) {
-            currentCharacterId = null;
-            showCharacterStatus('角色已删除，请重新选择');
-        }
-        loadCharacters();
-    } catch (e) {
-        alert('删除失败：' + e.message);
-    }
-}
-
-// 查询当前会话已绑定的角色
-async function loadSessionCharacter() {
-    if (authRequired && !getToken()) return;
-    await ensureSession();
-    if (!sessionId) return;
-    try {
-        const resp = await fetch(`${apiUrl}/api/sessions/${sessionId}/character`);
-        if (resp.status === 404) {
-            // 会话已被删除：清理本地会话，等待下一次操作自动重建
-            sessionId = '';
-            localStorage.removeItem('sessionId');
-            loadSessions(true);
-            return;
-        }
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const result = await resp.json();
-        if (result.character) {
-            currentCharacterId = result.character.id;
-            showCharacterStatus(`当前使用角色：「${result.character.name}」`);
-            loadCharacters();
-        } else {
-            // 服务端未绑定，尝试从 localStorage 恢复
-            const saved = localStorage.getItem(`session_character_${sessionId}`);
-            if (saved) {
-                await bindCharacter(saved);
-            }
-        }
-    } catch (e) {
-        console.warn('查询会话角色失败:', e.message);
-    }
-}
-
-// 编辑自定义角色：回填表单，保存时走 PUT（GAP-01）
-let editingCharacterId = null;
-
-async function editCharacter(characterId) {
-    try {
-        const resp = await fetch(`${apiUrl}/api/characters/${characterId}`);
-        if (!resp.ok) {
-            alert(`加载角色失败（HTTP ${resp.status}）`);
-            return;
-        }
-        const result = await resp.json();
-        const ch = result.character || {};
-        const vp = ch.voice_profile || {};
-        const pp = ch.persona_profile || {};
-        document.getElementById('charName').value = ch.name || '';
-        document.getElementById('charGender').value = vp.gender || 'female';
-        document.getElementById('charAgeGroup').value = vp.age_group || 'youth';
-        const dialectSel = document.getElementById('charDialect');
-        if (dialectSel) {
-            dialectSel.value = vp.dialect || '';
-            updateDialectHint();
-        }
-        document.getElementById('charRelation').value = pp.relation || 'friend';
-        document.getElementById('charIdentity').value = pp.identity || '';
-        document.getElementById('charStyle').value = pp.speaking_style || '';
-        document.getElementById('charFreeDesc').value = pp.free_description || '';
-        const voiceTags = new Set(vp.voice_tags || []);
-        document.querySelectorAll('#charVoiceTags input[data-group="voice"]').forEach(cb => {
-            cb.checked = voiceTags.has(cb.value);
-        });
-        const personaTags = new Set(pp.personality_tags || []);
-        document.querySelectorAll('#charPersonalityTags input[data-group="personality"]').forEach(cb => {
-            cb.checked = personaTags.has(cb.value);
-        });
-        editingCharacterId = characterId;
-        const btn = document.getElementById('createCharacterBtn');
-        btn.textContent = '保存修改';
-        const cancelBtn = document.getElementById('cancelCharacterEditBtn');
-        if (cancelBtn) cancelBtn.style.display = 'inline-block';
-        const form = document.getElementById('charName');
-        if (form && form.scrollIntoView) form.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        showCharacterStatus(`正在编辑角色「${ch.name}」`);
-    } catch (e) {
-        alert('加载角色失败：' + e.message);
-    }
-}
-
-function resetCharacterEdit() {
-    editingCharacterId = null;
-    ['charName', 'charIdentity', 'charStyle', 'charFreeDesc'].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-    });
-    document.querySelectorAll('#charVoiceTags input:checked, #charPersonalityTags input:checked').forEach(cb => cb.checked = false);
-    const dialectSel = document.getElementById('charDialect');
-    if (dialectSel) dialectSel.value = '';
-    updateDialectHint();
-    const btn = document.getElementById('createCharacterBtn');
-    if (btn) { btn.disabled = false; btn.textContent = '创建角色'; }
-    const cancelBtn = document.getElementById('cancelCharacterEditBtn');
-    if (cancelBtn) cancelBtn.style.display = 'none';
-    const response = document.getElementById('characterResponse');
-    if (response) response.innerHTML = '';
-}
-
-// 创建 / 修改自定义角色
-async function createCharacter() {
-    const name = document.getElementById('charName').value.trim();
-    const isEdit = !!editingCharacterId;
-    if (!isEdit && !name) {
-        alert('请填写角色名称');
-        return;
-    }
-    const payload = {
-        name: name,
-        voice_profile: {
-            gender: document.getElementById('charGender').value,
-            age_group: document.getElementById('charAgeGroup').value,
-            voice_tags: getSelectedTags('voice'),
-            speed: 1.0,
-            dialect: (document.getElementById('charDialect')?.value || null)
-        },
-        persona_profile: {
-            identity: document.getElementById('charIdentity').value.trim(),
-            relation: document.getElementById('charRelation').value,
-            personality_tags: getSelectedTags('personality'),
-            speaking_style: document.getElementById('charStyle').value.trim(),
-            free_description: document.getElementById('charFreeDesc').value.trim()
-        }
-    };
-
-    const btn = document.getElementById('createCharacterBtn');
-    btn.disabled = true;
-    btn.textContent = isEdit ? '保存中...' : '创建中...';
-    try {
-        const url = isEdit ? `${apiUrl}/api/characters/${editingCharacterId}` : `${apiUrl}/api/characters`;
-        const resp = await fetch(url, {
-            method: isEdit ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-            let detail = `HTTP ${resp.status}`;
-            try { const err = await resp.json(); if (err && err.error) detail = err.error; } catch (_) {}
-            alert((isEdit ? '保存失败：' : '创建失败：') + detail);
-        } else {
-            const result = await resp.json();
-            resetCharacterEdit();
-            document.getElementById('characterResponse').innerHTML =
-                `<p style="color:green;">角色「${escapeHtml(result.character.name)}」${isEdit ? '修改' : '创建'}成功！${isEdit ? '' : '可在上方列表点"选择"绑定到当前会话。'}</p>`;
-            loadCharacters();
-            loadSessionCharacter();
-        }
-    } catch (e) {
-        alert((isEdit ? '保存失败：' : '创建失败：') + e.message);
-    } finally {
-        btn.disabled = false;
-        btn.textContent = editingCharacterId ? '保存修改' : '创建角色';
-    }
-}
 
 // ===== 孩子档案 + 育儿急救 =====
 const AGE_LABELS = { toddler: '1-3岁学步期', preschool: '3-6岁学龄前', early: '6-9岁低年级', middle: '9-12岁高年级', preteen: '12-14岁青春期前', teen: '14-18岁青春期' };
 const TEMP_LABELS = { sensitive: '敏感型', active: '活跃型', calm: '沉稳型', stubborn: '执拗型', social: '社交型' };
+
+const ACTIVE_CHILD_KEY = 'yuban_active_child';
+let _childrenCache = [];
+let _editingChildId = null;  // 非空时表单处于编辑态
+
+// 当前关注的孩子：话术卡按它的档案生成建议
+function _activeChildId() {
+    return localStorage.getItem(ACTIVE_CHILD_KEY) || '';
+}
+function _setActiveChildId(id) {
+    if (id) localStorage.setItem(ACTIVE_CHILD_KEY, id);
+    else localStorage.removeItem(ACTIVE_CHILD_KEY);
+}
+
+// 重置档案表单为新建态
+function _resetChildForm() {
+    _editingChildId = null;
+    document.getElementById('cpName').value = '';
+    document.getElementById('cpSensitivities').value = '';
+    const saveBtn = document.getElementById('cpSaveBtn');
+    if (saveBtn) saveBtn.textContent = '保存';
+}
+
+// 填充「当前关注的孩子」下拉；仅一个孩子时自动选中
+function _renderActiveChildSelect(children) {
+    const sel = document.getElementById('cpActiveChild');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">不指定（通用建议）</option>' +
+        children.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    const stored = _activeChildId();
+    if (stored && children.some(c => c.id === stored)) {
+        sel.value = stored;
+    } else if (children.length === 1) {
+        sel.value = children[0].id;
+        _setActiveChildId(children[0].id);
+    } else {
+        sel.value = '';
+        _setActiveChildId('');
+    }
+}
 
 window.loadChildren = async function() {
     const list = document.getElementById('childProfileList');
@@ -2379,6 +1682,8 @@ window.loadChildren = async function() {
         if (!resp.ok) throw new Error(resp.status);
         const data = await resp.json();
         const children = data.children || [];
+        _childrenCache = children;
+        _renderActiveChildSelect(children);
         if (children.length === 0) {
             list.innerHTML = '<p style="color:#888;">还没有孩子档案，点下方按钮添加</p>';
             return;
@@ -2401,11 +1706,17 @@ window.loadChildren = async function() {
 };
 
 window.editChild = function(id) {
-    // 从全局缓存或直接拉：简化处理，直接跳表单
-    loadChildren().then(async () => {
-        // 简易版：用 prompt 式编辑占位
-        alert('编辑功能请在表单中操作');
-    });
+    const child = _childrenCache.find(c => c.id === id);
+    if (!child) return;
+    _editingChildId = id;
+    document.getElementById('cpName').value = child.name || '';
+    document.getElementById('cpAgeStage').value = child.age_stage || 'preschool';
+    document.getElementById('cpTemperament').value = child.temperament || 'sensitive';
+    document.getElementById('cpSensitivities').value = child.sensitivities || '';
+    document.getElementById('cpSaveBtn').textContent = '保存修改';
+    const form = document.getElementById('childProfileForm');
+    form.style.display = 'block';
+    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 };
 
 window.deleteChild = async function(id) {
@@ -2413,6 +1724,11 @@ window.deleteChild = async function(id) {
     try {
         const resp = await fetch(`${apiUrl}/api/children/` + id, { method: 'DELETE' });
         if (!resp.ok) throw new Error(resp.status);
+        if (_activeChildId() === id) _setActiveChildId('');
+        if (_editingChildId === id) {
+            _resetChildForm();
+            document.getElementById('childProfileForm').style.display = 'none';
+        }
         alert('已删除');
         loadChildren();
     } catch (e) {
@@ -2426,6 +1742,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (newBtn && !newBtn._bound) {
         newBtn._bound = true;
         newBtn.addEventListener('click', () => {
+            _resetChildForm();
             document.getElementById('childProfileForm').style.display = 'block';
         });
     }
@@ -2433,8 +1750,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cancelBtn && !cancelBtn._bound) {
         cancelBtn._bound = true;
         cancelBtn.addEventListener('click', () => {
+            _resetChildForm();
             document.getElementById('childProfileForm').style.display = 'none';
         });
+    }
+    const activeSel = document.getElementById('cpActiveChild');
+    if (activeSel && !activeSel._bound) {
+        activeSel._bound = true;
+        activeSel.addEventListener('change', () => _setActiveChildId(activeSel.value));
     }
     const saveBtn = document.getElementById('cpSaveBtn');
     if (saveBtn && !saveBtn._bound) {
@@ -2445,26 +1768,30 @@ document.addEventListener('DOMContentLoaded', () => {
             const temperament = document.getElementById('cpTemperament').value;
             const sensitivities = document.getElementById('cpSensitivities').value.trim();
             if (!name) { alert('请输入昵称'); return; }
+            const editingId = _editingChildId;
             saveBtn.disabled = true; saveBtn.textContent = '保存中…';
             try {
-                const resp = await fetch(`${apiUrl}/api/children`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, age_stage, temperament, sensitivities })
-                });
+                const resp = await fetch(
+                    editingId ? `${apiUrl}/api/children/${editingId}` : `${apiUrl}/api/children`,
+                    {
+                        method: editingId ? 'PUT' : 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, age_stage, temperament, sensitivities })
+                    }
+                );
                 if (!resp.ok) {
                     const d = await resp.json().catch(() => ({}));
                     throw new Error(d.error || resp.status);
                 }
+                _resetChildForm();
                 document.getElementById('childProfileForm').style.display = 'none';
-                document.getElementById('cpName').value = '';
-                document.getElementById('cpSensitivities').value = '';
                 alert('已保存');
                 loadChildren();
             } catch (e) {
                 alert('保存失败：' + e.message);
             } finally {
-                saveBtn.disabled = false; saveBtn.textContent = '保存';
+                saveBtn.disabled = false;
+                saveBtn.textContent = _editingChildId ? '保存修改' : '保存';
             }
         });
     }
