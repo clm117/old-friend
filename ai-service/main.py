@@ -79,6 +79,9 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import io
 import wave
+import threading
+import re
+from pathlib import Path
 import voice_catalog
 
 # ===== Prometheus 指标 =====
@@ -441,6 +444,40 @@ _CHILD_TEMPERAMENTS = {"sensitive", "active", "calm", "stubborn", "social"}
 _MAX_CHILDREN_PER_USER = 5
 _CHILD_STORE: dict[str, list[dict]] = {}  # owner -> [child dict]
 
+# 持久化：默认落盘到 YUBAN_DATA_DIR/children.json（默认 ai-service/data/children.json）
+_CHILD_DATA_DIR = Path(os.environ.get("YUBAN_DATA_DIR", Path(__file__).parent / "data"))
+_CHILD_FILE = _CHILD_DATA_DIR / "children.json"
+_CHILD_LOCK = threading.Lock()
+
+
+def _load_children():
+    """启动时从磁盘加载；文件缺失或损坏时安全降级为空，不影响启动"""
+    global _CHILD_STORE
+    try:
+        if _CHILD_FILE.exists():
+            with open(_CHILD_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                _CHILD_STORE = {k: v for k, v in data.items() if isinstance(v, list)}
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"[children] 档案加载失败，降级为空: {e}")
+
+
+def _save_children():
+    """原子写：先写临时文件再 rename，避免中途崩溃丢数据"""
+    try:
+        _CHILD_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        with _CHILD_LOCK:
+            tmp = _CHILD_FILE.with_suffix(".tmp")
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(_CHILD_STORE, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, _CHILD_FILE)
+    except OSError as e:
+        print(f"[children] 档案持久化失败: {e}")
+
+
+_load_children()
+
 
 def _children_of(owner: str) -> list[dict]:
     return _CHILD_STORE.setdefault(owner, [])
@@ -497,6 +534,7 @@ async def create_child(request: Request):
         "updated_at": time.time(),
     }
     children.append(child)
+    _save_children()
     return {"status": "ok", "child": child}
 
 
@@ -529,6 +567,7 @@ async def update_child(child_id: str, request: Request):
     if "sensitivities" in body:
         target["sensitivities"] = (body["sensitivities"] or "")[:200]
     target["updated_at"] = time.time()
+    _save_children()
     return {"status": "ok", "child": target}
 
 
@@ -542,6 +581,7 @@ async def delete_child(child_id: str, request: Request):
     for i, c in enumerate(children):
         if c["id"] == child_id:
             children.pop(i)
+            _save_children()
             return {"status": "ok", "deleted_id": child_id}
     return JSONResponse({"error": "孩子档案不存在"}, status_code=404)
 
@@ -609,15 +649,28 @@ async def parenting_advice(request: Request):
         "\n"
         "质量红线：\n"
         "- 不要说 必须是具体原话如'你怎么这么不懂事'，禁止'不要情绪化''不要翻旧账'这种标签\n"
-        "- 为什么 必须先点出发展阶段如'4岁处于秩序敏感期''13岁青春期追求独立'，再解释\n"
+        "- 为什么 必须以年龄段开头，格式为「N岁孩子…」，再解释 say/not_say 的依据；禁止只写'避免指责''给孩子安全感'这类结论\n"
         "- 后续步骤 每条必须有'家长+动作+时间点'如'今晚睡前和孩子聊聊，10分钟'\n"
         "- 紧急情况（孩子自伤/自杀/严重心理危机）在 为什么 开头加'⚠️紧急：'\n"
+        "- 只输出上述四行，不要复述或改写家长给出的场景，不要加开场白、总结、括号批注\n"
+        "\n"
+        "示例（场景：5岁孩子在超市要买玩具被拒后大哭）：\n"
+        "此刻可以说：妈妈知道你很想要这个玩具，现在不能买，你很难过，对不对？我们先抱一下，然后一起想想怎么攒零花钱。\n"
+        "不要说：再哭我就走了，你自己在这儿哭吧\n"
+        "为什么：5岁孩子处于情绪调节能力尚未成熟的阶段，需要通过被理解来学会安抚自己；威胁抛弃会破坏安全感，让哭闹升级。\n"
+        "后续步骤：当场蹲下平视并拥抱1分钟；当晚睡前用5分钟回顾这件事，教他用'我想要'表达；一周内出门前先约定今天不买玩具。\n"
     )
 
     user_msg = f"场景：{scene}"
     if child_ctx:
         user_msg += f"\n\n孩子情况：\n{child_ctx}"
-    user_msg += "\n\n再次提醒：为什么字段必须点出发展阶段需求，后续步骤每条必须有时间点。"
+    user_msg += (
+        "\n\n输出前在心里自检（不要把检查过程、修改说明、括号补充写进输出，只输出四行正文）：\n"
+        "1. 为什么 一栏必须以「数字+岁孩子」开头，例如「4岁孩子…」；"
+        "如果是「避免指责」「保持积极沟通」这类结论，必须改写成以年龄段开头的因果解释。\n"
+        "2. 后续步骤 每条都必须带具体时间点（X分钟后/今晚/明天/本周）。\n"
+        "3. 不要说 必须是家长真的会脱口而出的句子，不是形容词。"
+    )
 
     try:
         advice_text = await llm_service.chat(
@@ -646,14 +699,66 @@ async def parenting_advice(request: Request):
         logger.warning("[parenting-advice] JSON 解析失败: %s, 尝试从纯文本提取", e)
         advice = _parse_plain_advice(advice_text)
 
-    # 字段兜底 + 紧急标记检测
-    advice.setdefault("say", advice_text[:120])
-    advice.setdefault("not_say", "")
-    advice.setdefault("why", "")
-    advice.setdefault("next_steps", "")
-    advice.setdefault("emergency", "⚠️紧急" in advice_text or "紧急" in advice.get("why", ""))
+    if not isinstance(advice, dict):
+        advice = _parse_plain_advice(advice_text)
+
+    # 统一清洗：去掉行首列表符号、包裹引号、多余空白（JSON 与纯文本两条路径都走这里）
+    for k in ("say", "not_say", "why", "next_steps"):
+        advice[k] = _clean_field(advice.get(k, ""))
+    if not advice["say"]:
+        advice["say"] = _clean_field(advice_text)[:120]
+    advice["emergency"] = bool(
+        advice.get("emergency")
+        or "⚠️" in advice_text
+        or "紧急" in advice["why"]
+    )
 
     return {"status": "ok", "advice": advice}
+
+
+# 行首列表符号：- * • · 1. 1、1) (1) 等
+_BULLET_RE = re.compile(r'^[\s\u3000]*(?:[-*•·]+|\d+[.、)）]|[（(]\d+[）)])\s*')
+_QUOTE_PAIRS = ("“", "”"), ("\"", "\""), ("「", "」"), ("『", "』"), ("'", "'")
+
+
+def _clean_field(value) -> str:
+    """清理 LLM 格式漂移：行首列表符号、包裹引号、多余空行；多条合并为分号分隔"""
+    if not value:
+        return ""
+    items = []
+    for line in str(value).replace("\r", "").split("\n"):
+        line = _BULLET_RE.sub("", line).strip()
+        if not line:
+            continue
+        # 去掉整行包裹的引号（可能多次嵌套）
+        changed = True
+        while changed and len(line) >= 2:
+            changed = False
+            for left, right in _QUOTE_PAIRS:
+                if line.startswith(left) and line.endswith(right) and len(line) > 2:
+                    line = line[1:-1].strip()
+                    changed = True
+        if line:
+            items.append(line.rstrip("。.；;，,").strip())
+    items = [x for x in items if x]
+    # 行内编号（如「…感受。2. 明天…」）拆成独立条目后再去编号
+    expanded = []
+    for it in items:
+        for part in re.split(r'(?<=[。；;])\s*(?=\d+[.、)）])', it):
+            part = _BULLET_RE.sub("", part).strip().rstrip("。.；;，,")
+            if part:
+                expanded.append(part)
+    items = expanded
+    if not items:
+        return ""
+    text = items[0] if len(items) == 1 else "；".join(items)
+    # 清掉模型自检泄漏进正文的括号说明（括号内含其他字段标签）
+    text = re.sub(r'[（(][^（）()]*?(?:为什么|不要说|此刻可以说|后续步骤)[：:][^（）()]*[）)]', '', text)
+    # 清掉句尾的简短点评式括号（不含数字，如「（避免指责）」「（指责）」）
+    text = re.sub(r'[（(][^（）()\d]{1,14}[）)]\s*$', '', text)
+    # 清掉未闭合的尾部括号残片
+    text = re.sub(r'[（(][^（）()]*$', '', text)
+    return text.strip().rstrip("（(、，,；;：:。.").strip()
 
 
 def _parse_plain_advice(text: str) -> dict:
@@ -663,9 +768,8 @@ def _parse_plain_advice(text: str) -> dict:
       不要说：xxx
       为什么：xxx
       后续步骤：xxx
-    按关键词切分，提取各字段。
+    按关键词切分，提取各字段（字段内容后续由 _clean_field 统一清洗）。
     """
-    import re
     result = {"say": "", "not_say": "", "why": "", "next_steps": ""}
     # 统一关键词到英文 key
     patterns = [
@@ -1306,18 +1410,13 @@ async def transcribe_audio(session_id: str = Form("default"),
         return {"error": "音频为空"}
 
     try:
-        # 解析 WAV，提取 PCM（前端已按 16kHz/单声道编码；这里按实际头信息读取）
-        with wave.open(io.BytesIO(raw), "rb") as wf:
-            channels = wf.getnchannels()
-            sampwidth = wf.getsampwidth()
-            framerate = wf.getframerate()
-            pcm = wf.readframes(wf.getnframes())
-
-        # 非 16k/16bit/单声道时做简单处理提示（前端应保证格式）
-        if framerate != 16000 or channels != 1 or sampwidth != 2:
-            return {"error": f"音频格式不支持（需要 16kHz/16bit/单声道，当前 {framerate}Hz/{channels}ch/{sampwidth*8}bit）"}
-
-        text = await asr_service.transcribe_pcm(pcm, sample_rate=16000)
+        # 已是容器格式（WAV/MP3/OGG/FLAC/M4A）直接上传；裸 PCM 才补 WAV 头
+        detected = asr_service._detect_container(raw)
+        if detected:
+            text = await asr_service.transcribe_any(raw)
+        else:
+            # 裸 PCM：按 16kHz/16bit/单声道 封装后上传
+            text = await asr_service.transcribe_pcm(raw, sample_rate=16000)
         if not text:
             return {"status": "ok", "text": "", "warning": "未识别到语音内容，请靠近麦克风重试"}
         return {"status": "ok", "text": text}
